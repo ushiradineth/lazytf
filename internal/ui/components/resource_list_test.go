@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/tftui/internal/diff"
 	"github.com/ushiradineth/tftui/internal/styles"
 	"github.com/ushiradineth/tftui/internal/terraform"
@@ -189,6 +191,33 @@ func selectFirstResource(r *ResourceList) *terraform.ResourceChange {
 	return nil
 }
 
+func containsString(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func isSorted(list []string) bool {
+	for i := 1; i < len(list); i++ {
+		if list[i-1] > list[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func indexOfGroup(items []listItem, label string) int {
+	for i, item := range items {
+		if item.kind == itemGroup && item.label == label {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestFuzzyMatchNonContiguous(t *testing.T) {
 	if !fuzzyMatch("awsins", "aws_instance") {
 		t.Fatalf("expected non-contiguous match to pass")
@@ -201,6 +230,41 @@ func TestFuzzyMatchNonContiguous(t *testing.T) {
 func TestFuzzyMatchCaseInsensitive(t *testing.T) {
 	if !fuzzyMatch("aws", strings.ToLower("AWS_INSTANCE")) {
 		t.Fatalf("expected case-insensitive match to pass")
+	}
+}
+
+func TestFuzzyMatchOrderRequired(t *testing.T) {
+	// Test that characters must appear in order
+	tests := []struct {
+		query     string
+		candidate string
+		shouldMatch bool
+	}{
+		// Should match: e-g-g appears in order
+		{"egg", "gselllllglllawdaeaewdwag", true},
+		// Should NOT match: only one 'g' after 'e'
+		{"egg", "gawdhuaowdhoaweawdbiuawbdiauwbdg", false},
+		// Should NOT match: 'e' comes after both 'g's
+		{"egg", "gge", false},
+		// Additional test cases
+		{"abc", "aabbcc", true},
+		{"abc", "acb", false}, // 'b' comes after 'c'
+		{"xyz", "xaybzc", true},
+		{"xyz", "xzy", false}, // 'y' comes after 'z'
+		// Real-world terraform examples
+		{"edge4", "module.gamma.kubernetes_config_map.settings_4", false}, // no 'd' after 'e' and before 'g'
+		{"edge4", "module.zeta.aws_instance.node_4", false},               // no 'g' in address
+		{"edge4", "module.beta.module.db.aws_security_group.legacy_4", true}, // e(modul-e) d(mo-d-ule) g(security_-g-roup) e(l-e-gacy) 4(-4)
+		{"edge4", "module.alpha.module.net.module.edge.aws_instance.node_4", true}, // has actual 'edge' substring
+		{"edge", "module.alpha.module.net.module.edge.aws_instance.node_0", true},
+	}
+
+	for _, tt := range tests {
+		result := fuzzyMatch(tt.query, tt.candidate)
+		if result != tt.shouldMatch {
+			t.Errorf("fuzzyMatch(%q, %q) = %v, want %v",
+				tt.query, tt.candidate, result, tt.shouldMatch)
+		}
 	}
 }
 
@@ -410,5 +474,403 @@ func TestDeepGroupingCreatesNestedItems(t *testing.T) {
 	}
 	if !foundGroup || !foundSubGroup {
 		t.Fatalf("expected nested groups, got %#v", r.visibleItems)
+	}
+}
+
+func TestGroupLabelLocalNamePerDepth(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	labels := []string{}
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			labels = append(labels, item.label)
+		}
+	}
+	if !containsString(labels, "module.alpha") || !containsString(labels, "module.net") || !containsString(labels, "module.edge") {
+		t.Fatalf("unexpected group labels: %#v", labels)
+	}
+}
+
+func TestGroupIndentIncrementsPerDepth(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.module.edge.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	indents := []int{}
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			indents = append(indents, item.indent)
+		}
+	}
+	if len(indents) < 3 || indents[0] != 0 || indents[1] != 2 || indents[2] != 4 {
+		t.Fatalf("unexpected indents: %#v", indents)
+	}
+}
+
+func TestToggleGroupCollapseHidesDescendants(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	if groupIdx < 0 {
+		t.Fatalf("expected module.alpha group")
+	}
+	r.selectedIndex = groupIdx
+	r.ToggleGroup()
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup && item.label != "module.alpha" {
+			t.Fatalf("expected descendants hidden, got %#v", r.visibleItems)
+		}
+		if item.kind == itemResource {
+			t.Fatalf("expected no resources when collapsed, got %#v", r.visibleItems)
+		}
+	}
+}
+
+func TestToggleGroupExpandRestoresSortedChildren(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.zeta", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.alpha", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	r.selectedIndex = groupIdx
+	r.ToggleGroup()
+	r.ToggleGroup()
+
+	resourceAddrs := []string{}
+	for _, item := range r.visibleItems {
+		if item.kind == itemResource {
+			resourceAddrs = append(resourceAddrs, item.resource.Address)
+		}
+	}
+	if len(resourceAddrs) < 2 || resourceAddrs[0] > resourceAddrs[1] {
+		t.Fatalf("expected sorted children, got %#v", resourceAddrs)
+	}
+}
+
+func TestGroupsSortedAlphabeticallyPerDepth(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.beta.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.gamma.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupLabels := []string{}
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			groupLabels = append(groupLabels, item.label)
+		}
+	}
+	if !isSorted(groupLabels) {
+		t.Fatalf("expected groups sorted, got %#v", groupLabels)
+	}
+}
+
+func TestResourcesSortedWithinGroup(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.zeta", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.alpha", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	resourceAddrs := []string{}
+	for _, item := range r.visibleItems {
+		if item.kind == itemResource {
+			resourceAddrs = append(resourceAddrs, item.resource.Address)
+		}
+	}
+	if len(resourceAddrs) < 2 || resourceAddrs[0] > resourceAddrs[1] {
+		t.Fatalf("expected sorted resources, got %#v", resourceAddrs)
+	}
+}
+
+func TestUngroupedResourcesAfterGroups(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.root", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	lastGroupIdx := -1
+	rootIdx := -1
+	for i, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			lastGroupIdx = i
+		}
+		if item.kind == itemResource && item.resource.Address == "aws_instance.root" {
+			rootIdx = i
+		}
+	}
+	if rootIdx <= lastGroupIdx {
+		t.Fatalf("expected ungrouped resource after groups: %#v", r.visibleItems)
+	}
+}
+
+func TestSelectionOnGroupHeaderHasNoResource(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	r.selectedIndex = groupIdx
+	if got := r.GetSelectedResource(); got != nil {
+		t.Fatalf("expected nil resource for group selection, got %#v", got)
+	}
+}
+
+func TestSelectionMovesOverCollapsedGroup(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	r.selectedIndex = groupIdx
+	r.ToggleGroup()
+	r.MoveDown()
+	if r.selectedIndex == groupIdx {
+		t.Fatalf("expected selection to move past collapsed group")
+	}
+}
+
+func TestCollapseSelectedGroupClearsDiffSelection(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	r.selectedIndex = groupIdx
+	r.ToggleGroup()
+	if r.GetSelectedResource() != nil {
+		t.Fatalf("expected no selected resource after collapsing group")
+	}
+}
+
+func TestSingleResourceLeafNoGroupHeader(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			t.Fatalf("expected no group header for single resource, got %#v", r.visibleItems)
+		}
+	}
+}
+
+func TestSingleResourceLeafShowsGroupHeaderDuringSearch(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSearchQuery("web")
+	r.SetSize(80, 10)
+
+	// During search, even single resources should show group headers for context
+	foundGroup := false
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup && item.label == "module.alpha" {
+			foundGroup = true
+			break
+		}
+	}
+	if !foundGroup {
+		t.Fatalf("expected group header during search, got %#v", r.visibleItems)
+	}
+}
+
+func TestNestedSingleResourceShowsAllGroupsDuringSearch(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.module.edge.aws_instance.node_4", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.other", Action: terraform.ActionCreate},
+	})
+	r.SetSearchQuery("node_4")
+	r.SetSize(80, 10)
+
+	// Should show all nested groups: alpha, net, and edge
+	foundAlpha := false
+	foundNet := false
+	foundEdge := false
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			switch item.label {
+			case "module.alpha":
+				foundAlpha = true
+			case "module.net":
+				foundNet = true
+			case "module.edge":
+				foundEdge = true
+			}
+		}
+	}
+	if !foundAlpha || !foundNet || !foundEdge {
+		t.Fatalf("expected all nested groups during search (alpha=%v, net=%v, edge=%v), got %#v",
+			foundAlpha, foundNet, foundEdge, r.visibleItems)
+	}
+}
+
+func TestMixedDepthModulesRenderNestedGroups(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.module.edge.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	if indexOfGroup(r.visibleItems, "module.net") < 0 || indexOfGroup(r.visibleItems, "module.edge") < 0 {
+		t.Fatalf("expected nested groups for mixed depth, got %#v", r.visibleItems)
+	}
+}
+
+func TestNonModuleContextDoesNotGroup(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "example.module_value.resource", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			t.Fatalf("expected no grouping for non-module context, got %#v", r.visibleItems)
+		}
+	}
+}
+
+func TestToggleAllGroupsDeepTree(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.module.edge.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.beta.module.db.module.read.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	r.ToggleAllGroups()
+	if r.allExpanded {
+		t.Fatalf("expected all groups collapsed")
+	}
+	r.ToggleAllGroups()
+	if !r.allExpanded {
+		t.Fatalf("expected all groups expanded")
+	}
+}
+
+func TestSearchWithGroupingCountsAndVisibility(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.web2", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	r.SetSearchQuery("web")
+	r.SetSize(80, 10)
+
+	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	if groupIdx < 0 || r.visibleItems[groupIdx].count != 2 {
+		t.Fatalf("expected filtered count for module.alpha, got %#v", r.visibleItems)
+	}
+}
+
+func TestFilterWithGroupingCountsAndVisibility(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionDelete},
+	})
+	r.SetFilter(terraform.ActionDelete, false)
+	r.SetSize(80, 10)
+
+	if indexOfGroup(r.visibleItems, "module.alpha") >= 0 {
+		t.Fatalf("expected single resource without group header, got %#v", r.visibleItems)
+	}
+	if got := selectFirstResource(r); got == nil || got.Address != "module.alpha.aws_instance.web" {
+		t.Fatalf("expected remaining resource, got %#v", got)
+	}
+}
+
+func TestResourceListMoveUpAndUpdate(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(40, 5)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.db", Action: terraform.ActionCreate},
+	})
+
+	r.MoveDown()
+	if r.selectedIndex != 1 {
+		t.Fatalf("expected selection to move down, got %d", r.selectedIndex)
+	}
+	r.MoveUp()
+	if r.selectedIndex != 0 {
+		t.Fatalf("expected selection to move up, got %d", r.selectedIndex)
+	}
+
+	r.selectedIndex = 1
+	r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if r.selectedIndex != 0 {
+		t.Fatalf("expected key update to move selection up, got %d", r.selectedIndex)
+	}
+}
+
+func TestResourceListInitReturnsNil(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	if cmd := r.Init(); cmd != nil {
+		t.Fatalf("expected nil init command, got %#v", cmd)
+	}
+}
+
+func TestFirstResourceIndex(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.visibleItems = []listItem{
+		{kind: itemGroup, label: "module.alpha"},
+		{kind: itemResource, resource: &terraform.ResourceChange{Address: "aws_instance.web"}},
+	}
+	if idx := r.firstResourceIndex(); idx != 1 {
+		t.Fatalf("expected first resource index 1, got %d", idx)
+	}
+}
+
+func TestPadMultilinePadsEachLine(t *testing.T) {
+	out := padMultiline("a\nbb", 4)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two lines, got %#v", lines)
+	}
+	for _, line := range lines {
+		if len(line) != 4 {
+			t.Fatalf("expected padded line width 4, got %q", line)
+		}
 	}
 }

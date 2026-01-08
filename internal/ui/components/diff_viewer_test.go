@@ -1,6 +1,7 @@
 package components
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -103,6 +104,87 @@ func TestRenderHeaderActionLabels(t *testing.T) {
 			t.Fatalf("expected %s in header for %s: %q", tt.label, tt.action, out)
 		}
 	}
+}
+
+func TestColumnWidthsDefaultsAndSum(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	if got := viewer.columnWidths(); len(got) != 4 || got[0] != 2 || got[1] != 18 {
+		t.Fatalf("unexpected default column widths: %#v", got)
+	}
+
+	viewer.SetSize(120, 10)
+	got := viewer.columnWidths()
+	sum := 0
+	for _, w := range got {
+		sum += w
+	}
+	if sum != 120 {
+		t.Fatalf("expected columns to sum to width, got %d", sum)
+	}
+	if got[1] < 16 || got[2] < 14 || got[3] < 14 {
+		t.Fatalf("expected minimum column widths, got %#v", got)
+	}
+}
+
+func TestRenderRowTruncatesColumns(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	columns := []int{2, 6, 6, 6}
+	out := viewer.renderRow(columns, styles.DefaultStyles().DiffAdd, "+++", "verylongpath", "beforevalue", "aftervalue")
+	out = stripANSIDiffViewer(out)
+	if !strings.Contains(out, "...") {
+		t.Fatalf("expected truncated content in output, got %q", out)
+	}
+}
+
+func TestRenderDiffRowIncludesValues(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(40, 10)
+	columns := viewer.columnWidths()
+	item := diff.MinimalDiff{
+		Path:     []string{"name"},
+		NewValue: "value",
+		Action:   diff.DiffAdd,
+	}
+	out := viewer.renderDiffRow(columns, item, nil)
+	out = stripANSIDiffViewer(out)
+	if !strings.Contains(out, "name") || !strings.Contains(out, "value") {
+		t.Fatalf("expected path and value in output, got %q", out)
+	}
+}
+
+func TestRenderTableLineCount(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"a"}, OldValue: 1, NewValue: 2, Action: diff.DiffChange},
+		{Path: []string{"b"}, OldValue: "x", NewValue: "y", Action: diff.DiffChange},
+	}
+	out := viewer.renderTable(diffs, nil)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(lines))
+	}
+}
+
+func TestTruncateMiddle(t *testing.T) {
+	got := truncateMiddle("abcdefghij", 6)
+	if !strings.Contains(got, "...") || !strings.HasPrefix(got, "abc") || !strings.HasSuffix(got, "j") {
+		t.Fatalf("unexpected truncated output: %q", got)
+	}
+}
+
+func TestFormatSingleLineValueEscapesNewlines(t *testing.T) {
+	got := formatSingleLineValue("a\nb")
+	if !strings.Contains(got, `\n`) {
+		t.Fatalf("expected newline escape, got %q", got)
+	}
+	if !strings.HasPrefix(got, "\"") || !strings.HasSuffix(got, "\"") {
+		t.Fatalf("expected quoted string, got %q", got)
+	}
+}
+
+func stripANSIDiffViewer(s string) string {
+	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return re.ReplaceAllString(s, "")
 }
 
 func TestReplaceMarkerOnlyForMatchingPath(t *testing.T) {

@@ -57,29 +57,33 @@ var (
 
 // Styles contains all the lipgloss styles used in the TUI
 type Styles struct {
-	Theme             Theme
-	Create            lipgloss.Style
-	Update            lipgloss.Style
-	Delete            lipgloss.Style
-	Replace           lipgloss.Style
-	NoChange          lipgloss.Style
-	ResourceAddress   lipgloss.Style
-	ResourceCollapsed lipgloss.Style
-	ResourceExpanded  lipgloss.Style
-	Selected          lipgloss.Style
-	FilterBarActive   lipgloss.Style
-	FilterBarInactive lipgloss.Style
-	SearchBar         lipgloss.Style
-	StatusBar         lipgloss.Style
-	Border            lipgloss.Style
-	DiffAdd           lipgloss.Style
-	DiffRemove        lipgloss.Style
-	DiffChange        lipgloss.Style
-	Comment           lipgloss.Style
-	HelpKey           lipgloss.Style
-	HelpValue         lipgloss.Style
-	Title             lipgloss.Style
-	Dimmed            lipgloss.Style
+	Theme                  Theme
+	Create                 lipgloss.Style
+	Update                 lipgloss.Style
+	Delete                 lipgloss.Style
+	Replace                lipgloss.Style
+	NoChange               lipgloss.Style
+	ResourceAddress        lipgloss.Style
+	ResourceCollapsed      lipgloss.Style
+	ResourceExpanded       lipgloss.Style
+	Selected               lipgloss.Style
+	FilterBarActive        lipgloss.Style
+	FilterBarInactive      lipgloss.Style
+	SearchBar              lipgloss.Style
+	StatusBar              lipgloss.Style
+	Border                 lipgloss.Style
+	DiffAdd                lipgloss.Style
+	DiffRemove             lipgloss.Style
+	DiffChange             lipgloss.Style
+	Comment                lipgloss.Style
+	Highlight              lipgloss.Style
+	HelpKey                lipgloss.Style
+	HelpValue              lipgloss.Style
+	Title                  lipgloss.Style
+	LineItemText           lipgloss.Style
+	SelectedLine           lipgloss.Style
+	SelectedLineBackground lipgloss.AdaptiveColor
+	Dimmed                 lipgloss.Style
 }
 
 // NewStyles creates a new set of styles based on a theme
@@ -169,6 +173,11 @@ func NewStyles(theme Theme) *Styles {
 	s.Comment = lipgloss.NewStyle().
 		Foreground(theme.DeleteColor)
 
+	// Highlight
+	s.Highlight = lipgloss.NewStyle().
+		Foreground(theme.HighlightColor).
+		Bold(true)
+
 	// Help styles
 	s.HelpKey = lipgloss.NewStyle().
 		Foreground(theme.SelectedColor).
@@ -183,6 +192,16 @@ func NewStyles(theme Theme) *Styles {
 		Background(theme.BorderColor).
 		Padding(0, 1).
 		Bold(true)
+
+	// List line items
+	s.LineItemText = lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"})
+
+	s.SelectedLine = lipgloss.NewStyle().
+		Background(lipgloss.AdaptiveColor{Light: "#B3D9FF", Dark: "#2F5D8A"}).
+		Bold(true)
+
+	s.SelectedLineBackground = lipgloss.AdaptiveColor{Light: "#B3D9FF", Dark: "#2F5D8A"}
 
 	// Dimmed text
 	s.Dimmed = lipgloss.NewStyle().

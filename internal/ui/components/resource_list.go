@@ -30,6 +30,9 @@ type ResourceList struct {
 	groupExpanded map[string]bool
 	visibleItems  []listItem
 	allExpanded   bool
+	searchActive  bool
+	matchScores   map[string]int
+	lastMove      int
 }
 
 // NewResourceList creates a new resource list component
@@ -77,7 +80,7 @@ func (r *ResourceList) SetFilter(actionType terraform.ActionType, enabled bool) 
 
 // SetSearchQuery sets the current search query for filtering resources.
 func (r *ResourceList) SetSearchQuery(query string) {
-	r.searchQuery = strings.TrimSpace(query)
+	r.searchQuery = strings.ToLower(strings.TrimSpace(query))
 	r.updateViewport()
 }
 
@@ -85,6 +88,7 @@ func (r *ResourceList) SetSearchQuery(query string) {
 func (r *ResourceList) MoveUp() {
 	if r.selectedIndex > 0 {
 		r.selectedIndex--
+		r.lastMove = -1
 		r.updateViewport()
 	}
 }
@@ -93,6 +97,7 @@ func (r *ResourceList) MoveUp() {
 func (r *ResourceList) MoveDown() {
 	if r.selectedIndex < len(r.visibleItems)-1 {
 		r.selectedIndex++
+		r.lastMove = 1
 		r.updateViewport()
 	}
 }
@@ -105,17 +110,24 @@ func (r *ResourceList) Init() tea.Cmd {
 // Update handles messages
 func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 	var cmd tea.Cmd
+	handled := false
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
 			r.MoveUp()
+			handled = true
 		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
 			r.MoveDown()
+			handled = true
 		case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
 			r.ToggleGroup()
 		}
+	}
+
+	if handled {
+		return r, nil
 	}
 
 	r.viewport, cmd = r.viewport.Update(msg)
@@ -134,14 +146,29 @@ func (r *ResourceList) View() string {
 // getFilteredResources returns resources that pass the current filter
 func (r *ResourceList) getFilteredResources() []terraform.ResourceChange {
 	filtered := []terraform.ResourceChange{}
-	query := strings.ToLower(r.searchQuery)
+	query := r.searchQuery
+	r.searchActive = query != ""
+	r.matchScores = make(map[string]int)
 	for _, resource := range r.resources {
 		if !r.filterActions[resource.Action] {
 			continue
 		}
 		if query == "" || resourceMatchesQuery(resource, query) {
+			if query != "" {
+				r.matchScores[resource.Address] = bestQueryScore(query, resource)
+			}
 			filtered = append(filtered, resource)
 		}
+	}
+	if query != "" {
+		sort.Slice(filtered, func(i, j int) bool {
+			left := r.matchScores[filtered[i].Address]
+			right := r.matchScores[filtered[j].Address]
+			if left == right {
+				return filtered[i].Address < filtered[j].Address
+			}
+			return left < right
+		})
 	}
 	return filtered
 }
@@ -180,6 +207,52 @@ func (r *ResourceList) updateViewport() {
 	}
 
 	r.viewport.SetContent(content.String())
+	r.adjustViewportOffset()
+}
+
+func (r *ResourceList) adjustViewportOffset() {
+	if r.viewport.Height <= 0 || len(r.visibleItems) == 0 {
+		return
+	}
+
+	maxOffset := len(r.visibleItems) - r.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+
+	anchorTop := 2
+	if r.viewport.Height-1 < anchorTop {
+		anchorTop = r.viewport.Height - 1
+	}
+	anchorBottom := r.viewport.Height - 3
+	if anchorBottom < anchorTop {
+		anchorBottom = anchorTop
+	}
+
+	switch {
+	case r.lastMove > 0:
+		threshold := r.viewport.YOffset + anchorBottom
+		if r.selectedIndex > threshold {
+			r.viewport.YOffset = r.selectedIndex - anchorBottom
+		}
+	case r.lastMove < 0:
+		threshold := r.viewport.YOffset + anchorTop
+		if r.selectedIndex < threshold {
+			r.viewport.YOffset = r.selectedIndex - anchorTop
+		}
+	default:
+		if r.selectedIndex < r.viewport.YOffset {
+			r.viewport.YOffset = r.selectedIndex
+		} else if r.selectedIndex >= r.viewport.YOffset+r.viewport.Height {
+			r.viewport.YOffset = r.selectedIndex - r.viewport.Height + 1
+		}
+	}
+
+	if r.viewport.YOffset < 0 {
+		r.viewport.YOffset = 0
+	} else if r.viewport.YOffset > maxOffset {
+		r.viewport.YOffset = maxOffset
+	}
 }
 
 // renderResource renders a single resource line.
@@ -202,33 +275,42 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	if indent > 0 {
 		address = trimModulePrefix(resource.Address, indent)
 	}
-	headerBase := fmt.Sprintf("%s%s %s", prefix, actionIcon, address)
 	headerSuffix := ""
 	if changeCount > 0 {
 		headerSuffix = fmt.Sprintf("  (%d changes)", changeCount)
 	}
 
+	selectedBg := r.styles.SelectedLineBackground
+	iconStyle := actionStyle
+	addressStyle := r.styles.LineItemText
+	suffixStyle := r.styles.LineItemText
+	spaceStyle := lipgloss.NewStyle()
+	prefixText := prefix
 	if isSelected {
-		headerLine := headerBase + headerSuffix
-		if r.width > 0 {
-			headerLine = runewidth.Truncate(headerLine, r.width, "...")
-		}
-		headerLine = r.styles.Selected.Render(headerLine)
-		if r.width > 0 {
-			headerLine = padAfterStyled(headerLine, r.width)
-		}
-		output.WriteString(headerLine)
-	} else {
-		headerLine := headerBase
-		if headerSuffix != "" {
-			headerLine += r.styles.Dimmed.Render(headerSuffix)
-		}
-		if r.width > 0 {
-			headerLine = padLine(headerLine, r.width)
-		}
-		headerLine = actionStyle.Render(headerLine)
-		output.WriteString(headerLine)
+		iconStyle = iconStyle.Background(selectedBg).Bold(true)
+		addressStyle = addressStyle.Background(selectedBg).Bold(true)
+		suffixStyle = suffixStyle.Background(selectedBg).Bold(true)
+		spaceStyle = lipgloss.NewStyle().Background(selectedBg)
+		prefixText = lipgloss.NewStyle().Background(selectedBg).Render(prefix)
 	}
+	icon := iconStyle.Render(actionIcon)
+	addressText := addressStyle.Render(address)
+	suffixText := ""
+	if headerSuffix != "" {
+		suffixText = suffixStyle.Render(headerSuffix)
+	}
+	headerLine := fmt.Sprintf("%s%s%s%s", prefixText, icon, spaceStyle.Render(" "), addressText+suffixText)
+	if r.width > 0 {
+		headerLine = lipgloss.NewStyle().MaxWidth(r.width).Render(headerLine)
+	}
+	if isSelected {
+		if r.width > 0 {
+			headerLine = padAfterStyledWithBackground(headerLine, r.width, selectedBg)
+		}
+	} else if r.width > 0 {
+		headerLine = padAfterStyled(headerLine, r.width)
+	}
+	output.WriteString(headerLine)
 
 	return output.String()
 }
@@ -299,6 +381,29 @@ func (n *moduleNode) countTotal() int {
 	return total
 }
 
+func (n *moduleNode) minScore(scores map[string]int) int {
+	if len(scores) == 0 {
+		return 0
+	}
+	min := -1
+	for i := range n.resources {
+		score := scores[n.resources[i].Address]
+		if min == -1 || score < min {
+			min = score
+		}
+	}
+	for _, child := range n.children {
+		score := child.minScore(scores)
+		if min == -1 || score < min {
+			min = score
+		}
+	}
+	if min == -1 {
+		return 0
+	}
+	return min
+}
+
 func modulePath(address string) []string {
 	if !strings.HasPrefix(address, "module.") {
 		return nil
@@ -311,6 +416,80 @@ func modulePath(address string) []string {
 		}
 	}
 	return names
+}
+
+func fuzzyScore(query, candidate string) int {
+	if query == "" {
+		return 0
+	}
+	q := []rune(query)
+	c := []rune(candidate)
+	if len(q) > len(c) {
+		return -1
+	}
+	pos := make([]int, 0, len(q))
+	qi := 0
+	for i, r := range c {
+		if r == q[qi] {
+			pos = append(pos, i)
+			qi++
+			if qi == len(q) {
+				break
+			}
+		}
+	}
+	if qi != len(q) {
+		return -1
+	}
+	span := pos[len(pos)-1] - pos[0]
+	start := pos[0]
+	gaps := 0
+	dots := 0
+	for i := 1; i < len(pos); i++ {
+		gaps += pos[i] - pos[i-1] - 1
+		for j := pos[i-1] + 1; j < pos[i]; j++ {
+			if c[j] == '.' {
+				dots++
+			}
+		}
+	}
+	return span + start + gaps + dots*4
+}
+
+func normalizeAddressForScore(address string) string {
+	return strings.ReplaceAll(address, "module.", "")
+}
+
+func bestQueryScore(query string, resource terraform.ResourceChange) int {
+	if query == "" {
+		return 0
+	}
+	terms := strings.Fields(query)
+	if len(terms) > 1 {
+		score := 0
+		for _, term := range terms {
+			termScore := bestQueryScore(term, resource)
+			if termScore < 0 {
+				return -1
+			}
+			score += termScore
+		}
+		return score
+	}
+
+	candidate := strings.ToLower(normalizeAddressForScore(resource.Address))
+	best := fuzzyScore(query, candidate)
+	if resource.ResourceType != "" {
+		if score := fuzzyScore(query, strings.ToLower(resource.ResourceType)); score >= 0 && (best == -1 || score < best) {
+			best = score
+		}
+	}
+	if resource.ResourceName != "" {
+		if score := fuzzyScore(query, strings.ToLower(resource.ResourceName)); score >= 0 && (best == -1 || score < best) {
+			best = score
+		}
+	}
+	return best
 }
 
 // renderDiff renders a single diff line
@@ -409,14 +588,35 @@ func (r *ResourceList) buildVisibleItems(resources []terraform.ResourceChange) [
 
 	items := make([]listItem, 0, len(resources))
 	childNames := root.sortedChildNames()
+	if r.searchActive {
+		sort.Slice(childNames, func(i, j int) bool {
+			left := root.children[childNames[i]].minScore(r.matchScores)
+			right := root.children[childNames[j]].minScore(r.matchScores)
+			if left == right {
+				return childNames[i] < childNames[j]
+			}
+			return left < right
+		})
+	}
 	for _, name := range childNames {
 		child := root.children[name]
 		items = append(items, r.appendNodeItems(child, 0)...)
 	}
 
-	sort.Slice(ungrouped, func(i, j int) bool {
-		return ungrouped[i].Address < ungrouped[j].Address
-	})
+	if r.searchActive {
+		sort.Slice(ungrouped, func(i, j int) bool {
+			left := r.matchScores[ungrouped[i].Address]
+			right := r.matchScores[ungrouped[j].Address]
+			if left == right {
+				return ungrouped[i].Address < ungrouped[j].Address
+			}
+			return left < right
+		})
+	} else {
+		sort.Slice(ungrouped, func(i, j int) bool {
+			return ungrouped[i].Address < ungrouped[j].Address
+		})
+	}
 	for i := range ungrouped {
 		items = append(items, listItem{
 			kind:     itemResource,
@@ -431,12 +631,13 @@ func (r *ResourceList) buildVisibleItems(resources []terraform.ResourceChange) [
 func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 	items := []listItem{}
 	total := node.countTotal()
-	if total == 1 && len(node.children) == 0 {
+	// Skip group header for single resources, but not during search to preserve context
+	if !r.searchActive && total == 1 && len(node.children) == 0 {
 		res := node.resources[0]
 		items = append(items, listItem{
 			kind:     itemResource,
 			resource: &res,
-			indent:   depth * 2,
+			indent:   (depth + 1) * 2,
 		})
 		return items
 	}
@@ -457,9 +658,20 @@ func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 		return items
 	}
 
-	sort.Slice(node.resources, func(i, j int) bool {
-		return node.resources[i].Address < node.resources[j].Address
-	})
+	if r.searchActive {
+		sort.Slice(node.resources, func(i, j int) bool {
+			left := r.matchScores[node.resources[i].Address]
+			right := r.matchScores[node.resources[j].Address]
+			if left == right {
+				return node.resources[i].Address < node.resources[j].Address
+			}
+			return left < right
+		})
+	} else {
+		sort.Slice(node.resources, func(i, j int) bool {
+			return node.resources[i].Address < node.resources[j].Address
+		})
+	}
 	for i := range node.resources {
 		items = append(items, listItem{
 			kind:     itemResource,
@@ -469,6 +681,16 @@ func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 	}
 
 	childNames := node.sortedChildNames()
+	if r.searchActive {
+		sort.Slice(childNames, func(i, j int) bool {
+			left := node.children[childNames[i]].minScore(r.matchScores)
+			right := node.children[childNames[j]].minScore(r.matchScores)
+			if left == right {
+				return childNames[i] < childNames[j]
+			}
+			return left < right
+		})
+	}
 	for _, name := range childNames {
 		child := node.children[name]
 		items = append(items, r.appendNodeItems(child, depth+1)...)
@@ -492,9 +714,10 @@ func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded
 	}
 
 	if isSelected {
-		line = r.styles.Selected.Render(line)
+		selectedBg := r.styles.SelectedLineBackground
+		line = r.styles.LineItemText.Background(selectedBg).Bold(true).Render(line)
 		if r.width > 0 {
-			line = padAfterStyled(line, r.width)
+			line = padAfterStyledWithBackground(line, r.width, selectedBg)
 		}
 		return line
 	}
@@ -550,11 +773,27 @@ func (r *ResourceList) firstResourceIndex() int {
 }
 
 func resourceMatchesQuery(resource terraform.ResourceChange, query string) bool {
-	haystack := strings.ToLower(resource.Address)
-	if resource.ResourceType != "" || resource.ResourceName != "" {
-		haystack += " " + strings.ToLower(resource.ResourceType) + " " + strings.ToLower(resource.ResourceName)
+	if query == "" {
+		return true
 	}
-	return fuzzyMatch(query, haystack)
+	terms := strings.Fields(query)
+	address := strings.ToLower(resource.Address)
+	resourceType := strings.ToLower(resource.ResourceType)
+	resourceName := strings.ToLower(resource.ResourceName)
+
+	for _, term := range terms {
+		matched := fuzzyMatch(term, address)
+		if !matched && resourceType != "" {
+			matched = fuzzyMatch(term, resourceType)
+		}
+		if !matched && resourceName != "" {
+			matched = fuzzyMatch(term, resourceName)
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 func fuzzyMatch(query, candidate string) bool {
@@ -630,4 +869,16 @@ func padAfterStyled(styled string, width int) string {
 		return styled
 	}
 	return styled + strings.Repeat(" ", width-visible)
+}
+
+func padAfterStyledWithBackground(styled string, width int, bg lipgloss.AdaptiveColor) string {
+	if width <= 0 {
+		return styled
+	}
+	visible := lipgloss.Width(styled)
+	if visible >= width {
+		return styled
+	}
+	padding := strings.Repeat(" ", width-visible)
+	return styled + lipgloss.NewStyle().Background(bg).Render(padding)
 }
