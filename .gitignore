@@ -15,6 +15,7 @@ go.work
 .gocache/
 .cache/
 bin/
+.go/
 
 # Output of the go coverage tool
 coverage.out
