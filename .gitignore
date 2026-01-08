@@ -1,40 +1,21 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-tftui
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool
-*.out
-
-# Dependency directories
-vendor/
-
 # Go workspace file
 go.work
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Environment variables
+.env
+.env.production
 
-# OS files
+# Nix Development Environment
+.direnv
+
+# MacOS
 .DS_Store
 
-# Config and history files (user-specific)
-.tftui/
-*.db
+# Build artifacts
+.gocache/
+.cache/
+bin/
 
-# Terraform files
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfplan
-*.tfvars
+# Output of the go coverage tool
+coverage.out
+coverage.html
