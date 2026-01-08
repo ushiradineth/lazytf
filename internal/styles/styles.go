@@ -28,7 +28,7 @@ var (
 		CreateColor:     lipgloss.AdaptiveColor{Light: "#00AF00", Dark: "#00D700"},
 		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FF8700", Dark: "#FFAF00"},
 		DeleteColor:     lipgloss.AdaptiveColor{Light: "#D70000", Dark: "#FF5F5F"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#AF5F00", Dark: "#D78700"},
+		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#B200B2", Dark: "#D75FD7"},
 		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#767676", Dark: "#9E9E9E"},
 		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#1C1C1C"},
 		ForegroundColor: lipgloss.AdaptiveColor{Light: "#262626", Dark: "#E4E4E4"},
@@ -44,7 +44,7 @@ var (
 		CreateColor:     lipgloss.AdaptiveColor{Light: "#00CA72", Dark: "#00CA72"},
 		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FFA500", Dark: "#FFA500"},
 		DeleteColor:     lipgloss.AdaptiveColor{Light: "#E03A3E", Dark: "#E03A3E"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#9B5DE5", Dark: "#9B5DE5"},
+		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#C026D3", Dark: "#C026D3"},
 		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#8A8A8A", Dark: "#8A8A8A"},
 		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FAFAFA", Dark: "#1A1B26"},
 		ForegroundColor: lipgloss.AdaptiveColor{Light: "#1A1B26", Dark: "#F8F8F2"},
@@ -75,6 +75,7 @@ type Styles struct {
 	DiffAdd           lipgloss.Style
 	DiffRemove        lipgloss.Style
 	DiffChange        lipgloss.Style
+	Comment           lipgloss.Style
 	HelpKey           lipgloss.Style
 	HelpValue         lipgloss.Style
 	Title             lipgloss.Style
@@ -164,6 +165,9 @@ func NewStyles(theme Theme) *Styles {
 
 	s.DiffChange = lipgloss.NewStyle().
 		Foreground(theme.UpdateColor)
+
+	s.Comment = lipgloss.NewStyle().
+		Foreground(theme.DeleteColor)
 
 	// Help styles
 	s.HelpKey = lipgloss.NewStyle().

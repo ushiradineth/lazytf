@@ -117,6 +117,21 @@ func TestChangeUnmarshal_Nulls(t *testing.T) {
 	}
 }
 
+func TestChangeUnmarshal_ReplacePaths(t *testing.T) {
+	raw := []byte(`{
+		"actions": ["delete","create"],
+		"replace_paths": [["allocated_storage"], ["network", "self_link"]]
+	}`)
+
+	var change Change
+	if err := json.Unmarshal(raw, &change); err != nil {
+		t.Fatalf("unmarshal change: %v", err)
+	}
+	if len(change.ReplacePaths) != 2 || change.ReplacePaths[0][0] != "allocated_storage" {
+		t.Fatalf("unexpected replace paths: %#v", change.ReplacePaths)
+	}
+}
+
 func TestBuildOrderMap_InvalidJSON(t *testing.T) {
 	if got := buildOrderMap([]byte(`{"a":`)); got != nil {
 		t.Fatalf("expected nil for invalid json, got %#v", got)

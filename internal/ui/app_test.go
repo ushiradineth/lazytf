@@ -97,3 +97,51 @@ func TestModelRenderFilterBarCounts(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchFocusAndClear(t *testing.T) {
+	m := NewModel(&terraform.Plan{
+		Resources: []terraform.ResourceChange{
+			{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		},
+	})
+	m.ready = true
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !m.searching {
+		t.Fatalf("expected searching to be true")
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
+	if m.searchInput.Value() == "" {
+		t.Fatalf("expected search input to update")
+	}
+
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.searching {
+		t.Fatalf("expected searching to be false")
+	}
+	if m.searchInput.Value() != "" {
+		t.Fatalf("expected search input cleared")
+	}
+}
+
+func TestHelpBlocksInput(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+	m.showHelp = true
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if !m.filterCreate {
+		t.Fatalf("expected filters unchanged while help open")
+	}
+}
+
+func TestToggleDiffPanel(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+	m.showSplit = true
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if m.showSplit {
+		t.Fatalf("expected diff panel toggle off")
+	}
+}

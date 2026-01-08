@@ -289,7 +289,7 @@ func (m *Model) renderStatusBar() string {
 		totalResources = len(m.plan.Resources)
 	}
 
-	helpText := "q: quit | ↑↓/jk: navigate | enter/space: expand | c/u/d/r: filter | /: search | v: diff | ?: help"
+	helpText := "q: quit | ↑↓/jk: navigate | c/u/d/r: filter | /: search | v: diff | ?: help"
 
 	statusText := fmt.Sprintf("%d resources | %s", totalResources, helpText)
 
@@ -340,7 +340,6 @@ func (m *Model) renderMainContent() string {
 func (m *Model) renderHelp() string {
 	keys := []string{
 		"Navigation: ↑/↓ or j/k",
-		"Expand: enter/space",
 		"Filters: c/u/d/r",
 		"Search: / to focus, esc to clear",
 		"Diff panel: v to toggle",

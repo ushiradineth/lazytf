@@ -1,0 +1,206 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.6.6",
+  "variables": {},
+  "resource_changes": [
+    {
+      "address": "module.app.helm_release.app",
+      "module_address": ["module.app"],
+      "mode": "managed",
+      "type": "helm_release",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/helm",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "name": "web-app",
+          "namespace": "default",
+          "values": [
+            "applications:\n  name: web\n  retry: true\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: info\n"
+          ],
+          "set": ["image.tag=1.2.3", "resources.requests.cpu=250m"],
+          "metadata": {
+            "revision": "7",
+            "app_version": "1.2.3"
+          }
+        },
+        "after": {
+          "name": "web-app",
+          "namespace": "default",
+          "values": [
+            "applications:\n  name: web\n  retry: false\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: debug\n"
+          ],
+          "set": ["image.tag=1.2.4", "resources.requests.cpu=250m"],
+          "metadata": {
+            "revision": "8",
+            "app_version": "1.2.4"
+          }
+        },
+        "after_unknown": {
+          "metadata": {
+            "first_deployed": true
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_instance.web",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "instance_type": "t3.micro",
+          "ami": "ami-123456",
+          "vpc_security_group_ids": ["sg-111", "sg-222"],
+          "tags": {
+            "Environment": "staging",
+            "Owner": "team-a"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "ami": "ami-123456",
+          "vpc_security_group_ids": ["sg-111", "sg-333"],
+          "tags": {
+            "Environment": "prod",
+            "Owner": "team-a",
+            "CostCenter": "platform"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_db_instance.primary",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["delete", "create"],
+        "before": {
+          "identifier": "db-primary",
+          "engine": "postgres",
+          "allocated_storage": 50,
+          "backup_retention_period": 7,
+          "tags": {
+            "Environment": "prod"
+          }
+        },
+        "after": {
+          "identifier": "db-primary",
+          "engine": "postgres",
+          "allocated_storage": 100,
+          "backup_retention_period": 14,
+          "tags": {
+            "Environment": "prod",
+            "Tier": "critical"
+          }
+        },
+        "after_unknown": {
+          "endpoint": true,
+          "address": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "aws_security_group.legacy",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["delete"],
+        "before": {
+          "name": "legacy-sg",
+          "description": "deprecated",
+          "ingress": [
+            {
+              "from_port": 22,
+              "to_port": 22,
+              "protocol": "tcp",
+              "cidr_blocks": ["0.0.0.0/0"]
+            }
+          ],
+          "tags": {
+            "Environment": "dev"
+          }
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "google_storage_bucket.assets",
+      "mode": "managed",
+      "type": "google_storage_bucket",
+      "name": "assets",
+      "provider_name": "registry.terraform.io/hashicorp/google",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "assets-prod",
+          "location": "US",
+          "uniform_bucket_level_access": true,
+          "versioning": {
+            "enabled": true
+          },
+          "labels": {
+            "env": "prod",
+            "team": "platform"
+          }
+        },
+        "after_unknown": {
+          "self_link": true,
+          "url": true
+        }
+      }
+    },
+    {
+      "address": "kubernetes_config_map.app_settings",
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "app_settings",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    }
+  ],
+  "output_changes": {
+    "vpc_id": {
+      "actions": ["update"],
+      "before": "vpc-111111",
+      "after": "vpc-222222",
+      "sensitive": false
+    },
+    "admin_password": {
+      "actions": ["create"],
+      "before": null,
+      "after": "(sensitive)",
+      "sensitive": true
+    }
+  }
+}

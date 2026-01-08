@@ -76,6 +76,7 @@ type Change struct {
 	AfterUnknown      map[string]interface{} `json:"after_unknown,omitempty"`
 	BeforeSensitive   map[string]interface{} `json:"before_sensitive,omitempty"`
 	AfterSensitive    map[string]interface{} `json:"after_sensitive,omitempty"`
+	ReplacePaths      [][]string             `json:"replace_paths,omitempty"`
 	BeforeOrder       map[string][]string    `json:"-"`
 	AfterOrder        map[string][]string    `json:"-"`
 	AfterUnknownOrder map[string][]string    `json:"-"`
@@ -90,6 +91,7 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 		AfterUnknown    json.RawMessage        `json:"after_unknown"`
 		BeforeSensitive map[string]interface{} `json:"before_sensitive"`
 		AfterSensitive  map[string]interface{} `json:"after_sensitive"`
+		ReplacePaths    [][]string             `json:"replace_paths"`
 	}
 
 	var aux changeAlias
@@ -100,6 +102,7 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 	c.Actions = aux.Actions
 	c.BeforeSensitive = aux.BeforeSensitive
 	c.AfterSensitive = aux.AfterSensitive
+	c.ReplacePaths = aux.ReplacePaths
 
 	if len(aux.Before) > 0 && string(aux.Before) != "null" {
 		if err := json.Unmarshal(aux.Before, &c.Before); err != nil {

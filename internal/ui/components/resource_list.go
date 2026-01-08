@@ -15,11 +15,10 @@ import (
 	"github.com/ushiradineth/tftui/internal/terraform"
 )
 
-// ResourceList displays a list of resources with expand/collapse functionality
+// ResourceList displays a list of resources.
 type ResourceList struct {
 	viewport      viewport.Model
 	resources     []terraform.ResourceChange
-	expandedMap   map[string]bool // resource address -> expanded state
 	selectedIndex int
 	diffEngine    *diff.Engine
 	styles        *styles.Styles
@@ -36,7 +35,6 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 	return &ResourceList{
 		viewport:      vp,
 		resources:     []terraform.ResourceChange{},
-		expandedMap:   make(map[string]bool),
 		selectedIndex: 0,
 		diffEngine:    diff.NewEngine(),
 		styles:        s,
@@ -77,16 +75,6 @@ func (r *ResourceList) SetSearchQuery(query string) {
 	r.updateViewport()
 }
 
-// ToggleSelected toggles the expanded state of the currently selected resource
-func (r *ResourceList) ToggleSelected() {
-	filtered := r.getFilteredResources()
-	if r.selectedIndex >= 0 && r.selectedIndex < len(filtered) {
-		resource := filtered[r.selectedIndex]
-		r.expandedMap[resource.Address] = !r.expandedMap[resource.Address]
-		r.updateViewport()
-	}
-}
-
 // MoveUp moves the selection up
 func (r *ResourceList) MoveUp() {
 	if r.selectedIndex > 0 {
@@ -120,8 +108,6 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 			r.MoveUp()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
 			r.MoveDown()
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
-			r.ToggleSelected()
 		}
 	}
 
@@ -170,18 +156,17 @@ func (r *ResourceList) updateViewport() {
 
 	for i, resource := range filtered {
 		isSelected := i == r.selectedIndex
-		isExpanded := r.expandedMap[resource.Address]
 
 		// Render the resource
-		content.WriteString(r.renderResource(resource, isSelected, isExpanded))
+		content.WriteString(r.renderResource(resource, isSelected))
 		content.WriteString("\n")
 	}
 
 	r.viewport.SetContent(content.String())
 }
 
-// renderResource renders a single resource (collapsed or expanded)
-func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelected, isExpanded bool) string {
+// renderResource renders a single resource line.
+func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelected bool) string {
 	var output strings.Builder
 
 	// Get action style and icon
@@ -194,7 +179,7 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	// Render the header line
 	headerBase := fmt.Sprintf("%s %s", actionIcon, resource.Address)
 	headerSuffix := ""
-	if !isExpanded && changeCount > 0 {
+	if changeCount > 0 {
 		headerSuffix = fmt.Sprintf("  (%d changes)", changeCount)
 	}
 
@@ -220,26 +205,13 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 		output.WriteString(headerLine)
 	}
 
-	// If expanded, show the minimal diff
-	if isExpanded {
-		diffs := r.diffEngine.GetResourceDiffs(&resource)
-		if len(diffs) > 0 {
-			output.WriteString("\n")
-			for _, d := range diffs {
-				diffLine := r.renderDiff(d)
-				output.WriteString(diffLine)
-				output.WriteString("\n")
-			}
-		}
-	}
-
 	return output.String()
 }
 
 // renderDiff renders a single diff line
 func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 	symbol := d.Action.GetActionSymbol()
-	path := strings.Join(d.Path, ".")
+	path := formatPathForDisplay(d.Path)
 
 	var style lipgloss.Style
 	var line string
@@ -256,10 +228,7 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 		if oldStr, okOld := d.OldValue.(string); okOld {
 			if newStr, okNew := d.NewValue.(string); okNew && strings.Contains(oldStr, "\n") && strings.Contains(newStr, "\n") {
 				if multi := formatMultilineStringDiff(path, oldStr, newStr); multi != "" {
-					if r.width > 0 {
-						return style.Render(padMultiline(multi, r.width))
-					}
-					return style.Render(multi)
+					return r.renderMultilineDiff(multi)
 				}
 			}
 		}
@@ -347,6 +316,29 @@ func padMultiline(text string, width int) string {
 		lines[i] = padLine(line, width)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (r *ResourceList) renderMultilineDiff(block string) string {
+	lines := strings.Split(block, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(line, " ")
+		style := r.styles.Dimmed
+		switch {
+		case strings.HasPrefix(trimmed, "~ "):
+			style = r.styles.DiffChange
+		case strings.HasPrefix(trimmed, "- "):
+			style = r.styles.DiffRemove
+		case strings.HasPrefix(trimmed, "+ "):
+			style = r.styles.DiffAdd
+		}
+
+		if r.width > 0 {
+			line = padLine(line, r.width)
+		}
+		out = append(out, style.Render(line))
+	}
+	return strings.Join(out, "\n")
 }
 
 func padAfterStyled(styled string, width int) string {

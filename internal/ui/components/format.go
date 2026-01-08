@@ -118,3 +118,18 @@ func stripListMarker(line string) string {
 	}
 	return line
 }
+
+func formatPathForDisplay(path []string) string {
+	if len(path) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(path))
+	for _, segment := range path {
+		if strings.Contains(segment, ".") || strings.Contains(segment, " ") || strings.Contains(segment, "\"") || strings.Contains(segment, "\\") {
+			parts = append(parts, fmt.Sprintf("%q", segment))
+		} else {
+			parts = append(parts, segment)
+		}
+	}
+	return strings.Join(parts, ".")
+}
