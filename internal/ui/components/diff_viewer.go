@@ -37,8 +37,7 @@ func (d *DiffViewer) SetSize(width, height int) {
 func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 	content := ""
 	if resource == nil {
-		content = d.styles.Dimmed.Render("No resource selected")
-		return d.pad(content)
+		return d.pad("")
 	}
 
 	diffs := d.diffEngine.GetResourceDiffs(resource)

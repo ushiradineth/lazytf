@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -26,6 +27,9 @@ type ResourceList struct {
 	height        int
 	filterActions map[terraform.ActionType]bool
 	searchQuery   string
+	groupExpanded map[string]bool
+	visibleItems  []listItem
+	allExpanded   bool
 }
 
 // NewResourceList creates a new resource list component
@@ -44,6 +48,8 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 			terraform.ActionDelete:  true,
 			terraform.ActionReplace: true,
 		},
+		groupExpanded: make(map[string]bool),
+		allExpanded:   true,
 	}
 }
 
@@ -85,8 +91,7 @@ func (r *ResourceList) MoveUp() {
 
 // MoveDown moves the selection down
 func (r *ResourceList) MoveDown() {
-	filtered := r.getFilteredResources()
-	if r.selectedIndex < len(filtered)-1 {
+	if r.selectedIndex < len(r.visibleItems)-1 {
 		r.selectedIndex++
 		r.updateViewport()
 	}
@@ -108,6 +113,8 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 			r.MoveUp()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
 			r.MoveDown()
+		case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
+			r.ToggleGroup()
 		}
 	}
 
@@ -144,21 +151,31 @@ func (r *ResourceList) updateViewport() {
 	filtered := r.getFilteredResources()
 	if len(filtered) == 0 {
 		r.selectedIndex = 0
+		r.visibleItems = nil
 		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
 		return
 	}
 
-	if r.selectedIndex >= len(filtered) {
-		r.selectedIndex = len(filtered) - 1
+	r.visibleItems = r.buildVisibleItems(filtered)
+	if len(r.visibleItems) == 0 {
+		r.selectedIndex = 0
+		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
+		return
+	}
+
+	if r.selectedIndex >= len(r.visibleItems) {
+		r.selectedIndex = len(r.visibleItems) - 1
 	}
 
 	var content strings.Builder
-
-	for i, resource := range filtered {
+	for i, item := range r.visibleItems {
 		isSelected := i == r.selectedIndex
-
-		// Render the resource
-		content.WriteString(r.renderResource(resource, isSelected))
+		switch item.kind {
+		case itemGroup:
+			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent))
+		case itemResource:
+			content.WriteString(r.renderResource(*item.resource, isSelected, item.indent))
+		}
 		content.WriteString("\n")
 	}
 
@@ -166,7 +183,7 @@ func (r *ResourceList) updateViewport() {
 }
 
 // renderResource renders a single resource line.
-func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelected bool) string {
+func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelected bool, indent int) string {
 	var output strings.Builder
 
 	// Get action style and icon
@@ -177,7 +194,15 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	changeCount := r.diffEngine.CountChanges(&resource)
 
 	// Render the header line
-	headerBase := fmt.Sprintf("%s %s", actionIcon, resource.Address)
+	prefix := ""
+	if indent > 0 {
+		prefix = strings.Repeat(" ", indent)
+	}
+	address := resource.Address
+	if indent > 0 {
+		address = trimModulePrefix(resource.Address, indent)
+	}
+	headerBase := fmt.Sprintf("%s%s %s", prefix, actionIcon, address)
 	headerSuffix := ""
 	if changeCount > 0 {
 		headerSuffix = fmt.Sprintf("  (%d changes)", changeCount)
@@ -206,6 +231,86 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	}
 
 	return output.String()
+}
+
+func trimModulePrefix(address string, indent int) string {
+	if indent <= 0 {
+		return address
+	}
+	for i := 0; i < indent/2; i++ {
+		if strings.HasPrefix(address, "module.") {
+			parts := strings.SplitN(address, ".", 3)
+			if len(parts) == 3 {
+				address = parts[2]
+			} else {
+				break
+			}
+		}
+	}
+	return address
+}
+
+type moduleNode struct {
+	name      string
+	path      string
+	children  map[string]*moduleNode
+	resources []terraform.ResourceChange
+}
+
+func newModuleNode(name string) *moduleNode {
+	return &moduleNode{
+		name:     name,
+		children: make(map[string]*moduleNode),
+	}
+}
+
+func (n *moduleNode) insert(path []string, resource terraform.ResourceChange) {
+	current := n
+	for _, segment := range path {
+		child, ok := current.children[segment]
+		if !ok {
+			child = newModuleNode(segment)
+			if current.path == "" {
+				child.path = "module." + segment
+			} else {
+				child.path = current.path + ".module." + segment
+			}
+			current.children[segment] = child
+		}
+		current = child
+	}
+	current.resources = append(current.resources, resource)
+}
+
+func (n *moduleNode) sortedChildNames() []string {
+	names := make([]string, 0, len(n.children))
+	for name := range n.children {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (n *moduleNode) countTotal() int {
+	total := len(n.resources)
+	for _, child := range n.children {
+		total += child.countTotal()
+	}
+	return total
+}
+
+func modulePath(address string) []string {
+	if !strings.HasPrefix(address, "module.") {
+		return nil
+	}
+	parts := strings.Split(address, ".")
+	names := []string{}
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] == "module" && i+1 < len(parts) {
+			names = append(names, parts[i+1])
+		}
+	}
+	return names
 }
 
 // renderDiff renders a single diff line
@@ -262,11 +367,186 @@ func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Styl
 
 // GetSelectedResource returns the currently selected resource
 func (r *ResourceList) GetSelectedResource() *terraform.ResourceChange {
-	filtered := r.getFilteredResources()
-	if r.selectedIndex >= 0 && r.selectedIndex < len(filtered) {
-		return &filtered[r.selectedIndex]
+	if r.selectedIndex >= 0 && r.selectedIndex < len(r.visibleItems) {
+		item := r.visibleItems[r.selectedIndex]
+		if item.kind == itemResource {
+			return item.resource
+		}
 	}
 	return nil
+}
+
+type itemKind int
+
+const (
+	itemGroup itemKind = iota
+	itemResource
+)
+
+type listItem struct {
+	kind     itemKind
+	label    string
+	path     string
+	count    int
+	expanded bool
+	resource *terraform.ResourceChange
+	indent   int
+}
+
+func (r *ResourceList) buildVisibleItems(resources []terraform.ResourceChange) []listItem {
+	root := newModuleNode("")
+	ungrouped := make([]terraform.ResourceChange, 0)
+
+	for i := range resources {
+		resource := resources[i]
+		path := modulePath(resource.Address)
+		if len(path) == 0 {
+			ungrouped = append(ungrouped, resource)
+			continue
+		}
+		root.insert(path, resource)
+	}
+
+	items := make([]listItem, 0, len(resources))
+	childNames := root.sortedChildNames()
+	for _, name := range childNames {
+		child := root.children[name]
+		items = append(items, r.appendNodeItems(child, 0)...)
+	}
+
+	sort.Slice(ungrouped, func(i, j int) bool {
+		return ungrouped[i].Address < ungrouped[j].Address
+	})
+	for i := range ungrouped {
+		items = append(items, listItem{
+			kind:     itemResource,
+			resource: &ungrouped[i],
+			indent:   0,
+		})
+	}
+
+	return items
+}
+
+func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
+	items := []listItem{}
+	total := node.countTotal()
+	if total == 1 && len(node.children) == 0 {
+		res := node.resources[0]
+		items = append(items, listItem{
+			kind:     itemResource,
+			resource: &res,
+			indent:   depth * 2,
+		})
+		return items
+	}
+
+	if _, ok := r.groupExpanded[node.path]; !ok {
+		r.groupExpanded[node.path] = r.allExpanded
+	}
+
+	items = append(items, listItem{
+		kind:     itemGroup,
+		label:    "module." + node.name,
+		path:     node.path,
+		count:    total,
+		expanded: r.groupExpanded[node.path],
+		indent:   depth * 2,
+	})
+	if !r.groupExpanded[node.path] {
+		return items
+	}
+
+	sort.Slice(node.resources, func(i, j int) bool {
+		return node.resources[i].Address < node.resources[j].Address
+	})
+	for i := range node.resources {
+		items = append(items, listItem{
+			kind:     itemResource,
+			resource: &node.resources[i],
+			indent:   (depth + 1) * 2,
+		})
+	}
+
+	childNames := node.sortedChildNames()
+	for _, name := range childNames {
+		child := node.children[name]
+		items = append(items, r.appendNodeItems(child, depth+1)...)
+	}
+
+	return items
+}
+
+func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded bool, indent int) string {
+	indicator := "▶"
+	if expanded {
+		indicator = "▼"
+	}
+	prefix := ""
+	if indent > 0 {
+		prefix = strings.Repeat(" ", indent)
+	}
+	line := fmt.Sprintf("%s%s %s (%d)", prefix, indicator, group, count)
+	if r.width > 0 {
+		line = runewidth.Truncate(line, r.width, "...")
+	}
+
+	if isSelected {
+		line = r.styles.Selected.Render(line)
+		if r.width > 0 {
+			line = padAfterStyled(line, r.width)
+		}
+		return line
+	}
+
+	line = r.styles.Dimmed.Bold(true).Render(line)
+	if r.width > 0 {
+		line = padAfterStyled(line, r.width)
+	}
+	return line
+}
+
+func (r *ResourceList) ToggleGroup() {
+	if r.selectedIndex < 0 || r.selectedIndex >= len(r.visibleItems) {
+		return
+	}
+	item := r.visibleItems[r.selectedIndex]
+	if item.kind != itemGroup {
+		return
+	}
+	r.groupExpanded[item.path] = !r.groupExpanded[item.path]
+	r.allExpanded = r.computeAllExpanded()
+	r.updateViewport()
+}
+
+func (r *ResourceList) ToggleAllGroups() {
+	if len(r.groupExpanded) == 0 {
+		return
+	}
+	target := !r.allExpanded
+	for group := range r.groupExpanded {
+		r.groupExpanded[group] = target
+	}
+	r.allExpanded = target
+	r.updateViewport()
+}
+
+func (r *ResourceList) computeAllExpanded() bool {
+	for _, expanded := range r.groupExpanded {
+		if !expanded {
+			return false
+		}
+	}
+	return len(r.groupExpanded) > 0
+}
+
+func (r *ResourceList) firstResourceIndex() int {
+	for i, item := range r.visibleItems {
+		if item.kind == itemResource {
+			return i
+		}
+	}
+	return -1
 }
 
 func resourceMatchesQuery(resource terraform.ResourceChange, query string) bool {

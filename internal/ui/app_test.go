@@ -135,13 +135,3 @@ func TestHelpBlocksInput(t *testing.T) {
 		t.Fatalf("expected filters unchanged while help open")
 	}
 }
-
-func TestToggleDiffPanel(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.ready = true
-	m.showSplit = true
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
-	if m.showSplit {
-		t.Fatalf("expected diff panel toggle off")
-	}
-}

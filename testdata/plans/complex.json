@@ -5,20 +5,27 @@
   "resource_changes": [
     {
       "address": "module.app.helm_release.app",
-      "module_address": ["module.app"],
+      "module_address": [
+        "module.app"
+      ],
       "mode": "managed",
       "type": "helm_release",
       "name": "app",
       "provider_name": "registry.terraform.io/hashicorp/helm",
       "change": {
-        "actions": ["update"],
+        "actions": [
+          "update"
+        ],
         "before": {
           "name": "web-app",
           "namespace": "default",
           "values": [
             "applications:\n  name: web\n  retry: true\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: info\n"
           ],
-          "set": ["image.tag=1.2.3", "resources.requests.cpu=250m"],
+          "set": [
+            "image.tag=1.2.3",
+            "resources.requests.cpu=250m"
+          ],
           "metadata": {
             "revision": "7",
             "app_version": "1.2.3"
@@ -30,7 +37,10 @@
           "values": [
             "applications:\n  name: web\n  retry: false\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: debug\n"
           ],
-          "set": ["image.tag=1.2.4", "resources.requests.cpu=250m"],
+          "set": [
+            "image.tag=1.2.4",
+            "resources.requests.cpu=250m"
+          ],
           "metadata": {
             "revision": "8",
             "app_version": "1.2.4"
@@ -50,11 +60,16 @@
       "name": "web",
       "provider_name": "registry.terraform.io/hashicorp/aws",
       "change": {
-        "actions": ["update"],
+        "actions": [
+          "update"
+        ],
         "before": {
           "instance_type": "t3.micro",
           "ami": "ami-123456",
-          "vpc_security_group_ids": ["sg-111", "sg-222"],
+          "vpc_security_group_ids": [
+            "sg-111",
+            "sg-222"
+          ],
           "tags": {
             "Environment": "staging",
             "Owner": "team-a"
@@ -63,7 +78,10 @@
         "after": {
           "instance_type": "t3.small",
           "ami": "ami-123456",
-          "vpc_security_group_ids": ["sg-111", "sg-333"],
+          "vpc_security_group_ids": [
+            "sg-111",
+            "sg-333"
+          ],
           "tags": {
             "Environment": "prod",
             "Owner": "team-a",
@@ -80,7 +98,10 @@
       "name": "primary",
       "provider_name": "registry.terraform.io/hashicorp/aws",
       "change": {
-        "actions": ["delete", "create"],
+        "actions": [
+          "delete",
+          "create"
+        ],
         "before": {
           "identifier": "db-primary",
           "engine": "postgres",
@@ -118,7 +139,9 @@
       "name": "legacy",
       "provider_name": "registry.terraform.io/hashicorp/aws",
       "change": {
-        "actions": ["delete"],
+        "actions": [
+          "delete"
+        ],
         "before": {
           "name": "legacy-sg",
           "description": "deprecated",
@@ -127,7 +150,9 @@
               "from_port": 22,
               "to_port": 22,
               "protocol": "tcp",
-              "cidr_blocks": ["0.0.0.0/0"]
+              "cidr_blocks": [
+                "0.0.0.0/0"
+              ]
             }
           ],
           "tags": {
@@ -145,7 +170,9 @@
       "name": "assets",
       "provider_name": "registry.terraform.io/hashicorp/google",
       "change": {
-        "actions": ["create"],
+        "actions": [
+          "create"
+        ],
         "before": null,
         "after": {
           "name": "assets-prod",
@@ -172,7 +199,5108 @@
       "name": "app_settings",
       "provider_name": "registry.terraform.io/hashicorp/kubernetes",
       "change": {
-        "actions": ["update"],
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_0",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-0",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "0"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_1",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-1",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "1"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_2",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-2",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "2"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_3",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-3",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "3"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_4",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-4",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "4"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_5",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-5",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "5"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_0",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_1",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_2",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_3",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_0",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_1",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_2",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_3",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_0",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_1",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_2",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_3",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_0",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_1",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_2",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_3",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_0",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_1",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_2",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_3",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_0",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_1",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_2",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_3",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_0",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_1",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_2",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_3",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_0",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_1",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_2",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_3",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_db_instance.replica_0",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_db_instance.replica_1",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.beta.aws_db_instance.replica_2",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.beta.aws_security_group.legacy_0",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-0",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_security_group.legacy_1",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-1",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_security_group.legacy_2",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-2",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_0",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-0",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "0"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_1",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-1",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "1"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_2",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-2",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "2"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_3",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-3",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "3"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_4",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-4",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "4"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_5",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-5",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "5"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_6",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_6",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-6",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "6"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_7",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_7",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-7",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "7"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_8",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_8",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-8",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "8"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_9",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_9",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-9",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "9"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_10",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_10",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-10",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "10"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.root_11",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "root_11",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "root-bucket-11",
+          "versioning": {
+            "enabled": true
+          },
+          "tags": {
+            "env": "test",
+            "idx": "11"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true
+        }
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_0",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_1",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_2",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_3",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_4",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_instance.node_5",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_0",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_1",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_2",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_3",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_4",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_instance.node_5",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_0",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_1",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_2",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_3",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_4",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_instance.node_5",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.net.module.edge",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_0",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_1",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_2",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_3",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_4",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_instance.node_5",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.alpha.module.security",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_0",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_1",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_2",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_3",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_4",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_instance.node_5",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_0",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_1",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_2",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_3",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_4",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_instance.node_5",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_0",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_1",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_2",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_3",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_4",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_instance.node_5",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.read",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_0",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_1",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_2",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_3",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_4",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_instance.node_5",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.beta.module.db.module.write",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_0",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_1",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_2",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_3",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_4",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_instance.node_5",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_0",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_1",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_2",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_3",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_4",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.aws_instance.node_5",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.gamma.module.mesh",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_0",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_1",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_2",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_3",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_4",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.aws_instance.node_5",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_0",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_1",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_2",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_3",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_4",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.aws_instance.node_5",
+      "module_address": [
+        "module.delta.module.cache"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_0",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_1",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_2",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_3",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_4",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.module.cache.module.redis.aws_instance.node_5",
+      "module_address": [
+        "module.delta.module.cache.module.redis"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.delta.module.cache.module.redis",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_0",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_1",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_2",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_3",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_4",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.epsilon.aws_instance.node_5",
+      "module_address": [
+        "module.epsilon"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.epsilon",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_0",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_1",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_2",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_3",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_4",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.aws_instance.node_5",
+      "module_address": [
+        "module.zeta"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_0",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "0"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_1",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "1"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_2",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "2"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_3",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "3"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_4",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "4"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.zeta.module.monitoring.aws_instance.node_5",
+      "module_address": [
+        "module.zeta.module.monitoring"
+      ],
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "node_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "instance_type": "t3.micro",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring"
+          }
+        },
+        "after": {
+          "instance_type": "t3.small",
+          "tags": {
+            "Role": "worker",
+            "Module": "module.zeta.module.monitoring",
+            "Index": "5"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.alpha.aws_db_instance.replica_0",
+      "module_address": [
+        "module.alpha"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.alpha.module.net.aws_db_instance.replica_1",
+      "module_address": [
+        "module.alpha.module.net"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.alpha.module.net.module.edge.aws_db_instance.replica_2",
+      "module_address": [
+        "module.alpha.module.net.module.edge"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_db_instance.replica_3",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.beta.aws_db_instance.replica_4",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_db_instance.replica_5",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "allocated_storage": 50,
+          "engine": "postgres"
+        },
+        "after": {
+          "allocated_storage": 100,
+          "engine": "postgres"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "replace_paths": [
+          [
+            "allocated_storage"
+          ]
+        ]
+      }
+    },
+    {
+      "address": "module.alpha.module.security.aws_security_group.legacy_0",
+      "module_address": [
+        "module.alpha.module.security"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_0",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-0",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.aws_security_group.legacy_1",
+      "module_address": [
+        "module.beta"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_1",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-1",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.aws_security_group.legacy_2",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_2",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-2",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.aws_security_group.legacy_3",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_3",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-3",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.aws_security_group.legacy_4",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_4",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-4",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.aws_security_group.legacy_5",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "legacy_5",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "legacy-sg-5",
+          "description": "deprecated"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.kubernetes_config_map.settings_0",
+      "module_address": [
+        "module.beta.module.db"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_0",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.read.kubernetes_config_map.settings_1",
+      "module_address": [
+        "module.beta.module.db.module.read"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_1",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.beta.module.db.module.write.kubernetes_config_map.settings_2",
+      "module_address": [
+        "module.beta.module.db.module.write"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_2",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.kubernetes_config_map.settings_3",
+      "module_address": [
+        "module.gamma"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_3",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.gamma.module.mesh.kubernetes_config_map.settings_4",
+      "module_address": [
+        "module.gamma.module.mesh"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_4",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
+            "log_level": "info"
+          }
+        },
+        "after": {
+          "data": {
+            "app.yaml": "featureFlags:\n  newCheckout: true\n  betaUI: false\nrateLimits:\n  perMinute: 200\n",
+            "log_level": "debug"
+          }
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "module.delta.kubernetes_config_map.settings_5",
+      "module_address": [
+        "module.delta"
+      ],
+      "mode": "managed",
+      "type": "kubernetes_config_map",
+      "name": "settings_5",
+      "provider_name": "registry.terraform.io/hashicorp/kubernetes",
+      "change": {
+        "actions": [
+          "update"
+        ],
         "before": {
           "data": {
             "app.yaml": "featureFlags:\n  newCheckout: false\n  betaUI: false\nrateLimits:\n  perMinute: 120\n",
@@ -191,13 +5319,17 @@
   ],
   "output_changes": {
     "vpc_id": {
-      "actions": ["update"],
+      "actions": [
+        "update"
+      ],
       "before": "vpc-111111",
       "after": "vpc-222222",
       "sensitive": false
     },
     "admin_password": {
-      "actions": ["create"],
+      "actions": [
+        "create"
+      ],
       "before": null,
       "after": "(sensitive)",
       "sensitive": true

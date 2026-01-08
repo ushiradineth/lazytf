@@ -159,14 +159,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = !m.showHelp
 			return m, nil
 
-		case "v":
-			m.showSplit = !m.showSplit
-			m.updateLayout()
-			return m, nil
-
 		case "c":
 			m.filterCreate = !m.filterCreate
 			m.resourceList.SetFilter(terraform.ActionCreate, m.filterCreate)
+
+		case "t":
+			m.resourceList.ToggleAllGroups()
 
 		case "u":
 			m.filterUpdate = !m.filterUpdate
@@ -289,7 +287,7 @@ func (m *Model) renderStatusBar() string {
 		totalResources = len(m.plan.Resources)
 	}
 
-	helpText := "q: quit | ↑↓/jk: navigate | c/u/d/r: filter | /: search | v: diff | ?: help"
+	helpText := "q: quit | ↑↓/jk: navigate | enter/space: toggle group | t: toggle all | c/u/d/r: filter | /: search | ?: help"
 
 	statusText := fmt.Sprintf("%d resources | %s", totalResources, helpText)
 
@@ -340,9 +338,10 @@ func (m *Model) renderMainContent() string {
 func (m *Model) renderHelp() string {
 	keys := []string{
 		"Navigation: ↑/↓ or j/k",
+		"Toggle group: enter/space",
+		"Toggle all: t",
 		"Filters: c/u/d/r",
 		"Search: / to focus, esc to clear",
-		"Diff panel: v to toggle",
 		"Help: ? to close",
 		"Quit: q or ctrl+c",
 	}
@@ -403,12 +402,13 @@ func minInt(a, b int) int {
 
 // KeyMap defines the key bindings
 type KeyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Expand key.Binding
-	Filter key.Binding
-	Quit   key.Binding
-	Help   key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	Expand    key.Binding
+	ToggleAll key.Binding
+	Filter    key.Binding
+	Quit      key.Binding
+	Help      key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings
@@ -424,7 +424,11 @@ func DefaultKeyMap() KeyMap {
 		),
 		Expand: key.NewBinding(
 			key.WithKeys("enter", " "),
-			key.WithHelp("enter/space", "expand/collapse"),
+			key.WithHelp("enter/space", "toggle group"),
+		),
+		ToggleAll: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "toggle all groups"),
 		),
 		Filter: key.NewBinding(
 			key.WithKeys("c", "u", "d", "r"),

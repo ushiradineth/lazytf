@@ -449,3 +449,11 @@ func TestViewerNarrowWidthNoPanic(t *testing.T) {
 	}
 	_ = viewer.View(resource)
 }
+
+func TestViewNoResourceSelectedEmpty(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(20, 5)
+	if got := viewer.View(nil); strings.TrimSpace(got) != "" {
+		t.Fatalf("expected empty view, got %q", got)
+	}
+}

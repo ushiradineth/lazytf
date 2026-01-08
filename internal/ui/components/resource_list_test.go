@@ -88,19 +88,15 @@ func TestInterfaceHelpers(t *testing.T) {
 func TestResourceListFilteringAndSelection(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	resources := []terraform.ResourceChange{
-		{Address: "a", Action: terraform.ActionCreate},
-		{Address: "b", Action: terraform.ActionDelete},
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionDelete},
 	}
 	r.SetResources(resources)
 	r.SetFilter(terraform.ActionDelete, false)
 
-	if got := r.GetSelectedResource(); got == nil || got.Address != "a" {
-		t.Fatalf("unexpected selected resource: %#v", got)
-	}
-
 	r.MoveDown()
-	if r.selectedIndex != 0 {
-		t.Fatalf("expected selection to stay at 0, got %d", r.selectedIndex)
+	if got := r.GetSelectedResource(); got == nil || got.Address != "aws_instance.a" {
+		t.Fatalf("unexpected selected resource: %#v", got)
 	}
 
 	r.SetFilter(terraform.ActionCreate, false)
@@ -131,9 +127,23 @@ func TestRenderResourceDoesNotExpandDiffs(t *testing.T) {
 		},
 	}
 
-	out := r.renderResource(resource, false)
+	out := r.renderResource(resource, false, 0)
 	if !strings.Contains(out, "aws_vpc.main") || strings.Contains(out, "~ name") {
 		t.Fatalf("unexpected render output: %q", out)
+	}
+}
+
+func TestRenderResourceTrimsModulePrefix(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	resource := terraform.ResourceChange{
+		Address: "module.alpha.aws_instance.web",
+		Action:  terraform.ActionUpdate,
+		Change:  &terraform.Change{Before: map[string]interface{}{"a": 1}, After: map[string]interface{}{"a": 2}},
+	}
+
+	out := r.renderResource(resource, false, 2)
+	if !strings.Contains(out, "aws_instance.web") || strings.Contains(out, "module.alpha") {
+		t.Fatalf("expected trimmed module prefix, got %q", out)
 	}
 }
 
@@ -169,6 +179,16 @@ func stripANSI(s string) string {
 	return re.ReplaceAllString(s, "")
 }
 
+func selectFirstResource(r *ResourceList) *terraform.ResourceChange {
+	for i := 0; i < 20; i++ {
+		if res := r.GetSelectedResource(); res != nil {
+			return res
+		}
+		r.MoveDown()
+	}
+	return nil
+}
+
 func TestFuzzyMatchNonContiguous(t *testing.T) {
 	if !fuzzyMatch("awsins", "aws_instance") {
 		t.Fatalf("expected non-contiguous match to pass")
@@ -190,7 +210,7 @@ func TestSearchCaseInsensitive(t *testing.T) {
 		{Address: "aws_instance.web", Action: terraform.ActionCreate},
 	})
 	r.SetSearchQuery("AWS")
-	if got := r.GetSelectedResource(); got == nil {
+	if got := selectFirstResource(r); got == nil {
 		t.Fatalf("expected case-insensitive search to match")
 	}
 }
@@ -219,8 +239,8 @@ func TestSearchEmptyQueryRestoresSelection(t *testing.T) {
 		t.Fatalf("expected selection reset on empty list, got %d", r.selectedIndex)
 	}
 	r.SetSearchQuery("")
-	if got := r.GetSelectedResource(); got == nil || got.Address != "aws_instance.web" {
-		t.Fatalf("expected selection restored to first item, got %#v", got)
+	if got := selectFirstResource(r); got == nil {
+		t.Fatalf("expected selection restored to resource, got %#v", got)
 	}
 }
 
@@ -230,7 +250,7 @@ func TestSearchQueryTrimsWhitespace(t *testing.T) {
 		{Address: "aws_instance.web", Action: terraform.ActionCreate},
 	})
 	r.SetSearchQuery("  web ")
-	if got := r.GetSelectedResource(); got == nil || got.Address != "aws_instance.web" {
+	if got := selectFirstResource(r); got == nil || got.Address != "aws_instance.web" {
 		t.Fatalf("expected trimmed query to match, got %#v", got)
 	}
 }
@@ -241,11 +261,11 @@ func TestSearchQueryMatchesDotAndBracketSegments(t *testing.T) {
 		{Address: "module.app.aws_instance.web[0]", Action: terraform.ActionCreate},
 	})
 	r.SetSearchQuery("web[0]")
-	if got := r.GetSelectedResource(); got == nil {
+	if got := selectFirstResource(r); got == nil {
 		t.Fatalf("expected bracketed query to match")
 	}
 	r.SetSearchQuery("module.app")
-	if got := r.GetSelectedResource(); got == nil {
+	if got := selectFirstResource(r); got == nil {
 		t.Fatalf("expected dot query to match")
 	}
 }
@@ -261,7 +281,7 @@ func TestSearchMatchesResourceTypeAndName(t *testing.T) {
 		},
 	})
 	r.SetSearchQuery("aws_instance web")
-	if got := r.GetSelectedResource(); got == nil {
+	if got := selectFirstResource(r); got == nil {
 		t.Fatalf("expected resource type/name to match")
 	}
 }
@@ -301,7 +321,7 @@ func TestRenderLongResourceAddressTruncates(t *testing.T) {
 		Action:  terraform.ActionCreate,
 		Change:  &terraform.Change{Actions: []string{"create"}, Before: nil, After: map[string]interface{}{"x": "y"}},
 	}
-	out := stripANSI(r.renderResource(resource, false))
+	out := stripANSI(r.renderResource(resource, false, 0))
 	lines := strings.Split(out, "\n")
 	if len(lines) == 0 || len(lines[0]) > 20 {
 		t.Fatalf("expected truncated header line, got %q", out)
@@ -315,7 +335,7 @@ func TestExpandedResourceZeroDiffsNoExtraLine(t *testing.T) {
 		Action:  terraform.ActionUpdate,
 		Change:  &terraform.Change{Actions: []string{"update"}, Before: map[string]interface{}{"a": 1}, After: map[string]interface{}{"a": 1}},
 	}
-	out := r.renderResource(resource, false)
+	out := r.renderResource(resource, false, 0)
 	if strings.Count(out, "\n") != 0 {
 		t.Fatalf("expected no extra diff lines, got %q", out)
 	}
@@ -324,12 +344,71 @@ func TestExpandedResourceZeroDiffsNoExtraLine(t *testing.T) {
 func TestFilterPreservesSelection(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetResources([]terraform.ResourceChange{
-		{Address: "a", Action: terraform.ActionCreate},
-		{Address: "b", Action: terraform.ActionDelete},
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionDelete},
 	})
-	r.selectedIndex = 0
+	r.selectedIndex = 1
 	r.SetFilter(terraform.ActionDelete, false)
-	if got := r.GetSelectedResource(); got == nil || got.Address != "a" {
+	if got := r.GetSelectedResource(); got == nil || got.Address != "aws_instance.a" {
 		t.Fatalf("expected selection preserved, got %#v", got)
+	}
+}
+
+func TestToggleAllGroups(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	if len(r.visibleItems) == 0 {
+		t.Fatalf("expected visible items")
+	}
+
+	r.ToggleAllGroups()
+	if r.allExpanded {
+		t.Fatalf("expected all groups collapsed")
+	}
+
+	r.ToggleAllGroups()
+	if !r.allExpanded {
+		t.Fatalf("expected all groups expanded")
+	}
+}
+
+func TestModulePathParsing(t *testing.T) {
+	if got := modulePath("aws_instance.web"); len(got) != 0 {
+		t.Fatalf("expected empty module path, got %#v", got)
+	}
+	got := modulePath("module.alpha.module.net.aws_instance.web")
+	if len(got) != 2 || got[0] != "alpha" || got[1] != "net" {
+		t.Fatalf("unexpected module path: %#v", got)
+	}
+}
+
+func TestDeepGroupingCreatesNestedItems(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.module.net.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.aws_instance.db", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.security.aws_instance.bastion", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	foundGroup := false
+	foundSubGroup := false
+	for _, item := range r.visibleItems {
+		if item.kind == itemGroup && item.label == "module.alpha" {
+			foundGroup = true
+		}
+		if item.kind == itemGroup && item.label == "module.net" {
+			foundSubGroup = true
+		}
+	}
+	if !foundGroup || !foundSubGroup {
+		t.Fatalf("expected nested groups, got %#v", r.visibleItems)
 	}
 }
