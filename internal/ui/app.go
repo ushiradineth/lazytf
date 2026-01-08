@@ -2,8 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -18,12 +20,18 @@ type Model struct {
 	plan         *terraform.Plan
 	resourceList *components.ResourceList
 	diffEngine   *diff.Engine
+	diffViewer   *components.DiffViewer
 	styles       *styles.Styles
 	width        int
 	height       int
 	ready        bool
 	err          error
 	quitting     bool
+	showHelp     bool
+	showSplit    bool
+
+	searchInput textinput.Model
+	searching   bool
 
 	// Filter state
 	filterCreate  bool
@@ -36,13 +44,32 @@ type Model struct {
 func NewModel(plan *terraform.Plan) *Model {
 	appStyles := styles.DefaultStyles()
 	resourceList := components.NewResourceList(appStyles)
+	diffEngine := diff.NewEngine()
+	diffViewer := components.NewDiffViewer(appStyles, diffEngine)
+	searchInput := textinput.New()
+	searchInput.Placeholder = "press / to search"
+	searchInput.Prompt = "Search: "
+	searchInput.CharLimit = 80
+	searchBg := lipgloss.AdaptiveColor{Light: "#F2F2F2", Dark: "#262626"}
+	searchInput.TextStyle = lipgloss.NewStyle().
+		Foreground(appStyles.Theme.ForegroundColor).
+		Background(searchBg)
+	searchInput.PromptStyle = lipgloss.NewStyle().
+		Foreground(appStyles.Theme.ForegroundColor).
+		Background(searchBg)
+	searchInput.PlaceholderStyle = lipgloss.NewStyle().
+		Foreground(appStyles.Theme.ForegroundColor).
+		Background(searchBg)
 
 	m := &Model{
 		plan:          plan,
 		resourceList:  resourceList,
-		diffEngine:    diff.NewEngine(),
+		diffEngine:    diffEngine,
+		diffViewer:    diffViewer,
 		styles:        appStyles,
 		ready:         false,
+		showSplit:     true,
+		searchInput:   searchInput,
 		filterCreate:  true,
 		filterUpdate:  true,
 		filterDelete:  true,
@@ -60,7 +87,7 @@ func NewModel(plan *terraform.Plan) *Model {
 
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 // Update handles messages and updates the model
@@ -77,15 +104,65 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 
-		// Update component sizes
-		listHeight := m.height - 4 // Reserve space for filter bar and status bar
-		m.resourceList.SetSize(m.width, listHeight)
+		m.updateLayout()
 
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "?", "esc":
+				m.showHelp = false
+				return m, nil
+			default:
+				return m, nil
+			}
+		}
+
+		if m.searching {
+			switch msg.String() {
+			case "esc":
+				m.searching = false
+				m.searchInput.Blur()
+				m.searchInput.SetValue("")
+				m.resourceList.SetSearchQuery("")
+				return m, nil
+			case "enter":
+				m.searching = false
+				m.searchInput.Blur()
+				return m, nil
+			default:
+				m.searchInput, cmd = m.searchInput.Update(msg)
+				m.resourceList.SetSearchQuery(m.searchInput.Value())
+				return m, cmd
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
+
+		case "/":
+			m.searching = true
+			m.searchInput.Focus()
+			return m, nil
+		case "esc":
+			if m.searchInput.Value() != "" {
+				m.searchInput.SetValue("")
+				m.resourceList.SetSearchQuery("")
+				return m, nil
+			}
+
+		case "?":
+			m.showHelp = !m.showHelp
+			return m, nil
+
+		case "v":
+			m.showSplit = !m.showSplit
+			m.updateLayout()
+			return m, nil
 
 		case "c":
 			m.filterCreate = !m.filterCreate
@@ -134,13 +211,20 @@ func (m *Model) View() string {
 		return "No plan loaded\n"
 	}
 
+	if m.showHelp {
+		return m.renderHelp()
+	}
+
 	var sections []string
 
 	// Filter bar
 	sections = append(sections, m.renderFilterBar())
 
+	// Search bar
+	sections = append(sections, m.renderSearchBar())
+
 	// Resource list
-	sections = append(sections, m.resourceList.View())
+	sections = append(sections, m.renderMainContent())
 
 	// Status bar
 	sections = append(sections, m.renderStatusBar())
@@ -200,9 +284,12 @@ func (m *Model) renderFilterBar() string {
 
 // renderStatusBar renders the bottom status bar
 func (m *Model) renderStatusBar() string {
-	totalResources := len(m.plan.Resources)
+	totalResources := 0
+	if m.plan != nil {
+		totalResources = len(m.plan.Resources)
+	}
 
-	helpText := "q: quit | ↑↓/jk: navigate | enter/space: expand | c/u/d/r: filter"
+	helpText := "q: quit | ↑↓/jk: navigate | enter/space: expand | c/u/d/r: filter | /: search | v: diff | ?: help"
 
 	statusText := fmt.Sprintf("%d resources | %s", totalResources, helpText)
 
@@ -213,6 +300,9 @@ func (m *Model) renderStatusBar() string {
 
 // countResourcesByAction counts resources of a specific action type
 func (m *Model) countResourcesByAction(action terraform.ActionType) int {
+	if m.plan == nil {
+		return 0
+	}
 	count := 0
 	for _, resource := range m.plan.Resources {
 		if resource.Action == action {
@@ -222,14 +312,104 @@ func (m *Model) countResourcesByAction(action terraform.ActionType) int {
 	return count
 }
 
+func (m *Model) renderSearchBar() string {
+	m.searchInput.Width = maxInt(20, m.width-20)
+
+	if m.searching || m.searchInput.Value() != "" {
+		searchView := m.searchInput.View()
+		return m.styles.SearchBar.Width(m.width).Render(searchView)
+	}
+
+	searchView := m.searchInput.Prompt + m.searchInput.Placeholder
+	searchView = m.searchInput.TextStyle.Render(searchView)
+
+	return m.styles.SearchBar.Width(m.width).Render(searchView)
+}
+
+func (m *Model) renderMainContent() string {
+	if m.showSplit && m.width >= 100 {
+		left := m.resourceList.View()
+		right := lipgloss.NewStyle().MarginLeft(1).Render(
+			m.diffViewer.View(m.resourceList.GetSelectedResource()),
+		)
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	}
+	return m.resourceList.View()
+}
+
+func (m *Model) renderHelp() string {
+	keys := []string{
+		"Navigation: ↑/↓ or j/k",
+		"Expand: enter/space",
+		"Filters: c/u/d/r",
+		"Search: / to focus, esc to clear",
+		"Diff panel: v to toggle",
+		"Help: ? to close",
+		"Quit: q or ctrl+c",
+	}
+
+	content := m.styles.Title.Render("tftui help")
+	content += "\n"
+	for _, line := range keys {
+		content += m.styles.HelpValue.Render(line) + "\n"
+	}
+
+	box := m.styles.Border.
+		Width(minInt(60, m.width-4)).
+		Render(strings.TrimRight(content, "\n"))
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+func (m *Model) updateLayout() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+	reserved := lipgloss.Height(m.renderFilterBar()) +
+		lipgloss.Height(m.renderSearchBar()) +
+		lipgloss.Height(m.renderStatusBar())
+	listHeight := m.height - reserved
+	if listHeight < 1 {
+		listHeight = 1
+	}
+
+	if m.showSplit && m.width >= 100 {
+		listWidth := maxInt(40, int(float64(m.width)*0.45))
+		diffWidth := m.width - listWidth - 1
+		if diffWidth < 20 {
+			diffWidth = 20
+			listWidth = m.width - diffWidth - 1
+		}
+		m.resourceList.SetSize(listWidth, listHeight)
+		m.diffViewer.SetSize(diffWidth, listHeight)
+	} else {
+		m.resourceList.SetSize(m.width, listHeight)
+		m.diffViewer.SetSize(m.width, listHeight)
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // KeyMap defines the key bindings
 type KeyMap struct {
-	Up       key.Binding
-	Down     key.Binding
-	Expand   key.Binding
-	Filter   key.Binding
-	Quit     key.Binding
-	Help     key.Binding
+	Up     key.Binding
+	Down   key.Binding
+	Expand key.Binding
+	Filter key.Binding
+	Quit   key.Binding
+	Help   key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings

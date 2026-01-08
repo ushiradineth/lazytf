@@ -6,18 +6,18 @@ import (
 
 // Theme defines the color scheme for the TUI
 type Theme struct {
-	Name              string
-	CreateColor       lipgloss.AdaptiveColor
-	UpdateColor       lipgloss.AdaptiveColor
-	DeleteColor       lipgloss.AdaptiveColor
-	ReplaceColor      lipgloss.AdaptiveColor
-	NoChangeColor     lipgloss.AdaptiveColor
-	BackgroundColor   lipgloss.AdaptiveColor
-	ForegroundColor   lipgloss.AdaptiveColor
-	BorderColor       lipgloss.AdaptiveColor
-	SelectedColor     lipgloss.AdaptiveColor
-	DimmedColor       lipgloss.AdaptiveColor
-	HighlightColor    lipgloss.AdaptiveColor
+	Name            string
+	CreateColor     lipgloss.AdaptiveColor
+	UpdateColor     lipgloss.AdaptiveColor
+	DeleteColor     lipgloss.AdaptiveColor
+	ReplaceColor    lipgloss.AdaptiveColor
+	NoChangeColor   lipgloss.AdaptiveColor
+	BackgroundColor lipgloss.AdaptiveColor
+	ForegroundColor lipgloss.AdaptiveColor
+	BorderColor     lipgloss.AdaptiveColor
+	SelectedColor   lipgloss.AdaptiveColor
+	DimmedColor     lipgloss.AdaptiveColor
+	HighlightColor  lipgloss.AdaptiveColor
 }
 
 // Predefined themes
@@ -69,6 +69,7 @@ type Styles struct {
 	Selected          lipgloss.Style
 	FilterBarActive   lipgloss.Style
 	FilterBarInactive lipgloss.Style
+	SearchBar         lipgloss.Style
 	StatusBar         lipgloss.Style
 	Border            lipgloss.Style
 	DiffAdd           lipgloss.Style
@@ -141,6 +142,12 @@ func NewStyles(theme Theme) *Styles {
 	s.StatusBar = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
 		Background(lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#2A2A2A"}).
+		Padding(0, 1)
+
+	// Search bar
+	s.SearchBar = lipgloss.NewStyle().
+		Foreground(theme.ForegroundColor).
+		Background(lipgloss.AdaptiveColor{Light: "#F2F2F2", Dark: "#262626"}).
 		Padding(0, 1)
 
 	// Border

@@ -2,13 +2,13 @@ package components
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/ushiradineth/tftui/internal/diff"
 	"github.com/ushiradineth/tftui/internal/styles"
@@ -26,6 +26,7 @@ type ResourceList struct {
 	width         int
 	height        int
 	filterActions map[terraform.ActionType]bool
+	searchQuery   string
 }
 
 // NewResourceList creates a new resource list component
@@ -54,6 +55,7 @@ func (r *ResourceList) SetSize(width, height int) {
 	r.height = height
 	r.viewport.Width = width
 	r.viewport.Height = height
+	r.updateViewport()
 }
 
 // SetResources updates the list of resources to display
@@ -66,6 +68,12 @@ func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 // SetFilter sets which action types to display
 func (r *ResourceList) SetFilter(actionType terraform.ActionType, enabled bool) {
 	r.filterActions[actionType] = enabled
+	r.updateViewport()
+}
+
+// SetSearchQuery sets the current search query for filtering resources.
+func (r *ResourceList) SetSearchQuery(query string) {
+	r.searchQuery = strings.TrimSpace(query)
 	r.updateViewport()
 }
 
@@ -123,14 +131,22 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 
 // View renders the resource list
 func (r *ResourceList) View() string {
-	return r.viewport.View()
+	view := r.viewport.View()
+	if r.width > 0 && r.height > 0 {
+		return lipgloss.NewStyle().Width(r.width).Height(r.height).Render(view)
+	}
+	return view
 }
 
 // getFilteredResources returns resources that pass the current filter
 func (r *ResourceList) getFilteredResources() []terraform.ResourceChange {
 	filtered := []terraform.ResourceChange{}
+	query := strings.ToLower(r.searchQuery)
 	for _, resource := range r.resources {
-		if r.filterActions[resource.Action] {
+		if !r.filterActions[resource.Action] {
+			continue
+		}
+		if query == "" || resourceMatchesQuery(resource, query) {
 			filtered = append(filtered, resource)
 		}
 	}
@@ -141,8 +157,13 @@ func (r *ResourceList) getFilteredResources() []terraform.ResourceChange {
 func (r *ResourceList) updateViewport() {
 	filtered := r.getFilteredResources()
 	if len(filtered) == 0 {
+		r.selectedIndex = 0
 		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
 		return
+	}
+
+	if r.selectedIndex >= len(filtered) {
+		r.selectedIndex = len(filtered) - 1
 	}
 
 	var content strings.Builder
@@ -171,18 +192,33 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	changeCount := r.diffEngine.CountChanges(&resource)
 
 	// Render the header line
-	headerLine := fmt.Sprintf("%s %s", actionIcon, resource.Address)
+	headerBase := fmt.Sprintf("%s %s", actionIcon, resource.Address)
+	headerSuffix := ""
 	if !isExpanded && changeCount > 0 {
-		headerLine += r.styles.Dimmed.Render(fmt.Sprintf("  (%d changes)", changeCount))
+		headerSuffix = fmt.Sprintf("  (%d changes)", changeCount)
 	}
 
 	if isSelected {
+		headerLine := headerBase + headerSuffix
+		if r.width > 0 {
+			headerLine = runewidth.Truncate(headerLine, r.width, "...")
+		}
 		headerLine = r.styles.Selected.Render(headerLine)
+		if r.width > 0 {
+			headerLine = padAfterStyled(headerLine, r.width)
+		}
+		output.WriteString(headerLine)
 	} else {
+		headerLine := headerBase
+		if headerSuffix != "" {
+			headerLine += r.styles.Dimmed.Render(headerSuffix)
+		}
+		if r.width > 0 {
+			headerLine = padLine(headerLine, r.width)
+		}
 		headerLine = actionStyle.Render(headerLine)
+		output.WriteString(headerLine)
 	}
-
-	output.WriteString(headerLine)
 
 	// If expanded, show the minimal diff
 	if isExpanded {
@@ -220,6 +256,9 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 		if oldStr, okOld := d.OldValue.(string); okOld {
 			if newStr, okNew := d.NewValue.(string); okNew && strings.Contains(oldStr, "\n") && strings.Contains(newStr, "\n") {
 				if multi := formatMultilineStringDiff(path, oldStr, newStr); multi != "" {
+					if r.width > 0 {
+						return style.Render(padMultiline(multi, r.width))
+					}
 					return style.Render(multi)
 				}
 			}
@@ -230,6 +269,9 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 		line = fmt.Sprintf("  ? %s", path)
 	}
 
+	if r.width > 0 {
+		line = padLine(line, r.width)
+	}
 	return style.Render(line)
 }
 
@@ -249,119 +291,6 @@ func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Styl
 	}
 }
 
-// formatValue formats a value for display
-func formatValue(val interface{}) string {
-	if val == nil {
-		return "(null)"
-	}
-
-	if s, ok := val.(string); ok {
-		if len(s) > 200 {
-			return fmt.Sprintf("%q...", s[:197])
-		}
-		return fmt.Sprintf(`"%s"`, s)
-	}
-
-	if _, ok := val.(diff.UnknownValue); ok {
-		return "(known after apply)"
-	}
-
-	// For complex types, use a compact representation.
-	if isMap(val) {
-		return "{...}"
-	}
-	if isList(val) {
-		if asList := interfaceToList(val); len(asList) == 1 {
-			if s, ok := asList[0].(string); ok {
-				return formatValue(s)
-			}
-		}
-		return "[...]"
-	}
-
-	return fmt.Sprintf("%v", val)
-}
-
-func isMap(val interface{}) bool {
-	if val == nil {
-		return false
-	}
-	return reflect.TypeOf(val).Kind() == reflect.Map
-}
-
-func isList(val interface{}) bool {
-	if val == nil {
-		return false
-	}
-	kind := reflect.TypeOf(val).Kind()
-	return kind == reflect.Slice || kind == reflect.Array
-}
-
-func interfaceToList(val interface{}) []interface{} {
-	v := reflect.ValueOf(val)
-	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return nil
-	}
-
-	result := make([]interface{}, v.Len())
-	for i := 0; i < v.Len(); i++ {
-		result[i] = v.Index(i).Interface()
-	}
-	return result
-}
-
-func formatMultilineStringDiff(path, before, after string) string {
-	beforeLines := strings.Split(before, "\n")
-	afterLines := strings.Split(after, "\n")
-	if len(beforeLines) != len(afterLines) {
-		return ""
-	}
-
-	diffIndexes := make([]int, 0, 4)
-	for i := range beforeLines {
-		if beforeLines[i] != afterLines[i] {
-			diffIndexes = append(diffIndexes, i)
-			if len(diffIndexes) >= 4 {
-				break
-			}
-		}
-	}
-	if len(diffIndexes) == 0 {
-		return ""
-	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  ~ %s:", path))
-	for _, idx := range diffIndexes {
-		oldLine := stripListMarker(strings.TrimSpace(beforeLines[idx]))
-		newLine := stripListMarker(strings.TrimSpace(afterLines[idx]))
-		b.WriteString("\n")
-		b.WriteString("    - ")
-		b.WriteString(truncateLine(oldLine, 140))
-		b.WriteString("\n")
-		b.WriteString("    + ")
-		b.WriteString(truncateLine(newLine, 140))
-	}
-	return b.String()
-}
-
-func truncateLine(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	if max <= 3 {
-		return s[:max]
-	}
-	return s[:max-3] + "..."
-}
-
-func stripListMarker(line string) string {
-	if strings.HasPrefix(line, "- ") {
-		return strings.TrimSpace(line[2:])
-	}
-	return line
-}
-
 // GetSelectedResource returns the currently selected resource
 func (r *ResourceList) GetSelectedResource() *terraform.ResourceChange {
 	filtered := r.getFilteredResources()
@@ -369,4 +298,64 @@ func (r *ResourceList) GetSelectedResource() *terraform.ResourceChange {
 		return &filtered[r.selectedIndex]
 	}
 	return nil
+}
+
+func resourceMatchesQuery(resource terraform.ResourceChange, query string) bool {
+	haystack := strings.ToLower(resource.Address)
+	if resource.ResourceType != "" || resource.ResourceName != "" {
+		haystack += " " + strings.ToLower(resource.ResourceType) + " " + strings.ToLower(resource.ResourceName)
+	}
+	return fuzzyMatch(query, haystack)
+}
+
+func fuzzyMatch(query, candidate string) bool {
+	if query == "" {
+		return true
+	}
+	q := []rune(query)
+	c := []rune(candidate)
+	if len(q) > len(c) {
+		return false
+	}
+	i := 0
+	for _, r := range c {
+		if r == q[i] {
+			i++
+			if i == len(q) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func padLine(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+	truncated := runewidth.Truncate(line, width, "...")
+	pad := width - runewidth.StringWidth(truncated)
+	if pad <= 0 {
+		return truncated
+	}
+	return truncated + strings.Repeat(" ", pad)
+}
+
+func padMultiline(text string, width int) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = padLine(line, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func padAfterStyled(styled string, width int) string {
+	if width <= 0 {
+		return styled
+	}
+	visible := lipgloss.Width(styled)
+	if visible >= width {
+		return styled
+	}
+	return styled + strings.Repeat(" ", width-visible)
 }
