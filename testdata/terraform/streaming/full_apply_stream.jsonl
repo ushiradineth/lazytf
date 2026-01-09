@@ -1,0 +1,7 @@
+{"type":"version","terraform_version":"1.5.7","protocol_version":"0.1"}
+{"type":"planned_change","resource":{"address":"aws_instance.web","type":"aws_instance","name":"web","provider_name":"registry.terraform.io/hashicorp/aws"},"change":{"actions":["create"],"before":null,"after":{"id":"i-123"}}}
+{"type":"change_summary","changes":{"add":1,"change":0,"remove":0},"resource_drift":0,"outputs":{"add":0,"change":0,"remove":0}}
+{"type":"apply_start","hook":{"resource":{"address":"aws_instance.web"},"action":"create","id_key":"id","id_value":""}}
+{"type":"apply_complete","hook":{"resource":{"address":"aws_instance.web"},"action":"create","id_key":"id","id_value":"i-123"}}
+{"type":"diagnostic","diagnostic":{"severity":"warning","summary":"Test warning","detail":"Something happened","address":"aws_instance.web","range":{"filename":"main.tf","start":{"line":10,"column":3}}}}
+{"type":"outputs","outputs":{"public_ip":{"actions":["create"],"before":null,"after":"1.2.3.4","sensitive":false}}}

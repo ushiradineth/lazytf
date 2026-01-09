@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -18,21 +19,23 @@ import (
 
 // ResourceList displays a list of resources.
 type ResourceList struct {
-	viewport      viewport.Model
-	resources     []terraform.ResourceChange
-	selectedIndex int
-	diffEngine    *diff.Engine
-	styles        *styles.Styles
-	width         int
-	height        int
-	filterActions map[terraform.ActionType]bool
-	searchQuery   string
-	groupExpanded map[string]bool
-	visibleItems  []listItem
-	allExpanded   bool
-	searchActive  bool
-	matchScores   map[string]int
-	lastMove      int
+	viewport       viewport.Model
+	resources      []terraform.ResourceChange
+	selectedIndex  int
+	diffEngine     *diff.Engine
+	styles         *styles.Styles
+	width          int
+	height         int
+	filterActions  map[terraform.ActionType]bool
+	searchQuery    string
+	groupExpanded  map[string]bool
+	visibleItems   []listItem
+	allExpanded    bool
+	searchActive   bool
+	matchScores    map[string]int
+	lastMove       int
+	operationState *terraform.OperationState
+	showStatus     bool
 }
 
 // NewResourceList creates a new resource list component
@@ -70,6 +73,28 @@ func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 	r.resources = resources
 	r.selectedIndex = 0
 	r.updateViewport()
+}
+
+// Refresh recalculates the viewport content.
+func (r *ResourceList) Refresh() {
+	r.updateViewport()
+}
+
+// SetOperationState attaches the operation state for status display.
+func (r *ResourceList) SetOperationState(state *terraform.OperationState) {
+	r.operationState = state
+	r.updateViewport()
+}
+
+// SetShowStatus toggles the status column.
+func (r *ResourceList) SetShowStatus(show bool) {
+	r.showStatus = show
+	r.updateViewport()
+}
+
+// ShowStatus reports whether the status column is enabled.
+func (r *ResourceList) ShowStatus() bool {
+	return r.showStatus
 }
 
 // SetFilter sets which action types to display
@@ -261,6 +286,7 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	// Get action style and icon
 	actionIcon := resource.Action.GetActionIcon()
 	actionStyle := r.getActionStyle(resource.Action)
+	statusBadge, elapsed := r.getStatusDisplay(resource)
 
 	// Calculate change count
 	changeCount := r.diffEngine.CountChanges(&resource)
@@ -278,27 +304,40 @@ func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelec
 	if changeCount > 0 {
 		headerSuffix = fmt.Sprintf("  (%d changes)", changeCount)
 	}
+	if elapsed != "" {
+		headerSuffix += "  " + elapsed
+	}
 
 	selectedBg := r.styles.SelectedLineBackground
 	iconStyle := actionStyle
+	statusStyle := r.styles.LineItemText
 	addressStyle := r.styles.LineItemText
 	suffixStyle := r.styles.LineItemText
 	spaceStyle := lipgloss.NewStyle()
 	prefixText := prefix
 	if isSelected {
 		iconStyle = iconStyle.Background(selectedBg).Bold(true)
+		statusStyle = statusStyle.Background(selectedBg).Bold(true)
 		addressStyle = addressStyle.Background(selectedBg).Bold(true)
 		suffixStyle = suffixStyle.Background(selectedBg).Bold(true)
 		spaceStyle = lipgloss.NewStyle().Background(selectedBg)
 		prefixText = lipgloss.NewStyle().Background(selectedBg).Render(prefix)
 	}
 	icon := iconStyle.Render(actionIcon)
+	statusText := ""
+	if statusBadge != "" {
+		statusText = statusStyle.Render(statusBadge)
+	}
 	addressText := addressStyle.Render(address)
 	suffixText := ""
 	if headerSuffix != "" {
 		suffixText = suffixStyle.Render(headerSuffix)
 	}
-	headerLine := fmt.Sprintf("%s%s%s%s", prefixText, icon, spaceStyle.Render(" "), addressText+suffixText)
+	headerLine := fmt.Sprintf("%s%s%s", prefixText, icon, spaceStyle.Render(" "))
+	if statusText != "" {
+		headerLine += statusText + spaceStyle.Render(" ")
+	}
+	headerLine += addressText + suffixText
 	if r.width > 0 {
 		headerLine = lipgloss.NewStyle().MaxWidth(r.width).Render(headerLine)
 	}
@@ -528,6 +567,53 @@ func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Styl
 	default:
 		return r.styles.NoChange
 	}
+}
+
+func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (string, string) {
+	if !r.showStatus || r.operationState == nil {
+		return "", ""
+	}
+	op := r.operationState.GetResourceStatus(resource.Address)
+	if op == nil {
+		return "[ ]", ""
+	}
+
+	var badge string
+	switch op.Status {
+	case terraform.StatusPending:
+		badge = "[.]"
+	case terraform.StatusInProgress:
+		badge = "[>]"
+	case terraform.StatusComplete:
+		badge = "[*]"
+	case terraform.StatusErrored:
+		badge = "[x]"
+	default:
+		badge = "[ ]"
+	}
+
+	elapsed := op.ElapsedTime
+	if op.Status == terraform.StatusInProgress && !op.StartTime.IsZero() {
+		elapsed = time.Since(op.StartTime)
+	}
+	elapsedText := ""
+	if elapsed > 0 {
+		elapsedText = fmt.Sprintf("%s", formatShortDuration(elapsed))
+	}
+	return badge, elapsedText
+}
+
+func formatShortDuration(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	return fmt.Sprintf("%dh", int(d.Hours()))
 }
 
 // GetSelectedResource returns the currently selected resource

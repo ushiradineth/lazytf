@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -46,20 +47,28 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode  bool
-	executor       *terraform.Executor
-	applyView      *views.ApplyView
-	planView       *views.PlanView
-	autoPlan       bool
-	planFlags      []string
-	applyFlags     []string
-	planRunning    bool
-	applyRunning   bool
-	outputChan     <-chan string
-	cancelFunc     context.CancelFunc
-	execView       executionView
-	planStartedAt  time.Time
-	applyStartedAt time.Time
+	executionMode       bool
+	executor            *terraform.Executor
+	applyView           *views.ApplyView
+	planView            *views.PlanView
+	autoPlan            bool
+	planFlags           []string
+	applyFlags          []string
+	planRunning         bool
+	applyRunning        bool
+	outputChan          <-chan string
+	cancelFunc          context.CancelFunc
+	execView            executionView
+	planStartedAt       time.Time
+	applyStartedAt      time.Time
+	useJSON             bool
+	streamMsgChan       <-chan terraform.StreamMessage
+	streamParser        *tfparser.StreamParser
+	operationState      *terraform.OperationState
+	progressCompact     *components.ProgressCompact
+	diagnosticsPanel    *components.DiagnosticsPanel
+	showDiagnostics     bool
+	showCompactProgress bool
 
 	historyStore    *history.Store
 	historyPanel    *components.HistoryPanel
@@ -84,13 +93,17 @@ const (
 	viewApplyOutput
 	viewPlanConfirm
 	viewHistoryDetail
+	viewCompactProgress
+	viewDiagnostics
 )
 
 // ExecutionConfig configures execution mode behavior.
 type ExecutionConfig struct {
-	Executor *terraform.Executor
-	AutoPlan bool
-	Flags    []string
+	Executor  *terraform.Executor
+	AutoPlan  bool
+	Flags     []string
+	UseJSON   bool
+	ForceJSON bool
 }
 
 // NewModel creates a new application model
@@ -152,6 +165,28 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
 	m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
+	m.operationState = terraform.NewOperationState()
+	m.progressCompact = components.NewProgressCompact(m.operationState, m.styles)
+	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
+	m.resourceList.SetOperationState(m.operationState)
+	m.showCompactProgress = cfg.UseJSON
+	if plan != nil {
+		m.operationState.InitializeFromPlan(plan)
+	}
+
+	if cfg.UseJSON && !cfg.ForceJSON && m.executor != nil {
+		if supported, err := m.executor.SupportsJSON(); err != nil || !supported {
+			m.showCompactProgress = false
+			m.useJSON = false
+		} else {
+			m.useJSON = true
+		}
+	} else {
+		m.useJSON = cfg.UseJSON
+	}
+	if m.useJSON {
+		m.resourceList.SetShowStatus(true)
+	}
 	m.historyPanel = components.NewHistoryPanel(m.styles)
 	m.historyHeight = 6
 	m.showHistory = false
@@ -208,13 +243,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.historyView != nil {
 			m.historyView.SetSize(m.width, m.height)
 		}
+		if m.progressCompact != nil {
+			m.progressCompact.SetSize(m.width, m.height)
+		}
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetSize(m.width, m.height)
+		}
 
 	case PlanStartMsg:
 		return m.handlePlanStart(msg)
 
 	case PlanOutputMsg:
-		if m.applyView != nil {
+		if !m.useJSON && m.applyView != nil {
 			m.applyView.AppendLine(msg.Line)
+		}
+		if m.useJSON {
+			return m, nil
 		}
 		return m, m.streamPlanOutputCmd()
 
@@ -225,8 +269,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleApplyStart(msg)
 
 	case ApplyOutputMsg:
-		if m.applyView != nil {
+		if !m.useJSON && m.applyView != nil {
 			m.applyView.AppendLine(msg.Line)
+		}
+		if m.useJSON {
+			return m, nil
 		}
 		return m, m.streamApplyOutputCmd()
 
@@ -265,6 +312,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toastMessage = ""
 		m.toastIsError = false
 		return m, nil
+	case StreamMessageMsg:
+		return m, m.handleStreamMessage(msg.Message)
+	case OperationStateUpdateMsg:
+		if m.diagnosticsPanel != nil && m.operationState != nil {
+			m.diagnosticsPanel.SetDiagnostics(m.operationState.GetDiagnostics())
+		}
+		if m.resourceList != nil && m.resourceList.ShowStatus() {
+			m.resourceList.Refresh()
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		if m.showHelp {
@@ -289,6 +346,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.execView != viewMain {
 			if m.execView == viewPlanOutput || m.execView == viewApplyOutput {
 				m.applyView, cmd = m.applyView.Update(msg)
+				return m, cmd
+			}
+			if m.execView == viewDiagnostics && m.diagnosticsPanel != nil {
+				m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
 				return m, cmd
 			}
 			if m.execView == viewHistoryDetail && m.historyView != nil {
@@ -367,6 +428,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case viewPlanOutput, viewApplyOutput:
 			m.applyView, cmd = m.applyView.Update(msg)
 			return m, cmd
+		case viewDiagnostics:
+			if m.diagnosticsPanel != nil {
+				m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
+				return m, cmd
+			}
 		case viewHistoryDetail:
 			if m.historyView != nil {
 				m.historyView, cmd = m.historyView.Update(msg)
@@ -409,6 +475,14 @@ func (m *Model) View() string {
 		case viewPlanOutput, viewApplyOutput:
 			if m.applyView != nil {
 				return m.applyView.View()
+			}
+		case viewCompactProgress:
+			if m.progressCompact != nil {
+				return m.progressCompact.View()
+			}
+		case viewDiagnostics:
+			if m.diagnosticsPanel != nil {
+				return m.diagnosticsPanel.View()
 			}
 		case viewHistoryDetail:
 			if m.historyView != nil {
@@ -501,7 +575,11 @@ func (m *Model) renderStatusBar() string {
 
 	helpText := "q: quit | ↑↓/jk: navigate | enter/space: toggle group | t: toggle all | c/u/d/r: filter | /: search | ?: help"
 	if m.executionMode {
-		helpText = "p: plan | a: apply | h: history | tab: focus history | ctrl+c: cancel | " + helpText
+		execHelp := "p: plan | a: apply | h: history | tab: focus history | ctrl+c: cancel"
+		if m.useJSON {
+			execHelp += " | s: status | c: compact | d: diagnostics"
+		}
+		helpText = execHelp + " | " + helpText
 	}
 
 	statusText := fmt.Sprintf("%d resources | %s", totalResources, helpText)
@@ -605,6 +683,9 @@ func (m *Model) renderHelp() string {
 				{keys: "h", desc: "toggle history panel"},
 				{keys: "tab", desc: "focus history panel"},
 				{keys: "ctrl+c", desc: "cancel running command"},
+				{keys: "s", desc: "toggle status column"},
+				{keys: "c", desc: "toggle compact progress view"},
+				{keys: "d", desc: "toggle diagnostics panel"},
 			},
 		})
 	}
@@ -709,9 +790,55 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, tea.Quit
 		case "ctrl+c":
 			return true, m.cancelExecution()
+		case "c":
+			if m.useJSON && (m.planRunning || m.applyRunning) {
+				m.showCompactProgress = !m.showCompactProgress
+				m.showDiagnostics = false
+				if !m.showCompactProgress && m.applyView != nil {
+					m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+				}
+				m.updateExecutionViewForStreaming()
+				return true, nil
+			}
+		case "d":
+			if m.useJSON {
+				m.showDiagnostics = !m.showDiagnostics
+				m.updateExecutionViewForStreaming()
+				return true, nil
+			}
 		case "esc":
 			if !m.planRunning && !m.applyRunning {
 				m.execView = viewMain
+				return true, nil
+			}
+		}
+	case viewCompactProgress, viewDiagnostics:
+		switch key {
+		case "q":
+			m.quitting = true
+			return true, tea.Quit
+		case "ctrl+c":
+			return true, m.cancelExecution()
+		case "c":
+			if m.useJSON && (m.planRunning || m.applyRunning) {
+				m.showCompactProgress = !m.showCompactProgress
+				m.showDiagnostics = false
+				if !m.showCompactProgress && m.applyView != nil {
+					m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+				}
+				m.updateExecutionViewForStreaming()
+				return true, nil
+			}
+		case "d":
+			if m.useJSON {
+				m.showDiagnostics = !m.showDiagnostics
+				m.updateExecutionViewForStreaming()
+				return true, nil
+			}
+		case "esc":
+			if !m.planRunning && !m.applyRunning {
+				m.execView = viewMain
+				m.showDiagnostics = false
 				return true, nil
 			}
 		}
@@ -744,6 +871,9 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				m.historyFocused = false
 			}
 			m.updateLayout()
+			return true, nil
+		case "s":
+			m.resourceList.SetShowStatus(!m.resourceList.ShowStatus())
 			return true, nil
 		case "tab":
 			if m.showHistory && len(m.historyEntries) > 0 {
@@ -780,15 +910,20 @@ func (m *Model) beginPlan() tea.Cmd {
 	m.planRunning = true
 	m.execView = viewPlanOutput
 	m.planStartedAt = time.Now()
+	m.showDiagnostics = false
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Running terraform plan...")
 		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed - press esc to return")
 		m.applyView.SetStatus(views.ApplyRunning)
+		if m.useJSON && !m.showCompactProgress {
+			m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+		}
 	}
+	m.updateExecutionViewForStreaming()
 
 	return func() tea.Msg {
-		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{Flags: m.planFlags})
+		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{Flags: m.planFlags, UseJSON: m.useJSON})
 		return PlanStartMsg{Result: result, Output: output, Error: err}
 	}
 }
@@ -807,17 +942,23 @@ func (m *Model) beginApply() tea.Cmd {
 	m.applyRunning = true
 	m.execView = viewApplyOutput
 	m.applyStartedAt = time.Now()
+	m.showDiagnostics = false
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Applying changes...")
 		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
 		m.applyView.SetStatus(views.ApplyRunning)
+		if m.useJSON && !m.showCompactProgress {
+			m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+		}
 	}
+	m.updateExecutionViewForStreaming()
 
 	return func() tea.Msg {
 		result, output, err := m.executor.Apply(ctx, terraform.ApplyOptions{
 			Flags:       m.applyFlags,
 			AutoApprove: true,
+			UseJSON:     m.useJSON,
 		})
 		return ApplyStartMsg{Result: result, Output: output, Error: err}
 	}
@@ -843,8 +984,15 @@ func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 
 	m.outputChan = msg.Output
 	cmds := []tea.Cmd{
-		m.streamPlanOutputCmd(),
 		m.waitPlanCompleteCmd(msg.Result),
+	}
+	if m.useJSON {
+		if m.operationState != nil {
+			m.operationState.InitializeFromPlan(nil)
+		}
+		cmds = append(cmds, m.processJSONStream(msg.Output))
+	} else {
+		cmds = append(cmds, m.streamPlanOutputCmd())
 	}
 	if m.applyView != nil {
 		cmds = append(cmds, m.applyView.Tick())
@@ -856,6 +1004,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planRunning = false
 	m.cancelFunc = nil
 	m.outputChan = nil
+	m.streamMsgChan = nil
 
 	if msg.Error != nil {
 		if m.applyView != nil {
@@ -867,6 +1016,9 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 
 	if msg.Plan != nil {
 		m.setPlan(msg.Plan)
+		if m.operationState != nil {
+			m.operationState.InitializeFromPlan(msg.Plan)
+		}
 		if m.planView != nil {
 			m.planView.SetSummary(m.planSummary())
 		}
@@ -877,7 +1029,9 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplySuccess)
 	}
-	m.execView = viewMain
+	m.streamParser = nil
+	m.showDiagnostics = false
+	m.updateExecutionViewForStreaming()
 	return m, nil
 }
 
@@ -893,8 +1047,15 @@ func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
 
 	m.outputChan = msg.Output
 	cmds := []tea.Cmd{
-		m.streamApplyOutputCmd(),
 		m.waitApplyCompleteCmd(msg.Result),
+	}
+	if m.useJSON {
+		if m.operationState != nil {
+			m.operationState.InitializeFromPlan(m.plan)
+		}
+		cmds = append(cmds, m.processJSONStream(msg.Output))
+	} else {
+		cmds = append(cmds, m.streamApplyOutputCmd())
 	}
 	if m.applyView != nil {
 		cmds = append(cmds, m.applyView.Tick())
@@ -906,6 +1067,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.applyRunning = false
 	m.cancelFunc = nil
 	m.outputChan = nil
+	m.streamMsgChan = nil
 	if msg.Error != nil || !msg.Success {
 		if m.applyView != nil {
 			m.applyView.SetStatus(views.ApplyFailed)
@@ -917,6 +1079,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		if errors.Is(msg.Error, context.Canceled) {
 			status = history.StatusCanceled
 		}
+		m.streamParser = nil
 		return m, m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error)
 	}
 
@@ -924,11 +1087,97 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		m.applyView.SetStatus(views.ApplySuccess)
 	}
 	summary := m.planSummary()
-	m.execView = viewMain
+	m.showDiagnostics = false
+	m.updateExecutionViewForStreaming()
 	m.setPlan(&terraform.Plan{Resources: nil})
 	m.toastMessage = "Apply complete"
 	m.toastIsError = false
+	m.streamParser = nil
 	return m, tea.Batch(m.clearToastCmd(3*time.Second), m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil))
+}
+
+func (m *Model) handleStreamMessage(msg terraform.StreamMessage) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+
+	updated := false
+	if m.operationState != nil {
+		switch msg.Type {
+		case terraform.MessageTypeApplyStart, terraform.MessageTypeApplyProgress:
+			if msg.Hook != nil {
+				address := msg.Hook.Address
+				if address == "" {
+					address = msg.Hook.Resource.Address
+				}
+				if address != "" {
+					m.operationState.StartResource(address, terraform.ParseActionType(msg.Hook.Action))
+					updated = true
+				}
+			}
+		case terraform.MessageTypeApplyComplete:
+			if msg.Hook != nil {
+				address := msg.Hook.Address
+				if address == "" {
+					address = msg.Hook.Resource.Address
+				}
+				if address != "" {
+					m.operationState.CompleteResource(address, msg.Hook.IDValue)
+					updated = true
+				}
+			}
+		case terraform.MessageTypeApplyErrored:
+			if msg.Hook != nil {
+				address := msg.Hook.Address
+				if address == "" {
+					address = msg.Hook.Resource.Address
+				}
+				if address != "" {
+					err := errors.New(msg.Hook.Error)
+					if msg.Hook.Error == "" {
+						err = errors.New("resource apply error")
+					}
+					m.operationState.ErrorResource(address, err)
+					updated = true
+				}
+			}
+		case terraform.MessageTypeDiagnostic:
+			if msg.Diagnostic != nil {
+				m.operationState.AddDiagnostic(*msg.Diagnostic)
+				updated = true
+			}
+		}
+	}
+
+	if updated {
+		return tea.Batch(m.streamJSONMessagesCmd(), func() tea.Msg { return OperationStateUpdateMsg{} })
+	}
+	return m.streamJSONMessagesCmd()
+}
+
+func (m *Model) updateExecutionViewForStreaming() {
+	if m.execView == viewPlanConfirm || m.execView == viewHistoryDetail {
+		return
+	}
+	if m.showDiagnostics {
+		m.execView = viewDiagnostics
+		return
+	}
+	if m.showCompactProgress && (m.planRunning || m.applyRunning) {
+		m.execView = viewCompactProgress
+		return
+	}
+	if m.planRunning {
+		m.execView = viewPlanOutput
+		return
+	}
+	if m.applyRunning {
+		m.execView = viewApplyOutput
+		return
+	}
+	if m.execView != viewMain {
+		m.execView = viewMain
+	}
 }
 
 func (m *Model) streamPlanOutputCmd() tea.Cmd {
@@ -957,6 +1206,36 @@ func (m *Model) streamApplyOutputCmd() tea.Cmd {
 	}
 }
 
+func (m *Model) processJSONStream(output <-chan string) tea.Cmd {
+	if output == nil {
+		return nil
+	}
+	msgChan := make(chan terraform.StreamMessage, 100)
+	parser := tfparser.NewStreamParser()
+	m.streamParser = parser
+	m.streamMsgChan = msgChan
+
+	reader := chanToReader(output)
+	go func() {
+		_ = parser.Parse(reader, msgChan)
+		close(msgChan)
+	}()
+	return m.streamJSONMessagesCmd()
+}
+
+func (m *Model) streamJSONMessagesCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.streamMsgChan == nil {
+			return nil
+		}
+		msg, ok := <-m.streamMsgChan
+		if !ok {
+			return nil
+		}
+		return StreamMessageMsg{Message: msg}
+	}
+}
+
 func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 	return func() tea.Msg {
 		if result == nil {
@@ -967,11 +1246,17 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 			return PlanCompleteMsg{Error: result.Error}
 		}
 
-		textParser := tfparser.NewTextParser()
 		output := result.Output
 		if output == "" {
 			output = result.Stdout
 		}
+		if m.useJSON && m.streamParser != nil {
+			if plan := m.streamParser.GetAccumulatedPlan(); plan != nil {
+				return PlanCompleteMsg{Plan: plan, Output: output}
+			}
+		}
+
+		textParser := tfparser.NewTextParser()
 		plan, err := textParser.Parse(strings.NewReader(output))
 		if err != nil {
 			jsonParser := tfparser.NewJSONParser()
@@ -1008,6 +1293,9 @@ func (m *Model) setPlan(plan *terraform.Plan) {
 		m.err = err
 	}
 	m.resourceList.SetResources(plan.Resources)
+	if m.operationState != nil {
+		m.operationState.InitializeFromPlan(plan)
+	}
 }
 
 func (m *Model) recordHistoryCmd(status history.Status, summary string, planOutput string, result *terraform.ExecutionResult, err error) tea.Cmd {
@@ -1133,6 +1421,17 @@ func truncateOutput(output string, maxBytes int) string {
 		return output
 	}
 	return output[:maxBytes]
+}
+
+func chanToReader(input <-chan string) io.Reader {
+	pr, pw := io.Pipe()
+	go func() {
+		for line := range input {
+			_, _ = io.WriteString(pw, line+"\n")
+		}
+		_ = pw.Close()
+	}()
+	return pr
 }
 
 func (m *Model) planSummary() string {

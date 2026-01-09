@@ -64,6 +64,14 @@ type ApplyCompleteMsg struct {
 	Result  *terraform.ExecutionResult
 }
 
+// StreamMessageMsg delivers streaming JSON messages.
+type StreamMessageMsg struct {
+	Message terraform.StreamMessage
+}
+
+// OperationStateUpdateMsg signals that operation state changed.
+type OperationStateUpdateMsg struct{}
+
 // HistoryLoadedMsg delivers history entries.
 type HistoryLoadedMsg struct {
 	Entries []history.Entry
