@@ -22,6 +22,9 @@ var (
 	autoPlan        bool
 	tfFlags         string
 	workDir         string
+	useJSON         = true
+	forceJSON       bool
+	noJSON          bool
 	programRunner   = runProgram
 	executorFactory = terraform.NewExecutor
 )
@@ -45,6 +48,9 @@ showing only changed attributes in a git-style diff format.`,
 	rootCmd.Flags().BoolVar(&autoPlan, "auto-plan", false, "Automatically run terraform plan on startup")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
 	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
+	rootCmd.Flags().BoolVar(&useJSON, "json", true, "Enable streaming JSON output (auto-detect by default)")
+	rootCmd.Flags().BoolVar(&forceJSON, "force-json", false, "Force JSON streaming even if version check fails")
+	rootCmd.Flags().BoolVar(&noJSON, "no-json", false, "Disable JSON streaming output")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -59,11 +65,16 @@ func run(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize terraform: %w", err)
 		}
+		if noJSON {
+			useJSON = false
+		}
 
 		model := ui.NewExecutionModel(nil, ui.ExecutionConfig{
-			Executor: exec,
-			AutoPlan: autoPlan,
-			Flags:    flags,
+			Executor:  exec,
+			AutoPlan:  autoPlan,
+			Flags:     flags,
+			UseJSON:   useJSON,
+			ForceJSON: forceJSON,
 		})
 		return programRunner(model)
 	}
