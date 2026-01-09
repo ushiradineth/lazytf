@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -872,5 +873,69 @@ func TestPadMultilinePadsEachLine(t *testing.T) {
 		if len(line) != 4 {
 			t.Fatalf("expected padded line width 4, got %q", line)
 		}
+	}
+}
+
+func TestResourceListViewportOffsetOnJump(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	resources := make([]terraform.ResourceChange, 0, 30)
+	for i := 0; i < 30; i++ {
+		resources = append(resources, terraform.ResourceChange{
+			Address: fmt.Sprintf("aws_instance.%d", i),
+			Action:  terraform.ActionCreate,
+		})
+	}
+	r.SetResources(resources)
+	r.SetSize(40, 5)
+
+	for i := 0; i < 15; i++ {
+		r.MoveDown()
+	}
+	if r.viewport.YOffset == 0 {
+		t.Fatalf("expected viewport to scroll, got offset %d", r.viewport.YOffset)
+	}
+}
+
+func TestToggleGroupWhileSearchRetainsSelection(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	resources := []terraform.ResourceChange{
+		{Address: "module.foo.aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "module.foo.aws_instance.b", Action: terraform.ActionCreate},
+	}
+	r.SetResources(resources)
+	r.SetSize(60, 10)
+	r.SetSearchQuery("a")
+
+	r.MoveDown()
+	selected := r.GetSelectedResource()
+	if selected == nil || selected.Address != "module.foo.aws_instance.a" {
+		t.Fatalf("unexpected selected resource: %#v", selected)
+	}
+	r.ToggleGroup()
+
+	selectedAfter := r.GetSelectedResource()
+	if selectedAfter == nil || selectedAfter.Address != "module.foo.aws_instance.a" {
+		t.Fatalf("selection changed after toggle: %#v", selectedAfter)
+	}
+}
+
+func TestSearchGroupingAndFilterCounts(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	resources := []terraform.ResourceChange{
+		{Address: "module.foo.aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "module.foo.aws_instance.b", Action: terraform.ActionUpdate},
+		{Address: "module.bar.aws_instance.c", Action: terraform.ActionCreate},
+	}
+	r.SetResources(resources)
+	r.SetSize(80, 10)
+	r.SetFilter(terraform.ActionUpdate, false)
+	r.SetSearchQuery("module.foo")
+
+	if len(r.visibleItems) == 0 {
+		t.Fatalf("expected visible items")
+	}
+	group := r.visibleItems[0]
+	if group.kind != itemGroup || group.count != 1 {
+		t.Fatalf("expected group count 1, got %#v", group)
 	}
 }

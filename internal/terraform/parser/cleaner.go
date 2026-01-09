@@ -17,7 +17,7 @@ type Cleaner struct {
 func NewCleaner() *Cleaner {
 	return &Cleaner{
 		ansiRegex:    regexp.MustCompile(`\x1b\[[0-9;]*[mGKHF]`),
-		oscRegex:     regexp.MustCompile(`\x1b\][^\x07]*(?:\x07|\x1b\\)`),
+		oscRegex:     regexp.MustCompile(`\x1b\][^\x07]*?(?:\x07|\x1b\\)`),
 		apcRegex:     regexp.MustCompile(`\x1b_[^\x1b]*\x1b\\`),
 		spinnerRegex: regexp.MustCompile(`\r[\|/\\-]`),
 	}

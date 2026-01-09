@@ -8,7 +8,7 @@ import (
 	"github.com/ushiradineth/tftui/internal/terraform"
 )
 
-func TestCalculateMinimalDiff_OrderedKeys(t *testing.T) {
+func TestCalculateDiffs_OrderedKeys(t *testing.T) {
 	raw := []byte(`{
 		"actions": ["update"],
 		"before": {"b": 1, "a": 1},
@@ -21,7 +21,7 @@ func TestCalculateMinimalDiff_OrderedKeys(t *testing.T) {
 		t.Fatalf("unmarshal change: %v", err)
 	}
 
-	diffs := CalculateMinimalDiff(
+	diffs := CalculateDiffs(
 		change.Before,
 		change.After,
 		change.AfterUnknown,
@@ -41,23 +41,23 @@ func TestCalculateMinimalDiff_OrderedKeys(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_SkipsKnownAfterApplyEqual(t *testing.T) {
+func TestCalculateDiffs_SkipsKnownAfterApplyEqual(t *testing.T) {
 	before := map[string]any{"x": 1}
 	after := map[string]any{"x": 1}
 	afterUnknown := map[string]any{"x": true}
 
-	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 0 {
 		t.Fatalf("expected no diffs, got %d", len(diffs))
 	}
 }
 
-func TestCalculateMinimalDiff_KnownAfterApplyDiff(t *testing.T) {
+func TestCalculateDiffs_KnownAfterApplyDiff(t *testing.T) {
 	before := map[string]any{"x": 1}
 	after := map[string]any{}
 	afterUnknown := map[string]any{"x": true}
 
-	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 1 {
 		t.Fatalf("expected 1 diff, got %d", len(diffs))
 	}
@@ -74,7 +74,7 @@ func TestCalculateMinimalDiff_KnownAfterApplyDiff(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_StringListLCS(t *testing.T) {
+func TestCalculateDiffs_StringListLCS(t *testing.T) {
 	before := map[string]any{
 		"list": []any{"a", "b", "c"},
 	}
@@ -82,7 +82,7 @@ func TestCalculateMinimalDiff_StringListLCS(t *testing.T) {
 		"list": []any{"a", "c", "d"},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 2 {
 		t.Fatalf("expected 2 diffs, got %d", len(diffs))
 	}
@@ -94,7 +94,7 @@ func TestCalculateMinimalDiff_StringListLCS(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_SingleItemStringList(t *testing.T) {
+func TestCalculateDiffs_SingleItemStringList(t *testing.T) {
 	before := map[string]any{
 		"values": []any{"old"},
 	}
@@ -102,7 +102,7 @@ func TestCalculateMinimalDiff_SingleItemStringList(t *testing.T) {
 		"values": []any{"new"},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 1 {
 		t.Fatalf("expected 1 diff, got %d", len(diffs))
 	}
@@ -111,7 +111,7 @@ func TestCalculateMinimalDiff_SingleItemStringList(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_NestedMap(t *testing.T) {
+func TestCalculateDiffs_NestedMap(t *testing.T) {
 	before := map[string]any{
 		"tags": map[string]any{
 			"Environment": "dev",
@@ -124,7 +124,7 @@ func TestCalculateMinimalDiff_NestedMap(t *testing.T) {
 		},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 2 {
 		t.Fatalf("expected 2 diffs, got %d", len(diffs))
 	}
@@ -142,7 +142,7 @@ func TestCalculateMinimalDiff_NestedMap(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_ListFallback(t *testing.T) {
+func TestCalculateDiffs_ListFallback(t *testing.T) {
 	before := map[string]any{
 		"nums": []any{1.0, 2.0},
 	}
@@ -150,7 +150,7 @@ func TestCalculateMinimalDiff_ListFallback(t *testing.T) {
 		"nums": []any{1.0, 2.0, 3.0},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 1 {
 		t.Fatalf("expected 1 diff, got %d", len(diffs))
 	}
@@ -159,7 +159,49 @@ func TestCalculateMinimalDiff_ListFallback(t *testing.T) {
 	}
 }
 
-func TestCalculateMinimalDiff_UnknownNestedEqualSkips(t *testing.T) {
+func TestCalculateDiffs_AfterUnknownNestedMapsAndLists(t *testing.T) {
+	before := map[string]any{
+		"config": map[string]any{
+			"items": []any{"a", "b"},
+			"meta":  map[string]any{"enabled": true},
+		},
+	}
+	after := map[string]any{
+		"config": map[string]any{
+			"items": []any{"a", "b"},
+			"meta":  map[string]any{"enabled": true},
+		},
+	}
+	afterUnknown := map[string]any{
+		"config": map[string]any{
+			"items": true,
+			"meta":  map[string]any{"enabled": true},
+		},
+	}
+
+	diffs := CalculateDiffs(before, after, afterUnknown, nil, nil, nil, "")
+	if len(diffs) != 0 {
+		t.Fatalf("expected no diffs when unknown matches existing values")
+	}
+}
+
+func TestCalculateDiffs_ListMixedTypes(t *testing.T) {
+	before := map[string]any{
+		"mixed": []any{"a", 1},
+	}
+	after := map[string]any{
+		"mixed": []any{"a", 2},
+	}
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	if len(diffs) != 1 {
+		t.Fatalf("expected single diff for mixed list types, got %d", len(diffs))
+	}
+	if diffs[0].Path[0] != "mixed" {
+		t.Fatalf("unexpected diff path: %#v", diffs[0].Path)
+	}
+}
+
+func TestCalculateDiffs_UnknownNestedEqualSkips(t *testing.T) {
 	before := map[string]any{
 		"obj": map[string]any{"a": 1},
 	}
@@ -170,18 +212,18 @@ func TestCalculateMinimalDiff_UnknownNestedEqualSkips(t *testing.T) {
 		"obj": map[string]any{"a": true},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 0 {
 		t.Fatalf("expected no diffs, got %d", len(diffs))
 	}
 }
 
-func TestCalculateMinimalDiff_UnknownNilAfter(t *testing.T) {
+func TestCalculateDiffs_UnknownNilAfter(t *testing.T) {
 	before := map[string]any{"x": 1}
 	after := map[string]any{"x": nil}
 	afterUnknown := map[string]any{"x": true}
 
-	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 1 {
 		t.Fatalf("expected 1 diff, got %d", len(diffs))
 	}
@@ -239,7 +281,7 @@ func TestCalculateListDiff_SingleStringNoChange(t *testing.T) {
 		"values": []any{"same"},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 0 {
 		t.Fatalf("expected no diffs, got %d", len(diffs))
 	}
@@ -253,7 +295,7 @@ func TestStringListDiffs_AddRemove(t *testing.T) {
 		"list": []any{"b", "c", "d"},
 	}
 
-	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
 	if len(diffs) != 2 {
 		t.Fatalf("expected 2 diffs, got %d", len(diffs))
 	}

@@ -540,3 +540,42 @@ func TestViewNoResourceSelectedEmpty(t *testing.T) {
 		t.Fatalf("expected empty view, got %q", got)
 	}
 }
+
+func TestRenderWithNilAfterMap(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionDelete,
+		Change: &terraform.Change{
+			Before: map[string]any{"name": "old"},
+			After:  nil,
+		},
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "old") {
+		t.Fatalf("expected before value to render")
+	}
+}
+
+func TestReplaceMarkerMultipleIndexPaths(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	change := &terraform.Change{
+		ReplacePaths: [][]string{
+			{"ingress", "0", "cidr"},
+			{"ingress", "1", "cidr"},
+		},
+	}
+	item := diff.MinimalDiff{
+		Path:     []string{"ingress", "1", "cidr"},
+		OldValue: "0.0.0.0/0",
+		NewValue: "10.0.0.0/8",
+		Action:   diff.DiffChange,
+	}
+	line := viewer.renderInlineChange(item, change)
+	if !strings.Contains(line, "forces replacement") {
+		t.Fatalf("expected replace marker for list index path")
+	}
+}

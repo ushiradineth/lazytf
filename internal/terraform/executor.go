@@ -172,6 +172,10 @@ func (e *Executor) Version() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	<-result.Done()
+	if result.Error != nil {
+		return "", result.Error
+	}
 	return strings.TrimSpace(result.Stdout), nil
 }
 

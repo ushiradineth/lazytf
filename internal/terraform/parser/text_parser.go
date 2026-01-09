@@ -66,14 +66,19 @@ func (p *TextParser) ParseStream(lines <-chan string) (*terraform.Plan, error) {
 }
 
 type planBuilder struct {
-	cleaner      *Cleaner
-	plan         *terraform.Plan
-	current      *terraform.ResourceChange
-	before       map[string]any
-	after        map[string]any
-	afterUnknown map[string]any
-	pathStack    []string
-	sawNoChanges bool
+	cleaner       *Cleaner
+	plan          *terraform.Plan
+	current       *terraform.ResourceChange
+	before        map[string]any
+	after         map[string]any
+	afterUnknown  map[string]any
+	pathStack     []string
+	sawNoChanges  bool
+	heredocActive bool
+	heredocEnd    string
+	heredocKey    string
+	heredocPrefix string
+	heredocBuffer []string
 }
 
 func newPlanBuilder(cleaner *Cleaner) *planBuilder {
@@ -92,12 +97,28 @@ func (b *planBuilder) consume(line string) {
 	if b.cleaner != nil {
 		line = b.cleaner.Normalize(line)
 	}
+	rawLine := line
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return
 	}
 	if strings.Contains(trimmed, "No changes.") {
 		b.sawNoChanges = true
+	}
+
+	if b.heredocActive {
+		if trimmed == b.heredocEnd {
+			value := strings.Join(b.heredocBuffer, "\n")
+			b.applyHeredocValue(b.heredocKey, b.heredocPrefix, value)
+			b.heredocActive = false
+			b.heredocEnd = ""
+			b.heredocKey = ""
+			b.heredocPrefix = ""
+			b.heredocBuffer = nil
+			return
+		}
+		b.heredocBuffer = append(b.heredocBuffer, rawLine)
+		return
 	}
 
 	if address, action, ok := parseHeaderLine(trimmed); ok {
@@ -128,6 +149,15 @@ func (b *planBuilder) consume(line string) {
 
 	key, valuePart, ok := parseKeyValue(rest)
 	if !ok {
+		return
+	}
+
+	if delimiter, ok := parseHeredocDelimiter(valuePart); ok {
+		b.heredocActive = true
+		b.heredocEnd = delimiter
+		b.heredocKey = key
+		b.heredocPrefix = prefix
+		b.heredocBuffer = nil
 		return
 	}
 
@@ -243,6 +273,21 @@ func (b *planBuilder) setAfterUnknown(path []string) {
 	setPathValue(b.afterUnknown, path, true)
 }
 
+func (b *planBuilder) applyHeredocValue(key, prefix, value string) {
+	path := append([]string{}, b.pathStack...)
+	path = append(path, key)
+	switch prefix {
+	case "+":
+		b.setAfter(path, value)
+	case "-":
+		b.setBefore(path, value)
+	case "~":
+		b.setAfter(path, value)
+	default:
+		b.setAfter(path, value)
+	}
+}
+
 func parseHeaderLine(line string) (string, terraform.ActionType, bool) {
 	if !strings.HasPrefix(line, "# ") {
 		return "", terraform.ActionNoOp, false
@@ -298,6 +343,23 @@ func parseKeyValue(rest string) (string, string, bool) {
 	key = strings.Trim(key, "\"")
 	value := strings.TrimSpace(parts[1])
 	return key, value, true
+}
+
+func parseHeredocDelimiter(value string) (string, bool) {
+	if !strings.HasPrefix(value, "<<") {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(value)
+	trimmed = strings.TrimPrefix(trimmed, "<<")
+	trimmed = strings.TrimPrefix(trimmed, "-")
+	if trimmed == "" {
+		return "", false
+	}
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return "", false
+	}
+	return fields[0], true
 }
 
 func splitArrow(value string) (string, string) {

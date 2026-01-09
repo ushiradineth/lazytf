@@ -15,13 +15,15 @@ import (
 )
 
 var (
-	version      = "0.1.0"
-	planFile     string
-	mouseEnabled bool
-	executeMode  bool
-	autoPlan     bool
-	tfFlags      string
-	workDir      string
+	version         = "0.1.0"
+	planFile        string
+	mouseEnabled    bool
+	executeMode     bool
+	autoPlan        bool
+	tfFlags         string
+	workDir         string
+	programRunner   = runProgram
+	executorFactory = terraform.NewExecutor
 )
 
 func main() {
@@ -53,7 +55,7 @@ showing only changed attributes in a git-style diff format.`,
 func run(_ *cobra.Command, args []string) error {
 	if executeMode {
 		flags := splitFlags(tfFlags)
-		exec, err := terraform.NewExecutor(workDir, terraform.WithDefaultFlags(flags))
+		exec, err := executorFactory(workDir, terraform.WithDefaultFlags(flags))
 		if err != nil {
 			return fmt.Errorf("failed to initialize terraform: %w", err)
 		}
@@ -63,7 +65,7 @@ func run(_ *cobra.Command, args []string) error {
 			AutoPlan: autoPlan,
 			Flags:    flags,
 		})
-		return runProgram(model)
+		return programRunner(model)
 	}
 
 	// Determine plan file path
@@ -86,7 +88,7 @@ func run(_ *cobra.Command, args []string) error {
 
 	// Create and run the TUI
 	model := ui.NewModel(plan)
-	return runProgram(model)
+	return programRunner(model)
 }
 
 func runProgram(model tea.Model) error {
@@ -110,5 +112,38 @@ func splitFlags(flags string) []string {
 	if strings.TrimSpace(flags) == "" {
 		return nil
 	}
-	return strings.Fields(flags)
+	var args []string
+	var buf strings.Builder
+	inSingle := false
+	inDouble := false
+
+	flush := func() {
+		if buf.Len() > 0 {
+			args = append(args, buf.String())
+			buf.Reset()
+		}
+	}
+
+	for _, r := range flags {
+		switch r {
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+				continue
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+				continue
+			}
+		case ' ', '\t', '\n':
+			if !inSingle && !inDouble {
+				flush()
+				continue
+			}
+		}
+		buf.WriteRune(r)
+	}
+	flush()
+	return args
 }

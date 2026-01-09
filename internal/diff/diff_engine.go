@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// CalculateMinimalDiff computes the minimal set of changed attributes between before and after states
-// This shows only what changed, not the entire resource block
-func CalculateMinimalDiff(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []MinimalDiff {
+// CalculateDiffs computes the minimal set of changed attributes between before and after states.
+// This powers the diff viewer and resource summaries.
+func CalculateDiffs(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []MinimalDiff {
 	diffs := []MinimalDiff{}
 
 	// Collect all unique keys from both maps
@@ -61,7 +61,7 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]any, beforeOrde
 				// Recurse into nested objects
 				unknownMap := toMap(unknownVal)
 				nextPath := joinJSONPointer(pathPointer, key)
-				nestedDiffs := CalculateMinimalDiff(
+				nestedDiffs := CalculateDiffs(
 					toMap(beforeVal),
 					toMap(afterVal),
 					unknownMap,

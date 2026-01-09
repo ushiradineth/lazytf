@@ -41,7 +41,7 @@ func (e *Engine) GetResourceDiffs(resource *terraform.ResourceChange) []MinimalD
 	}
 
 	// Calculate diffs on demand
-	return CalculateMinimalDiff(before, after, afterUnknown, resource.Change.BeforeOrder, resource.Change.AfterOrder, resource.Change.AfterUnknownOrder, "")
+	return CalculateDiffs(before, after, afterUnknown, resource.Change.BeforeOrder, resource.Change.AfterOrder, resource.Change.AfterUnknownOrder, "")
 }
 
 // CountChanges returns the number of changes in a resource

@@ -267,12 +267,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.executionMode {
-			if handled, cmd := m.handleExecutionKey(msg); handled {
-				return m, cmd
-			}
-		}
-
 		if m.showHelp {
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -283,6 +277,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			default:
 				return m, nil
+			}
+		}
+
+		if m.executionMode {
+			if handled, cmd := m.handleExecutionKey(msg); handled {
+				return m, cmd
 			}
 		}
 

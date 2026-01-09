@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ushiradineth/tftui/internal/terraform"
 )
 
 func TestParseBytes(t *testing.T) {
@@ -127,5 +129,59 @@ func TestParse_InvalidReader(t *testing.T) {
 	p := NewJSONParser()
 	if _, err := p.Parse(bytes.NewReader([]byte(`{invalid`))); err == nil {
 		t.Fatalf("expected error for invalid json reader")
+	}
+}
+
+func TestParse_ModuleAddressAndActions(t *testing.T) {
+	raw := []byte(`{
+		"format_version":"1.2",
+		"terraform_version":"1.5.0",
+		"resource_changes":[
+			{
+				"address":"module.foo.aws_instance.one",
+				"module_address":"module.foo",
+				"type":"aws_instance",
+				"name":"one",
+				"change":{"actions":["create"],"before":null,"after":{}}
+			},
+			{
+				"address":"module.bar.aws_instance.two",
+				"module_address":["module","bar"],
+				"type":"aws_instance",
+				"name":"two",
+				"change":{"actions":["delete","create"],"before":{},"after":{}}
+			},
+			{
+				"address":"data.aws_caller_identity.current",
+				"type":"aws_caller_identity",
+				"name":"current",
+				"change":{"actions":["read"],"before":null,"after":{}}
+			}
+		],
+		"output_changes":{}
+	}`)
+
+	p := NewJSONParser()
+	plan, err := p.ParseBytes(raw)
+	if err != nil {
+		t.Fatalf("parse bytes: %v", err)
+	}
+	if len(plan.Resources) != 3 {
+		t.Fatalf("expected 3 resources, got %d", len(plan.Resources))
+	}
+	if plan.Resources[0].Action != terraform.ActionCreate {
+		t.Fatalf("expected create action")
+	}
+	if plan.Resources[1].Action != terraform.ActionReplace {
+		t.Fatalf("expected replace action")
+	}
+	if plan.Resources[2].Action != terraform.ActionRead {
+		t.Fatalf("expected read action")
+	}
+	if got := plan.Resources[0].ModulePath; len(got) != 1 || got[0] != "module.foo" {
+		t.Fatalf("unexpected module path: %#v", got)
+	}
+	if got := plan.Resources[1].ModulePath; len(got) != 2 {
+		t.Fatalf("unexpected module path: %#v", got)
 	}
 }
