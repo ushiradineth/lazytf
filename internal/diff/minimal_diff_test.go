@@ -42,9 +42,9 @@ func TestCalculateMinimalDiff_OrderedKeys(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_SkipsKnownAfterApplyEqual(t *testing.T) {
-	before := map[string]interface{}{"x": 1}
-	after := map[string]interface{}{"x": 1}
-	afterUnknown := map[string]interface{}{"x": true}
+	before := map[string]any{"x": 1}
+	after := map[string]any{"x": 1}
+	afterUnknown := map[string]any{"x": true}
 
 	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 0 {
@@ -53,9 +53,9 @@ func TestCalculateMinimalDiff_SkipsKnownAfterApplyEqual(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_KnownAfterApplyDiff(t *testing.T) {
-	before := map[string]interface{}{"x": 1}
-	after := map[string]interface{}{}
-	afterUnknown := map[string]interface{}{"x": true}
+	before := map[string]any{"x": 1}
+	after := map[string]any{}
+	afterUnknown := map[string]any{"x": true}
 
 	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 1 {
@@ -75,11 +75,11 @@ func TestCalculateMinimalDiff_KnownAfterApplyDiff(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_StringListLCS(t *testing.T) {
-	before := map[string]interface{}{
-		"list": []interface{}{"a", "b", "c"},
+	before := map[string]any{
+		"list": []any{"a", "b", "c"},
 	}
-	after := map[string]interface{}{
-		"list": []interface{}{"a", "c", "d"},
+	after := map[string]any{
+		"list": []any{"a", "c", "d"},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
@@ -95,11 +95,11 @@ func TestCalculateMinimalDiff_StringListLCS(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_SingleItemStringList(t *testing.T) {
-	before := map[string]interface{}{
-		"values": []interface{}{"old"},
+	before := map[string]any{
+		"values": []any{"old"},
 	}
-	after := map[string]interface{}{
-		"values": []interface{}{"new"},
+	after := map[string]any{
+		"values": []any{"new"},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
@@ -112,13 +112,13 @@ func TestCalculateMinimalDiff_SingleItemStringList(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_NestedMap(t *testing.T) {
-	before := map[string]interface{}{
-		"tags": map[string]interface{}{
+	before := map[string]any{
+		"tags": map[string]any{
 			"Environment": "dev",
 		},
 	}
-	after := map[string]interface{}{
-		"tags": map[string]interface{}{
+	after := map[string]any{
+		"tags": map[string]any{
 			"Environment": "prod",
 			"Team":        "core",
 		},
@@ -143,11 +143,11 @@ func TestCalculateMinimalDiff_NestedMap(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_ListFallback(t *testing.T) {
-	before := map[string]interface{}{
-		"nums": []interface{}{1.0, 2.0},
+	before := map[string]any{
+		"nums": []any{1.0, 2.0},
 	}
-	after := map[string]interface{}{
-		"nums": []interface{}{1.0, 2.0, 3.0},
+	after := map[string]any{
+		"nums": []any{1.0, 2.0, 3.0},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
@@ -160,14 +160,14 @@ func TestCalculateMinimalDiff_ListFallback(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_UnknownNestedEqualSkips(t *testing.T) {
-	before := map[string]interface{}{
-		"obj": map[string]interface{}{"a": 1},
+	before := map[string]any{
+		"obj": map[string]any{"a": 1},
 	}
-	after := map[string]interface{}{
-		"obj": map[string]interface{}{"a": 1},
+	after := map[string]any{
+		"obj": map[string]any{"a": 1},
 	}
-	afterUnknown := map[string]interface{}{
-		"obj": map[string]interface{}{"a": true},
+	afterUnknown := map[string]any{
+		"obj": map[string]any{"a": true},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
@@ -177,9 +177,9 @@ func TestCalculateMinimalDiff_UnknownNestedEqualSkips(t *testing.T) {
 }
 
 func TestCalculateMinimalDiff_UnknownNilAfter(t *testing.T) {
-	before := map[string]interface{}{"x": 1}
-	after := map[string]interface{}{"x": nil}
-	afterUnknown := map[string]interface{}{"x": true}
+	before := map[string]any{"x": 1}
+	after := map[string]any{"x": nil}
+	afterUnknown := map[string]any{"x": true}
 
 	diffs := CalculateMinimalDiff(before, after, afterUnknown, nil, nil, nil, "")
 	if len(diffs) != 1 {
@@ -200,13 +200,13 @@ func TestFormatValue_PrimitivesAndContainers(t *testing.T) {
 	if got := formatValue(UnknownValue{}); got != "(known after apply)" {
 		t.Fatalf("expected known after apply, got %q", got)
 	}
-	if got := formatValue(map[string]interface{}{"a": 1}); got != "{...}" {
+	if got := formatValue(map[string]any{"a": 1}); got != "{...}" {
 		t.Fatalf("expected map placeholder, got %q", got)
 	}
-	if got := formatValue([]interface{}{"one"}); got != "\"one\"" {
+	if got := formatValue([]any{"one"}); got != "\"one\"" {
 		t.Fatalf("expected single string list to format to string, got %q", got)
 	}
-	if got := formatValue([]interface{}{"one", "two"}); got != "[...]" {
+	if got := formatValue([]any{"one", "two"}); got != "[...]" {
 		t.Fatalf("expected list placeholder, got %q", got)
 	}
 
@@ -217,9 +217,9 @@ func TestFormatValue_PrimitivesAndContainers(t *testing.T) {
 }
 
 func TestOrderedKeys_RespectsOrderMaps(t *testing.T) {
-	before := map[string]interface{}{"b": 1}
-	after := map[string]interface{}{"a": 2, "d": 4}
-	afterUnknown := map[string]interface{}{"c": true}
+	before := map[string]any{"b": 1}
+	after := map[string]any{"a": 2, "d": 4}
+	afterUnknown := map[string]any{"c": true}
 	beforeOrder := map[string][]string{"": {"b", "a"}}
 	afterOrder := map[string][]string{"": {"a", "c"}}
 	afterUnknownOrder := map[string][]string{"": {"c", "b"}}
@@ -232,11 +232,11 @@ func TestOrderedKeys_RespectsOrderMaps(t *testing.T) {
 }
 
 func TestCalculateListDiff_SingleStringNoChange(t *testing.T) {
-	before := map[string]interface{}{
-		"values": []interface{}{"same"},
+	before := map[string]any{
+		"values": []any{"same"},
 	}
-	after := map[string]interface{}{
-		"values": []interface{}{"same"},
+	after := map[string]any{
+		"values": []any{"same"},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")
@@ -246,11 +246,11 @@ func TestCalculateListDiff_SingleStringNoChange(t *testing.T) {
 }
 
 func TestStringListDiffs_AddRemove(t *testing.T) {
-	before := map[string]interface{}{
-		"list": []interface{}{"a", "b", "c"},
+	before := map[string]any{
+		"list": []any{"a", "b", "c"},
 	}
-	after := map[string]interface{}{
-		"list": []interface{}{"b", "c", "d"},
+	after := map[string]any{
+		"list": []any{"b", "c", "d"},
 	}
 
 	diffs := CalculateMinimalDiff(before, after, nil, nil, nil, nil, "")

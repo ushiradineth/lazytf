@@ -48,11 +48,12 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 
 	header := d.renderHeader(resource, diffs)
 	var body string
-	if resource.Action == terraform.ActionCreate || resource.Action == terraform.ActionDelete {
+	switch {
+	case resource.Action == terraform.ActionCreate || resource.Action == terraform.ActionDelete:
 		body = d.renderCompactList(diffs, resource.Change)
-	} else if hasMultilineDiff(diffs) {
+	case hasMultilineDiff(diffs):
 		body = d.renderBlocks(diffs, resource.Change)
-	} else {
+	default:
 		body = d.renderCompactList(diffs, resource.Change)
 	}
 	content = lipgloss.JoinVertical(lipgloss.Left, header, body)
@@ -145,7 +146,7 @@ func (d *DiffViewer) renderInlineChange(item diff.MinimalDiff, change *terraform
 		line = fmt.Sprintf("%s %s: %s → %s", symbol, path, formatSingleLineValue(item.OldValue), formatSingleLineValue(item.NewValue))
 	default:
 		style = d.styles.Dimmed
-		line = fmt.Sprintf("? %s", path)
+		line = "? " + path
 	}
 
 	if d.width > 0 {
@@ -267,23 +268,23 @@ func (d *DiffViewer) pad(content string) string {
 	return lipgloss.NewStyle().Width(d.width).Height(d.height).Render(content)
 }
 
-func formatSingleLineValue(val interface{}) string {
+func formatSingleLineValue(val any) string {
 	if s, ok := val.(string); ok {
 		if strings.Contains(s, "\n") {
 			s = strings.ReplaceAll(s, "\n", `\n`)
 			s = truncateMiddle(s, 240)
-			return fmt.Sprintf(`"%s"`, s)
+			return fmt.Sprintf("%q", s)
 		}
 	}
 	return formatValue(val)
 }
 
-func truncateMiddle(s string, max int) string {
-	if len(s) <= max || max <= 3 {
+func truncateMiddle(s string, maxLen int) string {
+	if len(s) <= maxLen || maxLen <= 3 {
 		return s
 	}
-	head := max / 2
-	tail := max - head - 3
+	head := maxLen / 2
+	tail := maxLen - head - 3
 	if tail < 1 {
 		tail = 1
 	}

@@ -112,8 +112,13 @@ func TestChangeUnmarshal_Nulls(t *testing.T) {
 	if change.Before != nil || change.After != nil || change.AfterUnknown != nil {
 		t.Fatalf("expected nil maps, got before=%v after=%v unknown=%v", change.Before, change.After, change.AfterUnknown)
 	}
-	if change.BeforeSensitive["a"] != true || change.AfterSensitive["b"] != true {
-		t.Fatalf("expected sensitive maps to be set")
+	beforeVal, ok := change.BeforeSensitive["a"].(bool)
+	if !ok || !beforeVal {
+		t.Fatalf("expected before sensitive flag")
+	}
+	afterVal, ok := change.AfterSensitive["b"].(bool)
+	if !ok || !afterVal {
+		t.Fatalf("expected after sensitive flag")
 	}
 }
 

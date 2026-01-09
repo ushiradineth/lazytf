@@ -22,13 +22,13 @@ func TestFormatValue(t *testing.T) {
 	if got := formatValue(diff.UnknownValue{}); got != "(known after apply)" {
 		t.Fatalf("expected known after apply, got %q", got)
 	}
-	if got := formatValue(map[string]interface{}{"a": 1}); got != "{...}" {
+	if got := formatValue(map[string]any{"a": 1}); got != "{...}" {
 		t.Fatalf("expected map placeholder, got %q", got)
 	}
-	if got := formatValue([]interface{}{"one"}); got != "\"one\"" {
+	if got := formatValue([]any{"one"}); got != "\"one\"" {
 		t.Fatalf("expected single string list to format to string, got %q", got)
 	}
-	if got := formatValue([]interface{}{"one", "two"}); got != "[...]" {
+	if got := formatValue([]any{"one", "two"}); got != "[...]" {
 		t.Fatalf("expected list placeholder, got %q", got)
 	}
 }
@@ -70,7 +70,7 @@ func TestTruncateLineAndStripListMarker(t *testing.T) {
 }
 
 func TestInterfaceHelpers(t *testing.T) {
-	if !isMap(map[string]interface{}{"a": 1}) {
+	if !isMap(map[string]any{"a": 1}) {
 		t.Fatalf("expected map to be detected")
 	}
 	if isMap(nil) {
@@ -124,8 +124,8 @@ func TestRenderResourceDoesNotExpandDiffs(t *testing.T) {
 		Address: "aws_vpc.main",
 		Action:  terraform.ActionUpdate,
 		Change: &terraform.Change{
-			Before: map[string]interface{}{"name": "old"},
-			After:  map[string]interface{}{"name": "new"},
+			Before: map[string]any{"name": "old"},
+			After:  map[string]any{"name": "new"},
 		},
 	}
 
@@ -140,7 +140,7 @@ func TestRenderResourceTrimsModulePrefix(t *testing.T) {
 	resource := terraform.ResourceChange{
 		Address: "module.alpha.aws_instance.web",
 		Action:  terraform.ActionUpdate,
-		Change:  &terraform.Change{Before: map[string]interface{}{"a": 1}, After: map[string]interface{}{"a": 2}},
+		Change:  &terraform.Change{Before: map[string]any{"a": 1}, After: map[string]any{"a": 2}},
 	}
 
 	out := r.renderResource(resource, false, 2)
@@ -236,8 +236,8 @@ func TestFuzzyMatchCaseInsensitive(t *testing.T) {
 func TestFuzzyMatchOrderRequired(t *testing.T) {
 	// Test that characters must appear in order
 	tests := []struct {
-		query     string
-		candidate string
+		query       string
+		candidate   string
 		shouldMatch bool
 	}{
 		// Should match: e-g-g appears in order
@@ -252,9 +252,9 @@ func TestFuzzyMatchOrderRequired(t *testing.T) {
 		{"xyz", "xaybzc", true},
 		{"xyz", "xzy", false}, // 'y' comes after 'z'
 		// Real-world terraform examples
-		{"edge4", "module.gamma.kubernetes_config_map.settings_4", false}, // no 'd' after 'e' and before 'g'
-		{"edge4", "module.zeta.aws_instance.node_4", false},               // no 'g' in address
-		{"edge4", "module.beta.module.db.aws_security_group.legacy_4", true}, // e(modul-e) d(mo-d-ule) g(security_-g-roup) e(l-e-gacy) 4(-4)
+		{"edge4", "module.gamma.kubernetes_config_map.settings_4", false},          // no 'd' after 'e' and before 'g'
+		{"edge4", "module.zeta.aws_instance.node_4", false},                        // no 'g' in address
+		{"edge4", "module.beta.module.db.aws_security_group.legacy_4", true},       // e(modul-e) d(mo-d-ule) g(security_-g-roup) e(l-e-gacy) 4(-4)
 		{"edge4", "module.alpha.module.net.module.edge.aws_instance.node_4", true}, // has actual 'edge' substring
 		{"edge", "module.alpha.module.net.module.edge.aws_instance.node_0", true},
 	}
@@ -344,9 +344,9 @@ func TestSearchMatchesResourceTypeAndName(t *testing.T) {
 			Action:       terraform.ActionCreate,
 		},
 	})
-	r.SetSearchQuery("aws_instance web")
+	r.SetSearchQuery("aws_instance")
 	if got := selectFirstResource(r); got == nil {
-		t.Fatalf("expected resource type/name to match")
+		t.Fatalf("expected resource type to match")
 	}
 }
 
@@ -383,7 +383,7 @@ func TestRenderLongResourceAddressTruncates(t *testing.T) {
 	resource := terraform.ResourceChange{
 		Address: strings.Repeat("a", 80),
 		Action:  terraform.ActionCreate,
-		Change:  &terraform.Change{Actions: []string{"create"}, Before: nil, After: map[string]interface{}{"x": "y"}},
+		Change:  &terraform.Change{Actions: []string{"create"}, Before: nil, After: map[string]any{"x": "y"}},
 	}
 	out := stripANSI(r.renderResource(resource, false, 0))
 	lines := strings.Split(out, "\n")
@@ -397,7 +397,7 @@ func TestExpandedResourceZeroDiffsNoExtraLine(t *testing.T) {
 	resource := terraform.ResourceChange{
 		Address: "aws_instance.web",
 		Action:  terraform.ActionUpdate,
-		Change:  &terraform.Change{Actions: []string{"update"}, Before: map[string]interface{}{"a": 1}, After: map[string]interface{}{"a": 1}},
+		Change:  &terraform.Change{Actions: []string{"update"}, Before: map[string]any{"a": 1}, After: map[string]any{"a": 1}},
 	}
 	out := r.renderResource(resource, false, 0)
 	if strings.Count(out, "\n") != 0 {

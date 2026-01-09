@@ -84,10 +84,10 @@ func TestParse_ReaderFiltersAndOutputs(t *testing.T) {
 	for _, out := range plan.OutputChanges {
 		outputs[out.Name] = out.Sensitive
 	}
-	if got := outputs["bucket_id"]; got != true {
+	if got := outputs["bucket_id"]; !got {
 		t.Fatalf("expected bucket_id to be sensitive")
 	}
-	if got := outputs["region"]; got != false {
+	if got := outputs["region"]; got {
 		t.Fatalf("expected region to be not sensitive")
 	}
 }

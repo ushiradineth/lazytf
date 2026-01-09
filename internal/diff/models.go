@@ -11,10 +11,10 @@ const (
 
 // MinimalDiff represents a single attribute change in a resource
 type MinimalDiff struct {
-	Path     []string    // Path to the attribute (e.g., ["tags", "Environment"])
-	OldValue interface{} // nil if adding
-	NewValue interface{} // nil if removing
-	Action   DiffAction  // add/remove/change
+	Path     []string   // Path to the attribute (e.g., ["tags", "Environment"])
+	OldValue any        // nil if adding
+	NewValue any        // nil if removing
+	Action   DiffAction // add/remove/change
 }
 
 // UnknownValue represents a Terraform "known after apply" value.

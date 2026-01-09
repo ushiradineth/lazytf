@@ -112,16 +112,15 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 	var cmd tea.Cmd
 	handled := false
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
+		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("up", "k"))):
 			r.MoveUp()
 			handled = true
-		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
+		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("down", "j"))):
 			r.MoveDown()
 			handled = true
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
+		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("enter", " "))):
 			r.ToggleGroup()
 		}
 	}
@@ -320,14 +319,14 @@ func trimModulePrefix(address string, indent int) string {
 		return address
 	}
 	for i := 0; i < indent/2; i++ {
-		if strings.HasPrefix(address, "module.") {
-			parts := strings.SplitN(address, ".", 3)
-			if len(parts) == 3 {
-				address = parts[2]
-			} else {
-				break
-			}
+		if !strings.HasPrefix(address, "module.") {
+			break
 		}
+		parts := strings.SplitN(address, ".", 3)
+		if len(parts) != 3 {
+			break
+		}
+		address = parts[2]
 	}
 	return address
 }
@@ -385,23 +384,23 @@ func (n *moduleNode) minScore(scores map[string]int) int {
 	if len(scores) == 0 {
 		return 0
 	}
-	min := -1
+	minScore := -1
 	for i := range n.resources {
 		score := scores[n.resources[i].Address]
-		if min == -1 || score < min {
-			min = score
+		if minScore == -1 || score < minScore {
+			minScore = score
 		}
 	}
 	for _, child := range n.children {
 		score := child.minScore(scores)
-		if min == -1 || score < min {
-			min = score
+		if minScore == -1 || score < minScore {
+			minScore = score
 		}
 	}
-	if min == -1 {
+	if minScore == -1 {
 		return 0
 	}
-	return min
+	return minScore
 }
 
 func modulePath(address string) []string {
@@ -464,19 +463,6 @@ func bestQueryScore(query string, resource terraform.ResourceChange) int {
 	if query == "" {
 		return 0
 	}
-	terms := strings.Fields(query)
-	if len(terms) > 1 {
-		score := 0
-		for _, term := range terms {
-			termScore := bestQueryScore(term, resource)
-			if termScore < 0 {
-				return -1
-			}
-			score += termScore
-		}
-		return score
-	}
-
 	candidate := strings.ToLower(normalizeAddressForScore(resource.Address))
 	best := fuzzyScore(query, candidate)
 	if resource.ResourceType != "" {
@@ -519,7 +505,7 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 		line = fmt.Sprintf("  %s %s: %v → %v", symbol, path, formatValue(d.OldValue), formatValue(d.NewValue))
 	default:
 		style = r.styles.Dimmed
-		line = fmt.Sprintf("  ? %s", path)
+		line = "  ? " + path
 	}
 
 	if r.width > 0 {
@@ -776,24 +762,16 @@ func resourceMatchesQuery(resource terraform.ResourceChange, query string) bool 
 	if query == "" {
 		return true
 	}
-	terms := strings.Fields(query)
-	address := strings.ToLower(resource.Address)
-	resourceType := strings.ToLower(resource.ResourceType)
-	resourceName := strings.ToLower(resource.ResourceName)
-
-	for _, term := range terms {
-		matched := fuzzyMatch(term, address)
-		if !matched && resourceType != "" {
-			matched = fuzzyMatch(term, resourceType)
-		}
-		if !matched && resourceName != "" {
-			matched = fuzzyMatch(term, resourceName)
-		}
-		if !matched {
-			return false
-		}
+	if fuzzyMatch(query, strings.ToLower(resource.Address)) {
+		return true
 	}
-	return true
+	if resource.ResourceType != "" && fuzzyMatch(query, strings.ToLower(resource.ResourceType)) {
+		return true
+	}
+	if resource.ResourceName != "" && fuzzyMatch(query, strings.ToLower(resource.ResourceName)) {
+		return true
+	}
+	return false
 }
 
 func fuzzyMatch(query, candidate string) bool {

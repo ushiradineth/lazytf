@@ -323,8 +323,8 @@ func TestInlineMapAndListValues(t *testing.T) {
 	item := diff.MinimalDiff{
 		Path:     []string{"tags"},
 		Action:   diff.DiffChange,
-		OldValue: map[string]interface{}{"a": "b"},
-		NewValue: []interface{}{"x", "y"},
+		OldValue: map[string]any{"a": "b"},
+		NewValue: []any{"x", "y"},
 	}
 	out := viewer.renderInlineChange(item, nil)
 	if !strings.Contains(out, "{...}") || !strings.Contains(out, "[...]") {
@@ -518,6 +518,7 @@ func TestRenderBlocksSingleBlankBetweenRoots(t *testing.T) {
 }
 
 func TestViewerNarrowWidthNoPanic(t *testing.T) {
+	t.Helper()
 	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
 	viewer.SetSize(10, 5)
 	resource := &terraform.ResourceChange{
@@ -525,8 +526,8 @@ func TestViewerNarrowWidthNoPanic(t *testing.T) {
 		Action:  terraform.ActionUpdate,
 		Change: &terraform.Change{
 			Actions: []string{"update"},
-			Before:  map[string]interface{}{"a": 1},
-			After:   map[string]interface{}{"a": 2},
+			Before:  map[string]any{"a": 1},
+			After:   map[string]any{"a": 2},
 		},
 	}
 	_ = viewer.View(resource)

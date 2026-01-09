@@ -10,10 +10,13 @@ import (
 
 func TestRun_NoPlanFile(t *testing.T) {
 	oldPlanFile := planFile
+	oldExecute := executeMode
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		executeMode = oldExecute
 	})
 	planFile = ""
+	executeMode = false
 
 	err := run(&cobra.Command{}, nil)
 	if err == nil {
@@ -26,10 +29,13 @@ func TestRun_NoPlanFile(t *testing.T) {
 
 func TestRun_ParseFileError(t *testing.T) {
 	oldPlanFile := planFile
+	oldExecute := executeMode
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		executeMode = oldExecute
 	})
 	planFile = filepath.Join(t.TempDir(), "missing.json")
+	executeMode = false
 
 	err := run(&cobra.Command{}, nil)
 	if err == nil {

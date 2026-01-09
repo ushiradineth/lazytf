@@ -5,20 +5,16 @@ import (
 )
 
 // Engine orchestrates diff calculation for terraform resources
-type Engine struct {
-	formatter *Formatter
-}
+type Engine struct{}
 
 // NewEngine creates a new diff engine
 func NewEngine() *Engine {
-	return &Engine{
-		formatter: NewFormatter(),
-	}
+	return &Engine{}
 }
 
 // CalculateResourceDiffs is a no-op kept for compatibility
 // Diffs are now calculated on-demand in GetResourceDiffs
-func (e *Engine) CalculateResourceDiffs(plan *terraform.Plan) error {
+func (e *Engine) CalculateResourceDiffs(_ *terraform.Plan) error {
 	// Nothing to do - diffs are calculated on demand
 	return nil
 }
@@ -35,13 +31,13 @@ func (e *Engine) GetResourceDiffs(resource *terraform.ResourceChange) []MinimalD
 	afterUnknown := resource.Change.AfterUnknown
 
 	if before == nil {
-		before = make(map[string]interface{})
+		before = make(map[string]any)
 	}
 	if after == nil {
-		after = make(map[string]interface{})
+		after = make(map[string]any)
 	}
 	if afterUnknown == nil {
-		afterUnknown = make(map[string]interface{})
+		afterUnknown = make(map[string]any)
 	}
 
 	// Calculate diffs on demand

@@ -1,7 +1,7 @@
 package diff
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -35,5 +35,5 @@ func (f *Formatter) FormatResourceSummary(address string, action string, changeC
 	if changeCount == 1 {
 		return action + " " + address + "  (1 change)"
 	}
-	return action + " " + address + "  (" + fmt.Sprintf("%d", changeCount) + " changes)"
+	return action + " " + address + "  (" + strconv.Itoa(changeCount) + " changes)"
 }

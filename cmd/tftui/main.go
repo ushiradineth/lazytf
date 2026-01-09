@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/ushiradineth/tftui/internal/terraform"
 	"github.com/ushiradineth/tftui/internal/terraform/parser"
 	"github.com/ushiradineth/tftui/internal/ui"
 )
@@ -15,6 +18,10 @@ var (
 	version      = "0.1.0"
 	planFile     string
 	mouseEnabled bool
+	executeMode  bool
+	autoPlan     bool
+	tfFlags      string
+	workDir      string
 )
 
 func main() {
@@ -32,6 +39,10 @@ showing only changed attributes in a git-style diff format.`,
 	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan JSON file")
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
+	rootCmd.Flags().BoolVar(&executeMode, "execute", false, "Execute terraform commands directly")
+	rootCmd.Flags().BoolVar(&autoPlan, "auto-plan", false, "Automatically run terraform plan on startup")
+	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
+	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -39,15 +50,31 @@ showing only changed attributes in a git-style diff format.`,
 	}
 }
 
-func run(cmd *cobra.Command, args []string) error {
+func run(_ *cobra.Command, args []string) error {
+	if executeMode {
+		flags := splitFlags(tfFlags)
+		exec, err := terraform.NewExecutor(workDir, terraform.WithDefaultFlags(flags))
+		if err != nil {
+			return fmt.Errorf("failed to initialize terraform: %w", err)
+		}
+
+		model := ui.NewExecutionModel(nil, ui.ExecutionConfig{
+			Executor: exec,
+			AutoPlan: autoPlan,
+			Flags:    flags,
+		})
+		return runProgram(model)
+	}
+
 	// Determine plan file path
 	var planPath string
-	if len(args) > 0 {
+	switch {
+	case len(args) > 0:
 		planPath = args[0]
-	} else if planFile != "" {
+	case planFile != "":
 		planPath = planFile
-	} else {
-		return fmt.Errorf("no plan file specified. Usage: tftui <plan-file> or tftui --file <plan-file>")
+	default:
+		return errors.New("no plan file specified. Usage: tftui <plan-file> or tftui --file <plan-file>")
 	}
 
 	// Parse the plan
@@ -59,6 +86,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Create and run the TUI
 	model := ui.NewModel(plan)
+	return runProgram(model)
+}
+
+func runProgram(model tea.Model) error {
 	options := []tea.ProgramOption{
 		tea.WithAltScreen(),
 	}
@@ -73,4 +104,11 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func splitFlags(flags string) []string {
+	if strings.TrimSpace(flags) == "" {
+		return nil
+	}
+	return strings.Fields(flags)
 }

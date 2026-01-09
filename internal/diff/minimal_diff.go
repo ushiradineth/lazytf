@@ -9,7 +9,7 @@ import (
 
 // CalculateMinimalDiff computes the minimal set of changed attributes between before and after states
 // This shows only what changed, not the entire resource block
-func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []MinimalDiff {
+func CalculateMinimalDiff(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []MinimalDiff {
 	diffs := []MinimalDiff{}
 
 	// Collect all unique keys from both maps
@@ -29,7 +29,8 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 			afterExists = true
 		}
 
-		if !beforeExists {
+		switch {
+		case !beforeExists:
 			// New attribute added
 			diffs = append(diffs, MinimalDiff{
 				Path:     []string{key},
@@ -37,7 +38,7 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 				NewValue: afterVal,
 				Action:   DiffAdd,
 			})
-		} else if !afterExists {
+		case !afterExists:
 			// Attribute removed
 			diffs = append(diffs, MinimalDiff{
 				Path:     []string{key},
@@ -45,7 +46,7 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 				NewValue: nil,
 				Action:   DiffRemove,
 			})
-		} else if isUnknownValue(afterVal) {
+		case isUnknownValue(afterVal):
 			// Value is known after apply
 			diffs = append(diffs, MinimalDiff{
 				Path:     []string{key},
@@ -53,9 +54,10 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 				NewValue: afterVal,
 				Action:   DiffChange,
 			})
-		} else if !deepEqual(beforeVal, afterVal) {
+		case !deepEqual(beforeVal, afterVal):
 			// Attribute changed - check if we need to recurse
-			if isMap(beforeVal) && isMap(afterVal) {
+			switch {
+			case isMap(beforeVal) && isMap(afterVal):
 				// Recurse into nested objects
 				unknownMap := toMap(unknownVal)
 				nextPath := joinJSONPointer(pathPointer, key)
@@ -72,11 +74,11 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 					nd.Path = append([]string{key}, nd.Path...)
 					diffs = append(diffs, nd)
 				}
-			} else if isList(beforeVal) && isList(afterVal) {
+			case isList(beforeVal) && isList(afterVal):
 				// Handle lists/arrays
 				listDiffs := calculateListDiff(key, beforeVal, afterVal)
 				diffs = append(diffs, listDiffs...)
-			} else {
+			default:
 				// Simple value change
 				diffs = append(diffs, MinimalDiff{
 					Path:     []string{key},
@@ -93,7 +95,7 @@ func CalculateMinimalDiff(before, after, afterUnknown map[string]interface{}, be
 }
 
 // unionKeys returns all unique keys from two maps, sorted alphabetically
-func orderedKeys(before, after, afterUnknown map[string]interface{}, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []string {
+func orderedKeys(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []string {
 	keySet := make(map[string]bool)
 	ordered := make([]string, 0)
 
@@ -138,22 +140,22 @@ func orderedKeys(before, after, afterUnknown map[string]interface{}, beforeOrder
 }
 
 // deepEqual checks if two values are deeply equal
-func deepEqual(a, b interface{}) bool {
+func deepEqual(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-func isUnknown(val interface{}) bool {
+func isUnknown(val any) bool {
 	switch v := val.(type) {
 	case bool:
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		for _, sub := range v {
 			if isUnknown(sub) {
 				return true
 			}
 		}
 		return false
-	case []interface{}:
+	case []any:
 		for _, sub := range v {
 			if isUnknown(sub) {
 				return true
@@ -165,13 +167,13 @@ func isUnknown(val interface{}) bool {
 	}
 }
 
-func isUnknownValue(val interface{}) bool {
+func isUnknownValue(val any) bool {
 	_, ok := val.(UnknownValue)
 	return ok
 }
 
 // isMap checks if a value is a map
-func isMap(val interface{}) bool {
+func isMap(val any) bool {
 	if val == nil {
 		return false
 	}
@@ -180,7 +182,7 @@ func isMap(val interface{}) bool {
 }
 
 // isList checks if a value is a list/array
-func isList(val interface{}) bool {
+func isList(val any) bool {
 	if val == nil {
 		return false
 	}
@@ -188,16 +190,16 @@ func isList(val interface{}) bool {
 	return v.Kind() == reflect.Slice || v.Kind() == reflect.Array
 }
 
-// toMap converts an interface{} to map[string]interface{}
-func toMap(val interface{}) map[string]interface{} {
-	if m, ok := val.(map[string]interface{}); ok {
+// toMap converts an any to map[string]any
+func toMap(val any) map[string]any {
+	if m, ok := val.(map[string]any); ok {
 		return m
 	}
 	return nil
 }
 
 // calculateListDiff handles differences in lists/arrays
-func calculateListDiff(key string, before, after interface{}) []MinimalDiff {
+func calculateListDiff(key string, before, after any) []MinimalDiff {
 	beforeList := interfaceToList(before)
 	afterList := interfaceToList(after)
 
@@ -236,21 +238,21 @@ func calculateListDiff(key string, before, after interface{}) []MinimalDiff {
 	return nil
 }
 
-// interfaceToList converts an interface{} to a slice
-func interfaceToList(val interface{}) []interface{} {
+// interfaceToList converts an any to a slice
+func interfaceToList(val any) []any {
 	v := reflect.ValueOf(val)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 		return nil
 	}
 
-	result := make([]interface{}, v.Len())
+	result := make([]any, v.Len())
 	for i := 0; i < v.Len(); i++ {
 		result[i] = v.Index(i).Interface()
 	}
 	return result
 }
 
-func interfaceToStrings(list []interface{}) []string {
+func interfaceToStrings(list []any) []string {
 	result := make([]string, 0, len(list))
 	for _, item := range list {
 		result = append(result, item.(string))
@@ -258,7 +260,7 @@ func interfaceToStrings(list []interface{}) []string {
 	return result
 }
 
-func allStrings(list []interface{}) bool {
+func allStrings(list []any) bool {
 	for _, item := range list {
 		if _, ok := item.(string); !ok {
 			return false
@@ -281,11 +283,12 @@ func stringListDiffs(key string, before, after []string) []MinimalDiff {
 	}
 	for i := m - 1; i >= 0; i-- {
 		for j := n - 1; j >= 0; j-- {
-			if before[i] == after[j] {
+			switch {
+			case before[i] == after[j]:
 				dp[i][j] = dp[i+1][j+1] + 1
-			} else if dp[i+1][j] >= dp[i][j+1] {
+			case dp[i+1][j] >= dp[i][j+1]:
 				dp[i][j] = dp[i+1][j]
-			} else {
+			default:
 				dp[i][j] = dp[i][j+1]
 			}
 		}
@@ -294,14 +297,15 @@ func stringListDiffs(key string, before, after []string) []MinimalDiff {
 	ops := make([]op, 0, m+n)
 	i, j := 0, 0
 	for i < m && j < n {
-		if before[i] == after[j] {
+		switch {
+		case before[i] == after[j]:
 			ops = append(ops, op{kind: "equal", value: before[i]})
 			i++
 			j++
-		} else if dp[i+1][j] >= dp[i][j+1] {
+		case dp[i+1][j] >= dp[i][j+1]:
 			ops = append(ops, op{kind: "remove", value: before[i]})
 			i++
-		} else {
+		default:
 			ops = append(ops, op{kind: "add", value: after[j]})
 			j++
 		}
@@ -366,7 +370,7 @@ func FormatDiff(diff MinimalDiff) string {
 	case DiffChange:
 		return fmt.Sprintf("  ~ %s: %v → %v", pathStr, formatValue(diff.OldValue), formatValue(diff.NewValue))
 	default:
-		return fmt.Sprintf("  ? %s", pathStr)
+		return "  ? " + pathStr
 	}
 }
 
@@ -384,7 +388,7 @@ func formatPath(path []string) string {
 }
 
 // formatValue formats a value for display
-func formatValue(val interface{}) string {
+func formatValue(val any) string {
 	if val == nil {
 		return "(null)"
 	}
@@ -394,7 +398,7 @@ func formatValue(val interface{}) string {
 		if len(s) > 200 {
 			return fmt.Sprintf("%q...", s[:197])
 		}
-		return fmt.Sprintf(`"%s"`, s)
+		return fmt.Sprintf("%q", s)
 	}
 
 	if _, ok := val.(UnknownValue); ok {

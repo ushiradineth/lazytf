@@ -8,7 +8,7 @@ import (
 	"github.com/ushiradineth/tftui/internal/diff"
 )
 
-func formatValue(val interface{}) string {
+func formatValue(val any) string {
 	if val == nil {
 		return "(null)"
 	}
@@ -17,7 +17,7 @@ func formatValue(val interface{}) string {
 		if len(s) > 200 {
 			return fmt.Sprintf("%q...", s[:197])
 		}
-		return fmt.Sprintf(`"%s"`, s)
+		return fmt.Sprintf("%q", s)
 	}
 
 	if _, ok := val.(diff.UnknownValue); ok {
@@ -39,14 +39,14 @@ func formatValue(val interface{}) string {
 	return fmt.Sprintf("%v", val)
 }
 
-func isMap(val interface{}) bool {
+func isMap(val any) bool {
 	if val == nil {
 		return false
 	}
 	return reflect.TypeOf(val).Kind() == reflect.Map
 }
 
-func isList(val interface{}) bool {
+func isList(val any) bool {
 	if val == nil {
 		return false
 	}
@@ -54,13 +54,13 @@ func isList(val interface{}) bool {
 	return kind == reflect.Slice || kind == reflect.Array
 }
 
-func interfaceToList(val interface{}) []interface{} {
+func interfaceToList(val any) []any {
 	v := reflect.ValueOf(val)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 		return nil
 	}
 
-	result := make([]interface{}, v.Len())
+	result := make([]any, v.Len())
 	for i := 0; i < v.Len(); i++ {
 		result[i] = v.Index(i).Interface()
 	}
@@ -102,14 +102,14 @@ func formatMultilineStringDiff(path, before, after string) string {
 	return b.String()
 }
 
-func truncateLine(s string, max int) string {
-	if len(s) <= max {
+func truncateLine(s string, maxLen int) string {
+	if len(s) <= maxLen {
 		return s
 	}
-	if max <= 3 {
-		return s[:max]
+	if maxLen <= 3 {
+		return s[:maxLen]
 	}
-	return s[:max-3] + "..."
+	return s[:maxLen-3] + "..."
 }
 
 func stripListMarker(line string) string {

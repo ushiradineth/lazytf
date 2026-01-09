@@ -19,16 +19,16 @@ func NewJSONParser() *JSONParser {
 // Parse reads and parses JSON plan data from a reader
 func (p *JSONParser) Parse(input io.Reader) (*terraform.Plan, error) {
 	var rawPlan struct {
-		FormatVersion string `json:"format_version"`
-		TerraformVersion string `json:"terraform_version"`
-		ResourceChanges []terraform.ResourceChange `json:"resource_changes"`
-		OutputChanges map[string]struct {
-			Actions []string `json:"actions"`
-			Before interface{} `json:"before"`
-			After interface{} `json:"after"`
-			Sensitive bool `json:"sensitive"`
+		FormatVersion    string                     `json:"format_version"`
+		TerraformVersion string                     `json:"terraform_version"`
+		ResourceChanges  []terraform.ResourceChange `json:"resource_changes"`
+		OutputChanges    map[string]struct {
+			Actions   []string `json:"actions"`
+			Before    any      `json:"before"`
+			After     any      `json:"after"`
+			Sensitive bool     `json:"sensitive"`
 		} `json:"output_changes"`
-		Variables map[string]interface{} `json:"variables"`
+		Variables map[string]any `json:"variables"`
 	}
 
 	decoder := json.NewDecoder(input)
@@ -67,12 +67,12 @@ func (p *JSONParser) Parse(input io.Reader) (*terraform.Plan, error) {
 	// Process output changes
 	for name, change := range rawPlan.OutputChanges {
 		outputChange := terraform.OutputChange{
-			Name: name,
+			Name:   name,
 			Action: terraform.GetActionType(change.Actions),
 			Change: &terraform.OutputChangeDetail{
 				Actions: change.Actions,
-				Before: change.Before,
-				After: change.After,
+				Before:  change.Before,
+				After:   change.After,
 			},
 			Sensitive: change.Sensitive,
 		}
@@ -96,16 +96,16 @@ func (p *JSONParser) ParseFile(filePath string) (*terraform.Plan, error) {
 // ParseBytes parses JSON plan data from a byte slice
 func (p *JSONParser) ParseBytes(data []byte) (*terraform.Plan, error) {
 	var rawPlan struct {
-		FormatVersion string `json:"format_version"`
-		TerraformVersion string `json:"terraform_version"`
-		ResourceChanges []terraform.ResourceChange `json:"resource_changes"`
-		OutputChanges map[string]struct {
-			Actions []string `json:"actions"`
-			Before interface{} `json:"before"`
-			After interface{} `json:"after"`
-			Sensitive bool `json:"sensitive"`
+		FormatVersion    string                     `json:"format_version"`
+		TerraformVersion string                     `json:"terraform_version"`
+		ResourceChanges  []terraform.ResourceChange `json:"resource_changes"`
+		OutputChanges    map[string]struct {
+			Actions   []string `json:"actions"`
+			Before    any      `json:"before"`
+			After     any      `json:"after"`
+			Sensitive bool     `json:"sensitive"`
 		} `json:"output_changes"`
-		Variables map[string]interface{} `json:"variables"`
+		Variables map[string]any `json:"variables"`
 	}
 
 	if err := json.Unmarshal(data, &rawPlan); err != nil {
@@ -140,12 +140,12 @@ func (p *JSONParser) ParseBytes(data []byte) (*terraform.Plan, error) {
 	// Process output changes
 	for name, change := range rawPlan.OutputChanges {
 		outputChange := terraform.OutputChange{
-			Name: name,
+			Name:   name,
 			Action: terraform.GetActionType(change.Actions),
 			Change: &terraform.OutputChangeDetail{
 				Actions: change.Actions,
-				Before: change.Before,
-				After: change.After,
+				Before:  change.Before,
+				After:   change.After,
 			},
 			Sensitive: change.Sensitive,
 		}

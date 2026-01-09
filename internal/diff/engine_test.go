@@ -22,7 +22,7 @@ func TestEngine_GetResourceDiffsNilMaps(t *testing.T) {
 	rc := &terraform.ResourceChange{
 		Change: &terraform.Change{
 			Before: nil,
-			After: map[string]interface{}{
+			After: map[string]any{
 				"name": "app",
 			},
 			AfterUnknown: nil,

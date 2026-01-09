@@ -20,11 +20,11 @@ const (
 
 // Plan represents a parsed Terraform plan
 type Plan struct {
-	FormatVersion string                 `json:"format_version"`
-	Resources     []ResourceChange       `json:"resource_changes"`
-	OutputChanges []OutputChange         `json:"output_changes"`
-	Variables     map[string]interface{} `json:"variables"`
-	Metadata      PlanMetadata           `json:"metadata"`
+	FormatVersion string           `json:"format_version"`
+	Resources     []ResourceChange `json:"resource_changes"`
+	OutputChanges []OutputChange   `json:"output_changes"`
+	Variables     map[string]any   `json:"variables"`
+	Metadata      PlanMetadata     `json:"metadata"`
 }
 
 // ModuleAddress supports Terraform's module_address being a string or array.
@@ -70,28 +70,28 @@ type ResourceChange struct {
 
 // Change represents the before/after state of a resource
 type Change struct {
-	Actions           []string               `json:"actions"`
-	Before            map[string]interface{} `json:"before"`
-	After             map[string]interface{} `json:"after"`
-	AfterUnknown      map[string]interface{} `json:"after_unknown,omitempty"`
-	BeforeSensitive   map[string]interface{} `json:"before_sensitive,omitempty"`
-	AfterSensitive    map[string]interface{} `json:"after_sensitive,omitempty"`
-	ReplacePaths      [][]string             `json:"replace_paths,omitempty"`
-	BeforeOrder       map[string][]string    `json:"-"`
-	AfterOrder        map[string][]string    `json:"-"`
-	AfterUnknownOrder map[string][]string    `json:"-"`
+	Actions           []string            `json:"actions"`
+	Before            map[string]any      `json:"before"`
+	After             map[string]any      `json:"after"`
+	AfterUnknown      map[string]any      `json:"after_unknown,omitempty"`
+	BeforeSensitive   map[string]any      `json:"before_sensitive,omitempty"`
+	AfterSensitive    map[string]any      `json:"after_sensitive,omitempty"`
+	ReplacePaths      [][]string          `json:"replace_paths,omitempty"`
+	BeforeOrder       map[string][]string `json:"-"`
+	AfterOrder        map[string][]string `json:"-"`
+	AfterUnknownOrder map[string][]string `json:"-"`
 }
 
 // UnmarshalJSON captures key order for before/after/after_unknown maps.
 func (c *Change) UnmarshalJSON(data []byte) error {
 	type changeAlias struct {
-		Actions         []string               `json:"actions"`
-		Before          json.RawMessage        `json:"before"`
-		After           json.RawMessage        `json:"after"`
-		AfterUnknown    json.RawMessage        `json:"after_unknown"`
-		BeforeSensitive map[string]interface{} `json:"before_sensitive"`
-		AfterSensitive  map[string]interface{} `json:"after_sensitive"`
-		ReplacePaths    [][]string             `json:"replace_paths"`
+		Actions         []string        `json:"actions"`
+		Before          json.RawMessage `json:"before"`
+		After           json.RawMessage `json:"after"`
+		AfterUnknown    json.RawMessage `json:"after_unknown"`
+		BeforeSensitive map[string]any  `json:"before_sensitive"`
+		AfterSensitive  map[string]any  `json:"after_sensitive"`
+		ReplacePaths    [][]string      `json:"replace_paths"`
 	}
 
 	var aux changeAlias
@@ -214,9 +214,9 @@ type OutputChange struct {
 
 // OutputChangeDetail contains the before/after values of an output
 type OutputChangeDetail struct {
-	Actions []string    `json:"actions"`
-	Before  interface{} `json:"before"`
-	After   interface{} `json:"after"`
+	Actions []string `json:"actions"`
+	Before  any      `json:"before"`
+	After   any      `json:"after"`
 }
 
 // PlanMetadata contains metadata about the plan execution
