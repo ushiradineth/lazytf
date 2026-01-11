@@ -53,6 +53,54 @@ var (
 		DimmedColor:     lipgloss.AdaptiveColor{Light: "#9E9E9E", Dark: "#6E6E6E"},
 		HighlightColor:  lipgloss.AdaptiveColor{Light: "#FFFACD", Dark: "#4A4A2A"},
 	}
+
+	// MonokaiTheme is inspired by the Monokai palette.
+	MonokaiTheme = Theme{
+		Name:            "monokai",
+		CreateColor:     lipgloss.AdaptiveColor{Light: "#A6E22E", Dark: "#A6E22E"},
+		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FD971F", Dark: "#FD971F"},
+		DeleteColor:     lipgloss.AdaptiveColor{Light: "#F92672", Dark: "#F92672"},
+		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#AE81FF", Dark: "#AE81FF"},
+		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#75715E", Dark: "#75715E"},
+		BackgroundColor: lipgloss.AdaptiveColor{Light: "#F2F2F2", Dark: "#272822"},
+		ForegroundColor: lipgloss.AdaptiveColor{Light: "#272822", Dark: "#F8F8F2"},
+		BorderColor:     lipgloss.AdaptiveColor{Light: "#BDBDBD", Dark: "#3E3D32"},
+		SelectedColor:   lipgloss.AdaptiveColor{Light: "#66D9EF", Dark: "#66D9EF"},
+		DimmedColor:     lipgloss.AdaptiveColor{Light: "#9E9E9E", Dark: "#75715E"},
+		HighlightColor:  lipgloss.AdaptiveColor{Light: "#E6DB74", Dark: "#E6DB74"},
+	}
+
+	// NordTheme is based on the Nord color palette.
+	NordTheme = Theme{
+		Name:            "nord",
+		CreateColor:     lipgloss.AdaptiveColor{Light: "#5E81AC", Dark: "#81A1C1"},
+		UpdateColor:     lipgloss.AdaptiveColor{Light: "#D08770", Dark: "#D08770"},
+		DeleteColor:     lipgloss.AdaptiveColor{Light: "#BF616A", Dark: "#BF616A"},
+		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#B48EAD", Dark: "#B48EAD"},
+		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#7A7A7A", Dark: "#6E7A88"},
+		BackgroundColor: lipgloss.AdaptiveColor{Light: "#ECEFF4", Dark: "#2E3440"},
+		ForegroundColor: lipgloss.AdaptiveColor{Light: "#2E3440", Dark: "#ECEFF4"},
+		BorderColor:     lipgloss.AdaptiveColor{Light: "#D8DEE9", Dark: "#4C566A"},
+		SelectedColor:   lipgloss.AdaptiveColor{Light: "#88C0D0", Dark: "#88C0D0"},
+		DimmedColor:     lipgloss.AdaptiveColor{Light: "#8C92A0", Dark: "#7A8699"},
+		HighlightColor:  lipgloss.AdaptiveColor{Light: "#EBCB8B", Dark: "#EBCB8B"},
+	}
+
+	// GitHubDarkTheme mimics GitHub's dark UI.
+	GitHubDarkTheme = Theme{
+		Name:            "github-dark",
+		CreateColor:     lipgloss.AdaptiveColor{Light: "#2DA44E", Dark: "#2DA44E"},
+		UpdateColor:     lipgloss.AdaptiveColor{Light: "#D29922", Dark: "#D29922"},
+		DeleteColor:     lipgloss.AdaptiveColor{Light: "#F85149", Dark: "#F85149"},
+		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#A371F7", Dark: "#A371F7"},
+		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#6E7781", Dark: "#6E7781"},
+		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0D1117"},
+		ForegroundColor: lipgloss.AdaptiveColor{Light: "#24292F", Dark: "#C9D1D9"},
+		BorderColor:     lipgloss.AdaptiveColor{Light: "#D0D7DE", Dark: "#30363D"},
+		SelectedColor:   lipgloss.AdaptiveColor{Light: "#0969DA", Dark: "#1F6FEB"},
+		DimmedColor:     lipgloss.AdaptiveColor{Light: "#57606A", Dark: "#8B949E"},
+		HighlightColor:  lipgloss.AdaptiveColor{Light: "#D2A8FF", Dark: "#D2A8FF"},
+	}
 )
 
 // Styles contains all the lipgloss styles used in the TUI

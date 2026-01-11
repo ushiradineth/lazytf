@@ -12,17 +12,11 @@ go.work
 .DS_Store
 
 # Build artifacts
-.gocache/
 .cache/
 bin/
 .go/
-.golangci-cache/
-.go-cache/
+.tftui/
 
 # Output of the go coverage tool
 coverage.out
 coverage.html
-
-# Local tooling and temp artifacts
-.claude/
-.terraform-plugin-cache/
