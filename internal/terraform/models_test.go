@@ -184,6 +184,18 @@ func TestActionTypeDisplayHelpers(t *testing.T) {
 	if got := ActionUpdate.GetActionVerb(); got != "will be updated" {
 		t.Fatalf("unexpected verb: %q", got)
 	}
+	if got := ActionDelete.GetActionIcon(); got != "[-]" {
+		t.Fatalf("unexpected delete icon: %q", got)
+	}
+	if got := ActionReplace.GetActionVerb(); got != "will be replaced" {
+		t.Fatalf("unexpected replace verb: %q", got)
+	}
+	if got := ActionRead.GetActionIcon(); got != "[→]" {
+		t.Fatalf("unexpected read icon: %q", got)
+	}
+	if got := ActionNoOp.GetActionVerb(); got != "no changes" {
+		t.Fatalf("unexpected no-op verb: %q", got)
+	}
 	if got := ActionType("bogus").GetActionIcon(); got != "[?]" {
 		t.Fatalf("unexpected icon for unknown: %q", got)
 	}

@@ -36,12 +36,35 @@ type ExecutionResult struct {
 	done     chan struct{}
 }
 
+// NewExecutionResult creates a result with a completion channel.
+func NewExecutionResult() *ExecutionResult {
+	return &ExecutionResult{done: make(chan struct{})}
+}
+
 // Done returns a channel that closes when the command finishes.
 func (r *ExecutionResult) Done() <-chan struct{} {
 	if r == nil {
 		return nil
 	}
 	return r.done
+}
+
+// Finish closes the completion channel if it is still open.
+func (r *ExecutionResult) Finish() {
+	if r == nil {
+		return
+	}
+	if r.done == nil {
+		r.done = make(chan struct{})
+		close(r.done)
+		return
+	}
+	select {
+	case <-r.done:
+		return
+	default:
+		close(r.done)
+	}
 }
 
 // ExecutorOption configures an Executor.
@@ -97,6 +120,12 @@ type ApplyOptions struct {
 	Env         []string
 	AutoApprove bool
 	UseJSON     bool
+}
+
+// ShowOptions controls terraform show execution.
+type ShowOptions struct {
+	Timeout time.Duration
+	Env     []string
 }
 
 // NewExecutor creates a terraform executor.
@@ -172,6 +201,23 @@ func (e *Executor) Apply(ctx context.Context, opts ApplyOptions) (*ExecutionResu
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
 }
 
+// ShowJSON runs terraform show -json on a plan file.
+func (e *Executor) ShowJSON(ctx context.Context, planFile string, opts ShowOptions) (*ExecutionResult, error) {
+	if strings.TrimSpace(planFile) == "" {
+		return nil, errors.New("plan file path is required")
+	}
+	args := []string{"show", "-json", planFile}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	if result.Error != nil {
+		return result, result.Error
+	}
+	return result, nil
+}
+
 // Version returns terraform version output.
 func (e *Executor) Version() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -206,6 +252,46 @@ func (e *Executor) WorkDir() string {
 		return ""
 	}
 	return e.workDir
+}
+
+// CloneWithWorkDir returns a new executor with the same settings but a new workdir.
+func (e *Executor) CloneWithWorkDir(workDir string) (*Executor, error) {
+	if e == nil {
+		return nil, errors.New("executor is nil")
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	absDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve workdir: %w", err)
+	}
+	info, err := os.Stat(absDir)
+	if err != nil {
+		return nil, fmt.Errorf("workdir not found: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("workdir is not a directory: %s", absDir)
+	}
+
+	clone := &Executor{
+		workDir:       absDir,
+		terraformPath: e.terraformPath,
+		defaultFlags:  append([]string{}, e.defaultFlags...),
+		env:           append([]string{}, e.env...),
+		timeout:       e.timeout,
+	}
+	if clone.terraformPath == "" {
+		path, err := resolveTerraformPath()
+		if err != nil {
+			return nil, err
+		}
+		clone.terraformPath = path
+	}
+	if err := validateTerraformPath(clone.terraformPath); err != nil {
+		return nil, err
+	}
+	return clone, nil
 }
 
 type execOptions struct {

@@ -293,6 +293,191 @@ func TestExecutorInterleavedOutputOrder(t *testing.T) {
 	}
 }
 
+func TestExecutionResultFinish(t *testing.T) {
+	result := NewExecutionResult()
+	select {
+	case <-result.Done():
+		t.Fatalf("expected open result channel")
+	default:
+	}
+
+	result.Finish()
+	select {
+	case <-result.Done():
+	default:
+		t.Fatalf("expected closed result channel")
+	}
+
+	result.Finish()
+}
+
+func TestExecutionResultFinishNilChannel(t *testing.T) {
+	result := &ExecutionResult{}
+	result.Finish()
+	if result.Done() == nil {
+		t.Fatalf("expected Done channel to be initialized")
+	}
+	select {
+	case <-result.Done():
+	default:
+		t.Fatalf("expected Done channel to be closed")
+	}
+}
+
+func TestExecutionResultDoneNil(t *testing.T) {
+	var result *ExecutionResult
+	if result.Done() != nil {
+		t.Fatalf("expected nil done channel")
+	}
+}
+
+func TestExecutorInitAndShowJSON(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraform(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, err := exec.Init(context.Background())
+	if err != nil {
+		t.Fatalf("init error: %v", err)
+	}
+	<-result.Done()
+
+	planFile := filepath.Join(dir, "plan.tfplan")
+	if err := os.WriteFile(planFile, []byte("plan"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+	showResult, err := exec.ShowJSON(context.Background(), planFile, ShowOptions{})
+	if err != nil {
+		t.Fatalf("show json error: %v", err)
+	}
+	if !strings.Contains(showResult.Output, "format_version") {
+		t.Fatalf("unexpected show output: %q", showResult.Output)
+	}
+}
+
+func TestExecutorSupportsJSON(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraform(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	supported, err := exec.SupportsJSON()
+	if err != nil {
+		t.Fatalf("supports json error: %v", err)
+	}
+	if !supported {
+		t.Fatalf("expected json support")
+	}
+}
+
+func TestExecutorWorkDirAndClone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraform(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	if exec.WorkDir() == "" {
+		t.Fatalf("expected workdir to be set")
+	}
+
+	cloneDir := t.TempDir()
+	clone, err := exec.CloneWithWorkDir(cloneDir)
+	if err != nil {
+		t.Fatalf("clone error: %v", err)
+	}
+	if clone.WorkDir() == exec.WorkDir() {
+		t.Fatalf("expected clone workdir to differ")
+	}
+
+	var nilExec *Executor
+	if _, err := nilExec.CloneWithWorkDir(cloneDir); err == nil {
+		t.Fatalf("expected error for nil executor")
+	}
+}
+
+func TestWithTimeoutOption(t *testing.T) {
+	exec := &Executor{}
+	if err := WithTimeout(5 * time.Second)(exec); err != nil {
+		t.Fatalf("timeout option error: %v", err)
+	}
+	if exec.timeout != 5*time.Second {
+		t.Fatalf("expected timeout to be set")
+	}
+}
+
+func TestParseTerraformVersion(t *testing.T) {
+	if _, err := parseTerraformVersion(""); err == nil {
+		t.Fatalf("expected error for empty version")
+	}
+	parsed, err := parseTerraformVersion("Terraform v1.2.3\n")
+	if err != nil {
+		t.Fatalf("parse version: %v", err)
+	}
+	if parsed.major != 1 || parsed.minor != 2 || parsed.patch != 3 {
+		t.Fatalf("unexpected parsed version: %#v", parsed)
+	}
+	parsed, err = parseTerraformVersion("Terraform v1.2.3-beta")
+	if err != nil {
+		t.Fatalf("parse version: %v", err)
+	}
+	if !versionAtLeast(parsed, semVersion{major: 1, minor: 2, patch: 3}) {
+		t.Fatalf("expected version to be at least minimum")
+	}
+}
+
+func TestResolveTerraformPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	writeFakeTerraform(t, dir)
+	t.Setenv("PATH", dir)
+
+	path, err := resolveTerraformPath()
+	if err != nil {
+		t.Fatalf("resolve terraform path: %v", err)
+	}
+	if path == "" {
+		t.Fatalf("expected terraform path")
+	}
+}
+
+func TestResolveTerraformPathMissing(t *testing.T) {
+	t.Setenv("PATH", "")
+	if _, err := resolveTerraformPath(); err == nil {
+		t.Fatalf("expected resolve terraform path error")
+	}
+}
+
+func TestExecutorWorkDirNil(t *testing.T) {
+	var exec *Executor
+	if exec.WorkDir() != "" {
+		t.Fatalf("expected empty workdir for nil executor")
+	}
+}
+
+func TestVersionAtLeast(t *testing.T) {
+	if !versionAtLeast(semVersion{major: 1, minor: 2, patch: 3}, semVersion{major: 1, minor: 2, patch: 0}) {
+		t.Fatalf("expected version to be at least minimum")
+	}
+	if versionAtLeast(semVersion{major: 0, minor: 14, patch: 0}, semVersion{major: 0, minor: 15, patch: 0}) {
+		t.Fatalf("expected version to be below minimum")
+	}
+}
+
 func writeFakeTerraform(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "terraform")
@@ -303,9 +488,16 @@ if [ "$cmd" = "version" ]; then
   echo "Terraform v1.0.0"
   exit 0
 fi
+if [ "$cmd" = "show" ]; then
+  echo "{\"format_version\":\"1.0\",\"resource_changes\":[]}"
+  exit 0
+fi
 if [ "$cmd" = "plan" ] || [ "$cmd" = "apply" ]; then
   echo "stdout $cmd"
   echo "stderr $cmd" 1>&2
+fi
+if [ "$cmd" = "init" ]; then
+  echo "stdout init"
 fi
 if [ "$1" = "sleep" ]; then
   sleep 1
