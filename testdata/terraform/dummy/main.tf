@@ -10,11 +10,6 @@ terraform {
 
 resource "null_resource" "example" {
   triggers = {
-    message = "hello"
-    count   = 1
+    seed = "dumma"
   }
-}
-
-output "example_id" {
-  value = null_resource.example.id
 }

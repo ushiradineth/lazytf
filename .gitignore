@@ -16,7 +16,13 @@ go.work
 .cache/
 bin/
 .go/
+.golangci-cache/
+.go-cache/
 
 # Output of the go coverage tool
 coverage.out
 coverage.html
+
+# Local tooling and temp artifacts
+.claude/
+.terraform-plugin-cache/

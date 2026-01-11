@@ -24,9 +24,9 @@ dev *args:
 
 # Build the application
 build:
-    @echo "Building {{binary_name}}..."
-    go build -o bin/{{binary_name}} {{main_package}}
-    @echo "Build complete: bin/{{binary_name}}"
+	@echo "Building {{binary_name}}..."
+	go build -o bin/{{binary_name}} {{main_package}}
+	@echo "Build complete: bin/{{binary_name}}"
 
 # Install the application to $GOPATH/bin
 install:
