@@ -26,15 +26,16 @@ const (
 
 // Entry represents a stored apply history record.
 type Entry struct {
-	ID         int64
-	StartedAt  time.Time
-	FinishedAt time.Time
-	Duration   time.Duration
-	Status     Status
-	Summary    string
-	Error      string
-	WorkDir    string
-	Output     string
+	ID          int64
+	StartedAt   time.Time
+	FinishedAt  time.Time
+	Duration    time.Duration
+	Status      Status
+	Summary     string
+	Error       string
+	WorkDir     string
+	Environment string
+	Output      string
 }
 
 // OperationEntry represents a stored terraform operation.
@@ -89,7 +90,7 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".tftui", "history.db"), nil
+	return filepath.Join(home, ".config", "tftui", "history.db"), nil
 }
 
 // OpenDefault opens the default history store.
@@ -154,8 +155,8 @@ func (s *Store) RecordApply(entry Entry) error {
 	ctx := context.Background()
 	_, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO apply_history (started_at, finished_at, duration_ms, status, summary, error, workdir, output_text)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apply_history (started_at, finished_at, duration_ms, status, summary, error, workdir, environment, output_text)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		entry.StartedAt.UTC().Format(time.RFC3339Nano),
 		entry.FinishedAt.UTC().Format(time.RFC3339Nano),
 		entry.Duration.Milliseconds(),
@@ -163,6 +164,7 @@ func (s *Store) RecordApply(entry Entry) error {
 		entry.Summary,
 		entry.Error,
 		entry.WorkDir,
+		entry.Environment,
 		entry.Output,
 	)
 	return err
@@ -210,7 +212,7 @@ func (s *Store) ListRecent(limit int) ([]Entry, error) {
 	ctx := context.Background()
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir
+		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
 		 FROM apply_history
 		 ORDER BY finished_at DESC
 		 LIMIT ?`,
@@ -228,7 +230,60 @@ func (s *Store) ListRecent(limit int) ([]Entry, error) {
 		var finished string
 		var durationMs int64
 		var status string
-		if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir); err != nil {
+		if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment); err != nil {
+			return nil, err
+		}
+		startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
+		if parseErr == nil {
+			entry.StartedAt = startedAt.Local()
+		}
+		finishedAt, parseErr := time.Parse(time.RFC3339Nano, finished)
+		if parseErr == nil {
+			entry.FinishedAt = finishedAt.Local()
+		}
+		entry.Duration = time.Duration(durationMs) * time.Millisecond
+		entry.Status = Status(status)
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// ListRecentForEnvironment returns apply history entries for a specific environment.
+func (s *Store) ListRecentForEnvironment(environment string, limit int) ([]Entry, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if strings.TrimSpace(environment) == "" {
+		return s.ListRecent(limit)
+	}
+
+	ctx := context.Background()
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
+		 FROM apply_history
+		 WHERE environment = ?
+		 ORDER BY finished_at DESC
+		 LIMIT ?`,
+		environment,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var entry Entry
+		var started string
+		var finished string
+		var durationMs int64
+		var status string
+		if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment); err != nil {
 			return nil, err
 		}
 		startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
@@ -347,7 +402,7 @@ func (s *Store) GetByID(id int64) (Entry, error) {
 	ctx := context.Background()
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, output_text
+		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment, output_text
 		 FROM apply_history
 		 WHERE id = ?`,
 		id,
@@ -356,7 +411,7 @@ func (s *Store) GetByID(id int64) (Entry, error) {
 	var finished string
 	var durationMs int64
 	var status string
-	if err := row.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Output); err != nil {
+	if err := row.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment, &entry.Output); err != nil {
 		return entry, err
 	}
 	startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
@@ -440,6 +495,7 @@ func (s *Store) ensureSchema() error {
 			summary TEXT,
 			error TEXT,
 			workdir TEXT,
+			environment TEXT,
 			output_text TEXT
 		)`,
 	)
@@ -447,6 +503,9 @@ func (s *Store) ensureSchema() error {
 		return fmt.Errorf("init history schema: %w", err)
 	}
 	if err := s.ensureColumn("apply_history", "output_text", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("apply_history", "environment", "TEXT"); err != nil {
 		return err
 	}
 

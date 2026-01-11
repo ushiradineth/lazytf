@@ -24,20 +24,21 @@ func TestStoreRecordAndGet(t *testing.T) {
 	started := time.Now().UTC().Add(-2 * time.Second)
 	finished := time.Now().UTC()
 	entry := Entry{
-		StartedAt:  started,
-		FinishedAt: finished,
-		Duration:   2 * time.Second,
-		Status:     StatusSuccess,
-		Summary:    "+ 1 to create",
-		WorkDir:    "/tmp",
-		Output:     "plan output text",
+		StartedAt:   started,
+		FinishedAt:  finished,
+		Duration:    2 * time.Second,
+		Status:      StatusSuccess,
+		Summary:     "+ 1 to create",
+		WorkDir:     "/tmp",
+		Environment: "dev",
+		Output:      "plan output text",
 	}
 
 	if err := store.RecordApply(entry); err != nil {
 		t.Fatalf("record apply: %v", err)
 	}
 
-	entries, err := store.ListRecent(5)
+	entries, err := store.ListRecentForEnvironment("dev", 5)
 	if err != nil {
 		t.Fatalf("list recent: %v", err)
 	}
@@ -51,6 +52,9 @@ func TestStoreRecordAndGet(t *testing.T) {
 	}
 	if loaded.Output != entry.Output {
 		t.Fatalf("expected output %q, got %q", entry.Output, loaded.Output)
+	}
+	if loaded.Environment != entry.Environment {
+		t.Fatalf("expected environment %q, got %q", entry.Environment, loaded.Environment)
 	}
 	if !loaded.StartedAt.UTC().Equal(started) {
 		t.Fatalf("expected started at %v, got %v", started, loaded.StartedAt)
@@ -164,6 +168,54 @@ func TestStoreRecordAndQueryOperation(t *testing.T) {
 	}
 	if !loaded.StartedAt.UTC().Equal(started) {
 		t.Fatalf("expected started at %v, got %v", started, loaded.StartedAt)
+	}
+}
+
+func TestStoreListRecentForEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	entryDev := Entry{
+		StartedAt:   time.Now(),
+		FinishedAt:  time.Now(),
+		Duration:    time.Second,
+		Status:      StatusSuccess,
+		Summary:     "dev apply",
+		Environment: "dev",
+	}
+	entryProd := Entry{
+		StartedAt:   time.Now(),
+		FinishedAt:  time.Now(),
+		Duration:    time.Second,
+		Status:      StatusSuccess,
+		Summary:     "prod apply",
+		Environment: "prod",
+	}
+
+	if err := store.RecordApply(entryDev); err != nil {
+		t.Fatalf("record dev apply: %v", err)
+	}
+	if err := store.RecordApply(entryProd); err != nil {
+		t.Fatalf("record prod apply: %v", err)
+	}
+
+	entries, err := store.ListRecentForEnvironment("dev", 5)
+	if err != nil {
+		t.Fatalf("list recent dev: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 dev entry, got %d", len(entries))
+	}
+	if entries[0].Environment != "dev" {
+		t.Fatalf("expected dev environment, got %q", entries[0].Environment)
 	}
 }
 
