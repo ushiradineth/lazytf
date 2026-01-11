@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/tftui/internal/styles"
 )
 
@@ -21,4 +23,14 @@ func TestHistoryViewRendersContent(t *testing.T) {
 	if !strings.Contains(out, "line one") || !strings.Contains(out, "line two") {
 		t.Fatalf("expected content in output")
 	}
+}
+
+func TestHistoryViewUpdateHandlesKeys(_ *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(40, 6)
+	view.SetTitle("Title")
+	view.SetContent("line")
+
+	_, _ = view.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 }

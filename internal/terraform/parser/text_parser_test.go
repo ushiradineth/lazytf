@@ -221,7 +221,9 @@ func TestTextParserNestedBlocksAndListValues(t *testing.T) {
 }
 
 func TestParseTerraformValueAndComments(t *testing.T) {
-	if got, _ := parseTerraformValue("true"); got != true {
+	got, _ := parseTerraformValue("true")
+	gotBool, ok := got.(bool)
+	if !ok || !gotBool {
 		t.Fatalf("expected true")
 	}
 	if got, _ := parseTerraformValue("null"); got != nil {

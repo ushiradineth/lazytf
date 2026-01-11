@@ -32,3 +32,15 @@ func TestPlanViewSmallSize(t *testing.T) {
 		t.Fatalf("expected non-empty view for small size")
 	}
 }
+
+func TestPlanViewSetSummary(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewPlanView("", s)
+	view.SetSize(40, 6)
+	view.SetSummary("summary")
+
+	out := view.View()
+	if !strings.Contains(out, "summary") {
+		t.Fatalf("expected updated summary")
+	}
+}

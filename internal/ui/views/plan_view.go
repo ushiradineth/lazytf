@@ -63,10 +63,3 @@ func (v *PlanView) View() string {
 	}
 	return lipgloss.Place(v.width, v.height, lipgloss.Center, lipgloss.Center, box)
 }
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

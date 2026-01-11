@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -116,6 +117,59 @@ func TestResourceListViewEmpty(t *testing.T) {
 	normalized := strings.Join(strings.Fields(got), "")
 	if !strings.Contains(normalized, "Noresourcestodisplay") {
 		t.Fatalf("unexpected empty view: %q", got)
+	}
+}
+
+func TestResourceListShowStatusToggle(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	if r.ShowStatus() {
+		t.Fatalf("expected status hidden by default")
+	}
+	r.SetShowStatus(true)
+	if !r.ShowStatus() {
+		t.Fatalf("expected status enabled")
+	}
+}
+
+func TestResourceListRenderGroupAndVisibleItems(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(40, 5)
+	group := r.renderGroup("module.alpha", 2, true, true, 2)
+	if !strings.Contains(group, "module.alpha") {
+		t.Fatalf("expected group label")
+	}
+
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionUpdate},
+	})
+	out := r.renderVisibleItems()
+	if out == "" {
+		t.Fatalf("expected visible items output")
+	}
+}
+
+func TestResourceListStatusDisplayAndDuration(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	state := terraform.NewOperationState()
+	state.StartResource("aws_instance.web", terraform.ActionCreate)
+	state.CompleteResource("aws_instance.web", "id")
+	r.SetOperationState(state)
+	r.SetShowStatus(true)
+
+	resource := terraform.ResourceChange{Address: "aws_instance.web", Action: terraform.ActionCreate}
+	status, elapsed := r.getStatusDisplay(resource)
+	if status == "" {
+		t.Fatalf("expected status badge")
+	}
+	if elapsed == "" {
+		t.Fatalf("expected elapsed text")
+	}
+	if formatShortDuration(500*time.Millisecond) == "" {
+		t.Fatalf("expected short duration format")
+	}
+	if padAfterStyledWithBackground("x", 3, r.styles.SelectedLineBackground) == "" {
+		t.Fatalf("expected padded line")
 	}
 }
 
