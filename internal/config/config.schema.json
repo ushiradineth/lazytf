@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "general": {
+      "properties": {
+        "default_environment": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "history": {
+      "properties": {
+        "compression_threshold": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "level": {
+          "type": "string"
+        },
+        "max_entries": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "retention_days": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "presets": {
+      "items": {
+        "properties": {
+          "environment": {
+            "type": "string"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string"
+          },
+          "workdir": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "project_overrides": {
+      "additionalProperties": {
+        "properties": {
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preset_name": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "terraform": {
+      "properties": {
+        "binary": {
+          "type": "string"
+        },
+        "default_flags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parallelism": {
+          "type": "integer"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "working_dir": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "theme": {
+      "properties": {
+        "custom": {
+          "properties": {
+            "background_color": {
+              "type": "string"
+            },
+            "border_color": {
+              "type": "string"
+            },
+            "create_color": {
+              "type": "string"
+            },
+            "delete_color": {
+              "type": "string"
+            },
+            "dimmed_color": {
+              "type": "string"
+            },
+            "foreground_color": {
+              "type": "string"
+            },
+            "highlight_color": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "no_change_color": {
+              "type": "string"
+            },
+            "replace_color": {
+              "type": "string"
+            },
+            "selected_color": {
+              "type": "string"
+            },
+            "update_color": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ui": {
+      "properties": {
+        "animations_enabled": {
+          "type": "boolean"
+        },
+        "compact_mode": {
+          "type": "boolean"
+        },
+        "mouse_enabled": {
+          "type": "boolean"
+        },
+        "show_help": {
+          "type": "boolean"
+        },
+        "show_line_numbers": {
+          "type": "boolean"
+        },
+        "split_ratio": {
+          "type": "number"
+        },
+        "split_view_default": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "version": {
+      "type": "integer"
+    }
+  },
+  "title": "tftui config",
+  "type": "object"
+}
