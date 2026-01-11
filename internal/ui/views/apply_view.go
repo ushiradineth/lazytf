@@ -33,7 +33,6 @@ type ApplyView struct {
 	title       string
 	statusText  statusText
 	width       int
-	height      int
 	maxLines    int
 }
 
@@ -71,7 +70,6 @@ func NewApplyView(s *styles.Styles) *ApplyView {
 // SetSize updates the layout size.
 func (v *ApplyView) SetSize(width, height int) {
 	v.width = width
-	v.height = height
 	headerHeight := 1
 	footerHeight := 1
 	bodyHeight := height - headerHeight - footerHeight
@@ -117,6 +115,21 @@ func (v *ApplyView) Reset() {
 	v.progress = ""
 	v.status = ApplyPending
 	v.viewport.SetContent("")
+}
+
+// SetOutput replaces the output content.
+func (v *ApplyView) SetOutput(output string) {
+	output = strings.TrimRight(output, "\n")
+	if output == "" {
+		v.outputLines = nil
+		v.viewport.SetContent("")
+		return
+	}
+	v.outputLines = strings.Split(output, "\n")
+	if v.maxLines > 0 && len(v.outputLines) > v.maxLines {
+		v.outputLines = v.outputLines[len(v.outputLines)-v.maxLines:]
+	}
+	v.refreshViewport()
 }
 
 // AppendLine adds a new output line.
@@ -176,9 +189,9 @@ func (v *ApplyView) renderHeader() string {
 	case ApplyRunning:
 		label = fmt.Sprintf("%s %s", v.spinner.View(), title)
 	case ApplySuccess:
-		label = fmt.Sprintf("OK %s", title)
+		label = "OK " + title
 	case ApplyFailed:
-		label = fmt.Sprintf("ERR %s", title)
+		label = "ERR " + title
 	}
 	if v.width > 0 {
 		return v.styles.Title.Width(v.width).Render(label)
@@ -201,6 +214,13 @@ func (v *ApplyView) renderFooter() string {
 		footer = v.statusText.failure
 	default:
 		footer = v.statusText.pending
+	}
+	if v.status == ApplySuccess || v.status == ApplyFailed {
+		if footer != "" {
+			footer += " | esc: back | q: quit"
+		} else {
+			footer = "esc: back | q: quit"
+		}
 	}
 	if v.width > 0 {
 		return v.styles.StatusBar.Width(v.width).Render(footer)

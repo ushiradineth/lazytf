@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +32,7 @@ type Model struct {
 	styles       *styles.Styles
 	width        int
 	height       int
+	diagnosticsHeight int
 	ready        bool
 	err          error
 	quitting     bool
@@ -69,6 +71,7 @@ type Model struct {
 	diagnosticsPanel    *components.DiagnosticsPanel
 	showDiagnostics     bool
 	showCompactProgress bool
+	showRawLogs         bool
 
 	historyStore    *history.Store
 	historyPanel    *components.HistoryPanel
@@ -77,6 +80,7 @@ type Model struct {
 	historyHeight   int
 	historySelected int
 	historyFocused  bool
+	diagnosticsFocused bool
 	historyView     *views.HistoryView
 	historyDetail   *history.Entry
 	lastPlanOutput  string
@@ -168,6 +172,8 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 	m.operationState = terraform.NewOperationState()
 	m.progressCompact = components.NewProgressCompact(m.operationState, m.styles)
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
+	m.diagnosticsHeight = 8
+	m.showRawLogs = false
 	m.resourceList.SetOperationState(m.operationState)
 	m.showCompactProgress = cfg.UseJSON
 	if plan != nil {
@@ -247,7 +253,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.progressCompact.SetSize(m.width, m.height)
 		}
 		if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetSize(m.width, m.height)
+			m.diagnosticsPanel.SetSize(m.width, m.diagnosticsHeight)
 		}
 
 	case PlanStartMsg:
@@ -324,6 +330,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.diagnosticsFocused && m.diagnosticsPanel != nil && m.execView == viewMain {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "esc", "D":
+				m.diagnosticsFocused = false
+				return m, nil
+			case "R":
+				m.showRawLogs = !m.showRawLogs
+				m.diagnosticsPanel.SetShowRaw(m.showRawLogs)
+				return m, nil
+			}
+			m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
+			return m, cmd
+		}
 		if m.showHelp {
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -577,7 +599,7 @@ func (m *Model) renderStatusBar() string {
 	if m.executionMode {
 		execHelp := "p: plan | a: apply | h: history | tab: focus history | ctrl+c: cancel"
 		if m.useJSON {
-			execHelp += " | s: status | c: compact | d: diagnostics"
+			execHelp += " | s: status | C: compact | D: focus logs | R: raw logs"
 		}
 		helpText = execHelp + " | " + helpText
 	}
@@ -626,9 +648,21 @@ func (m *Model) renderMainContent() string {
 		right := lipgloss.NewStyle().MarginLeft(1).Render(
 			m.diffViewer.View(m.resourceList.GetSelectedResource()),
 		)
-		return lipgloss.JoinHorizontal(lipgloss.Top, leftContent, right)
+		main := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, right)
+		return m.appendDiagnostics(main)
 	}
-	return leftContent
+	return m.appendDiagnostics(leftContent)
+}
+
+func (m *Model) appendDiagnostics(content string) string {
+	if !m.executionMode || m.diagnosticsPanel == nil || m.diagnosticsHeight == 0 {
+		return content
+	}
+	panel := m.diagnosticsPanel.View()
+	if panel == "" {
+		return content
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, content, panel)
 }
 
 func (m *Model) renderHelp() string {
@@ -684,8 +718,9 @@ func (m *Model) renderHelp() string {
 				{keys: "tab", desc: "focus history panel"},
 				{keys: "ctrl+c", desc: "cancel running command"},
 				{keys: "s", desc: "toggle status column"},
-				{keys: "c", desc: "toggle compact progress view"},
-				{keys: "d", desc: "toggle diagnostics panel"},
+				{keys: "C", desc: "toggle compact progress view"},
+				{keys: "D", desc: "focus logs panel"},
+				{keys: "R", desc: "toggle raw logs"},
 			},
 		})
 	}
@@ -741,7 +776,18 @@ func (m *Model) updateLayout() {
 			historyHeight = 0
 		}
 	}
+	diagnosticsHeight := 0
+	if m.executionMode && m.diagnosticsPanel != nil {
+		diagnosticsHeight = m.diagnosticsHeight
+		if m.diagnosticsFocused {
+			diagnosticsHeight = maxInt(diagnosticsHeight, minInt(m.height/2, 12))
+		}
+		if diagnosticsHeight >= listHeight {
+			diagnosticsHeight = 0
+		}
+	}
 	listHeight -= historyHeight
+	listHeight -= diagnosticsHeight
 	if listHeight < 1 {
 		listHeight = 1
 	}
@@ -757,11 +803,17 @@ func (m *Model) updateLayout() {
 		if m.historyPanel != nil {
 			m.historyPanel.SetSize(listWidth, historyHeight)
 		}
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
+		}
 		m.diffViewer.SetSize(diffWidth, listHeight)
 	} else {
 		m.resourceList.SetSize(m.width, listHeight)
 		if m.historyPanel != nil {
 			m.historyPanel.SetSize(m.width, historyHeight)
+		}
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
 		}
 		m.diffViewer.SetSize(m.width, listHeight)
 	}
@@ -790,17 +842,17 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, tea.Quit
 		case "ctrl+c":
 			return true, m.cancelExecution()
-		case "c":
+		case "C":
 			if m.useJSON && (m.planRunning || m.applyRunning) {
 				m.showCompactProgress = !m.showCompactProgress
 				m.showDiagnostics = false
 				if !m.showCompactProgress && m.applyView != nil {
-					m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+					m.applyView.AppendLine("Streaming JSON output enabled. Press 'C' for compact progress.")
 				}
 				m.updateExecutionViewForStreaming()
 				return true, nil
 			}
-		case "d":
+		case "D":
 			if m.useJSON {
 				m.showDiagnostics = !m.showDiagnostics
 				m.updateExecutionViewForStreaming()
@@ -819,17 +871,17 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, tea.Quit
 		case "ctrl+c":
 			return true, m.cancelExecution()
-		case "c":
+		case "C":
 			if m.useJSON && (m.planRunning || m.applyRunning) {
 				m.showCompactProgress = !m.showCompactProgress
 				m.showDiagnostics = false
 				if !m.showCompactProgress && m.applyView != nil {
-					m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+					m.applyView.AppendLine("Streaming JSON output enabled. Press 'C' for compact progress.")
 				}
 				m.updateExecutionViewForStreaming()
 				return true, nil
 			}
-		case "d":
+		case "D":
 			if m.useJSON {
 				m.showDiagnostics = !m.showDiagnostics
 				m.updateExecutionViewForStreaming()
@@ -857,8 +909,10 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, m.beginPlan()
 		case "a":
 			if m.plan == nil {
-				m.err = errors.New("no plan loaded; run terraform plan first")
-				return true, nil
+				m.toastMessage = "No plan loaded; run terraform plan first"
+				m.toastIsError = true
+				cmd := m.clearToastCmd(3 * time.Second)
+				return true, cmd
 			}
 			if m.planView != nil {
 				m.planView.SetSummary(m.planSummary())
@@ -874,6 +928,29 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, nil
 		case "s":
 			m.resourceList.SetShowStatus(!m.resourceList.ShowStatus())
+			return true, nil
+		case "C":
+			if m.useJSON {
+				m.showCompactProgress = !m.showCompactProgress
+				m.showDiagnostics = false
+				if !m.showCompactProgress && m.applyView != nil {
+					m.applyView.AppendLine("Streaming JSON output enabled. Press \"C\" for compact progress.")
+				}
+				m.updateExecutionViewForStreaming()
+				return true, nil
+			}
+		case "D":
+			m.diagnosticsFocused = !m.diagnosticsFocused
+			if m.diagnosticsFocused {
+				m.showDiagnostics = true
+			}
+			m.updateExecutionViewForStreaming()
+			return true, nil
+		case "R":
+			m.showRawLogs = !m.showRawLogs
+			if m.diagnosticsPanel != nil {
+				m.diagnosticsPanel.SetShowRaw(m.showRawLogs)
+			}
 			return true, nil
 		case "tab":
 			if m.showHistory && len(m.historyEntries) > 0 {
@@ -917,7 +994,7 @@ func (m *Model) beginPlan() tea.Cmd {
 		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed - press esc to return")
 		m.applyView.SetStatus(views.ApplyRunning)
 		if m.useJSON && !m.showCompactProgress {
-			m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+			m.applyView.AppendLine("Streaming JSON output enabled. Press 'C' for compact progress.")
 		}
 	}
 	m.updateExecutionViewForStreaming()
@@ -949,7 +1026,7 @@ func (m *Model) beginApply() tea.Cmd {
 		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
 		m.applyView.SetStatus(views.ApplyRunning)
 		if m.useJSON && !m.showCompactProgress {
-			m.applyView.AppendLine("Streaming JSON output enabled. Press 'c' for compact progress.")
+			m.applyView.AppendLine("Streaming JSON output enabled. Press 'C' for compact progress.")
 		}
 	}
 	m.updateExecutionViewForStreaming()
@@ -979,6 +1056,7 @@ func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform plan: %v", msg.Error))
 		}
+		m.addErrorDiagnostic("Plan failed to start", msg.Error, "")
 		return m, nil
 	}
 
@@ -1011,6 +1089,11 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Plan failed: %v", msg.Error))
 		}
+		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Output)
+			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Output))
+		}
 		return m, nil
 	}
 
@@ -1025,6 +1108,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.Output != "" {
 		m.lastPlanOutput = msg.Output
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Output)
+			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Output))
+		}
 	}
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplySuccess)
@@ -1042,6 +1129,7 @@ func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform apply: %v", msg.Error))
 		}
+		m.addErrorDiagnostic("Apply failed to start", msg.Error, "")
 		return m, nil
 	}
 
@@ -1075,6 +1163,23 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 				m.applyView.AppendLine(fmt.Sprintf("Apply failed: %v", msg.Error))
 			}
 		}
+		if msg.Result != nil && m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Result.Output)
+			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Result.Output))
+		}
+		if msg.Error != nil {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Apply failed", msg.Error, output)
+		} else if !msg.Success {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Apply failed", errors.New("apply failed"), output)
+		}
 		status := history.StatusFailed
 		if errors.Is(msg.Error, context.Canceled) {
 			status = history.StatusCanceled
@@ -1087,13 +1192,28 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		m.applyView.SetStatus(views.ApplySuccess)
 	}
 	summary := m.planSummary()
+	if m.diagnosticsPanel != nil {
+		parsed := ""
+		if msg.Result != nil {
+			parsed = formatLogOutput(msg.Result.Output)
+		}
+		if strings.TrimSpace(parsed) == "" {
+			parsed = "Apply complete"
+		}
+		m.diagnosticsPanel.SetParsedText(parsed)
+	}
+	if m.applyView != nil && msg.Result != nil {
+		parsed := formatLogOutput(msg.Result.Output)
+		if strings.TrimSpace(parsed) == "" {
+			parsed = strings.TrimSpace(msg.Result.Output)
+		}
+		m.applyView.SetOutput(parsed)
+	}
 	m.showDiagnostics = false
-	m.updateExecutionViewForStreaming()
+	m.execView = viewApplyOutput
 	m.setPlan(&terraform.Plan{Resources: nil})
-	m.toastMessage = "Apply complete"
-	m.toastIsError = false
 	m.streamParser = nil
-	return m, tea.Batch(m.clearToastCmd(3*time.Second), m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil))
+	return m, m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil)
 }
 
 func (m *Model) handleStreamMessage(msg terraform.StreamMessage) tea.Cmd {
@@ -1178,6 +1298,80 @@ func (m *Model) updateExecutionViewForStreaming() {
 	if m.execView != viewMain {
 		m.execView = viewMain
 	}
+}
+
+func (m *Model) addErrorDiagnostic(summary string, err error, output string) {
+	if err == nil {
+		return
+	}
+	detail := err.Error()
+	if strings.TrimSpace(output) != "" {
+		detail = detail + "\n\n" + output
+	}
+	diag := terraform.Diagnostic{
+		Severity: "error",
+		Summary:  summary,
+		Detail:   detail,
+	}
+	if m.operationState != nil {
+		m.operationState.AddDiagnostic(diag)
+		if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetDiagnostics(m.operationState.GetDiagnostics())
+		}
+		return
+	}
+	if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetDiagnostics([]terraform.Diagnostic{diag})
+	}
+}
+
+func formatLogOutput(output string) string {
+	if strings.TrimSpace(output) == "" {
+		return ""
+	}
+	lines := make([]string, 0, 16)
+	for _, line := range strings.Split(strings.TrimRight(output, "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		var payload map[string]any
+		if json.Unmarshal([]byte(trimmed), &payload) == nil {
+			message := ""
+			if val, ok := payload["@message"].(string); ok {
+				message = val
+			} else if val, ok := payload["message"].(string); ok {
+				message = val
+			}
+			timestamp := ""
+			if val, ok := payload["@timestamp"].(string); ok {
+				timestamp = val
+			} else if val, ok := payload["timestamp"].(string); ok {
+				timestamp = val
+			}
+			if message != "" && timestamp != "" {
+				lines = append(lines, "["+formatLogTimestamp(timestamp)+"] "+message)
+				continue
+			}
+			if message != "" {
+				lines = append(lines, message)
+				continue
+			}
+		}
+		lines = append(lines, trimmed)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatLogTimestamp(value string) string {
+	ts, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		ts, err = time.Parse(time.RFC3339, value)
+	}
+	if err != nil {
+		return value
+	}
+	return ts.Format("2006-01-02 15:04:05 -07:00")
 }
 
 func (m *Model) streamPlanOutputCmd() tea.Cmd {

@@ -16,6 +16,9 @@ import (
 type DiagnosticsPanel struct {
 	viewport    viewport.Model
 	diagnostics []terraform.Diagnostic
+	logText     string
+	parsedText  string
+	showRaw     bool
 	styles      *styles.Styles
 	width       int
 	height      int
@@ -44,6 +47,26 @@ func (d *DiagnosticsPanel) SetDiagnostics(items []terraform.Diagnostic) {
 	d.updateViewport()
 }
 
+// SetLogText sets raw log output to show when no diagnostics are available.
+func (d *DiagnosticsPanel) SetLogText(text string) {
+	d.logText = strings.TrimRight(text, "\n")
+	d.updateViewport()
+	d.viewport.GotoBottom()
+}
+
+// SetParsedText sets the parsed summary text for display.
+func (d *DiagnosticsPanel) SetParsedText(text string) {
+	d.parsedText = strings.TrimRight(text, "\n")
+	d.updateViewport()
+	d.viewport.GotoBottom()
+}
+
+// SetShowRaw toggles between raw logs and parsed summary when no diagnostics exist.
+func (d *DiagnosticsPanel) SetShowRaw(show bool) {
+	d.showRaw = show
+	d.updateViewport()
+}
+
 // View renders the diagnostics panel.
 func (d *DiagnosticsPanel) View() string {
 	if d == nil || d.styles == nil {
@@ -59,7 +82,7 @@ func (d *DiagnosticsPanel) View() string {
 // Update forwards messages to the viewport for scrolling.
 func (d *DiagnosticsPanel) Update(msg tea.Msg) (*DiagnosticsPanel, tea.Cmd) {
 	if d == nil {
-		return d, nil
+		return nil, nil
 	}
 	var cmd tea.Cmd
 	d.viewport, cmd = d.viewport.Update(msg)
@@ -71,7 +94,31 @@ func (d *DiagnosticsPanel) updateViewport() {
 		return
 	}
 	if len(d.diagnostics) == 0 {
-		d.viewport.SetContent(d.styles.Dimmed.Render("No diagnostics reported."))
+		content := d.parsedText
+		title := "Parsed"
+		if d.showRaw {
+			content = d.logText
+			title = "Logs"
+		}
+		if strings.TrimSpace(content) == "" {
+			if strings.TrimSpace(d.logText) != "" {
+				content = d.logText
+				title = "Logs"
+			}
+		}
+		if strings.TrimSpace(content) == "" {
+			d.viewport.SetContent(d.styles.Dimmed.Render("No diagnostics reported."))
+			return
+		}
+		logs := content
+		if d.width > 0 {
+			logs = wrapText(logs, d.width)
+		}
+		lines := []string{
+			d.styles.Title.Render(title),
+			logs,
+		}
+		d.viewport.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
 		return
 	}
 
@@ -103,6 +150,18 @@ func (d *DiagnosticsPanel) updateViewport() {
 	}
 
 	d.viewport.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
+}
+
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	wrapped := make([]string, 0, 32)
+	wrapStyle := lipgloss.NewStyle().Width(width)
+	for _, line := range strings.Split(text, "\n") {
+		wrapped = append(wrapped, strings.TrimRight(wrapStyle.Render(line), " "))
+	}
+	return strings.TrimRight(strings.Join(wrapped, "\n"), "\n")
 }
 
 func formatDiagnostic(diag terraform.Diagnostic) string {
