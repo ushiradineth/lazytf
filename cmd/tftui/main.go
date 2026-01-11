@@ -1,35 +1,81 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/ushiradineth/tftui/internal/config"
+	"github.com/ushiradineth/tftui/internal/environment"
+	"github.com/ushiradineth/tftui/internal/history"
+	"github.com/ushiradineth/tftui/internal/styles"
 	"github.com/ushiradineth/tftui/internal/terraform"
 	"github.com/ushiradineth/tftui/internal/terraform/parser"
 	"github.com/ushiradineth/tftui/internal/ui"
 )
 
+type workspaceManager interface {
+	Switch(ctx context.Context, name string) error
+}
+
+type folderManager interface {
+	Validate(ctx context.Context, path string) error
+}
+
+type teaProgram interface {
+	Run() (tea.Model, error)
+}
+
 var (
-	version         = "0.1.0"
-	planFile        string
-	mouseEnabled    bool
-	executeMode     bool
-	autoPlan        bool
-	tfFlags         string
-	workDir         string
-	useJSON         = true
-	forceJSON       bool
-	noJSON          bool
-	programRunner   = runProgram
-	executorFactory = terraform.NewExecutor
+	version             = "0.1.0"
+	planFile            string
+	mouseEnabled        bool
+	readOnlyMode        bool
+	autoPlan            bool
+	tfFlags             string
+	workDir             string
+	useJSON             = true
+	forceJSON           bool
+	noJSON              bool
+	envName             string
+	presetName          string
+	workspaceName       string
+	folderPath          string
+	configPath          string
+	themeName           string
+	noHistory           bool
+	programRunner       = runProgram
+	executorFactory     = terraform.NewExecutor
+	newWorkspaceManager = func(workDir string) (workspaceManager, error) {
+		return environment.NewWorkspaceManager(workDir)
+	}
+	newFolderManager = func(workDir string) (folderManager, error) {
+		return environment.NewFolderManager(workDir)
+	}
+	newProgram = func(model tea.Model, opts ...tea.ProgramOption) teaProgram {
+		return tea.NewProgram(model, opts...)
+	}
 )
 
 func main() {
+	if err := runMain(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runMain() error {
+	rootCmd := newRootCommand()
+	return rootCmd.Execute()
+}
+
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "tftui [plan-file]",
 		Short: "A minimal TUI for reviewing Terraform plans",
@@ -44,24 +90,118 @@ showing only changed attributes in a git-style diff format.`,
 	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan JSON file")
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
-	rootCmd.Flags().BoolVar(&executeMode, "execute", false, "Execute terraform commands directly")
+	rootCmd.Flags().BoolVar(&readOnlyMode, "read-only", false, "Run in read-only mode (no terraform execution)")
 	rootCmd.Flags().BoolVar(&autoPlan, "auto-plan", false, "Automatically run terraform plan on startup")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
 	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
 	rootCmd.Flags().BoolVar(&useJSON, "json", true, "Enable streaming JSON output (auto-detect by default)")
 	rootCmd.Flags().BoolVar(&forceJSON, "force-json", false, "Force JSON streaming even if version check fails")
 	rootCmd.Flags().BoolVar(&noJSON, "no-json", false, "Disable JSON streaming output")
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	rootCmd.Flags().StringVar(&envName, "env", "", "Environment name to select")
+	rootCmd.Flags().StringVar(&presetName, "preset", "", "Environment preset to apply")
+	rootCmd.Flags().StringVar(&workspaceName, "workspace", "", "Terraform workspace to select")
+	rootCmd.Flags().StringVar(&folderPath, "folder", "", "Terraform environment folder to use")
+	rootCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
+	rootCmd.Flags().StringVar(&themeName, "theme", "", "Theme name to use")
+	rootCmd.Flags().BoolVar(&noHistory, "no-history", false, "Disable history logging")
+	return rootCmd
 }
 
-func run(_ *cobra.Command, args []string) error {
-	if executeMode {
-		flags := splitFlags(tfFlags)
-		exec, err := executorFactory(workDir, terraform.WithDefaultFlags(flags))
+func run(cmd *cobra.Command, args []string) error {
+	configManager, err := config.NewManager(configPath)
+	if err != nil {
+		return fmt.Errorf("config manager: %w", err)
+	}
+	cfg, err := configManager.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if themeName != "" {
+		cfg.Theme.Name = themeName
+	}
+	if noHistory {
+		cfg.History.Enabled = false
+	}
+	if workDir == "." && strings.TrimSpace(cfg.Terraform.WorkingDir) != "" {
+		workDir = cfg.Terraform.WorkingDir
+	}
+	var overrideFlags []string
+	if override := cfg.ProjectOverrideFor(workDir); override != nil {
+		if override.Theme != "" && themeName == "" {
+			cfg.Theme.Name = override.Theme
+		}
+		if override.PresetName != "" && presetName == "" {
+			presetName = override.PresetName
+		}
+		overrideFlags = append(overrideFlags, override.Flags...)
+	}
+	explicitReadOnly := false
+	if cmd != nil {
+		if flag := cmd.Flags().Lookup("read-only"); flag != nil && cmd.Flags().Changed("read-only") {
+			explicitReadOnly = true
+		}
+	}
+	if (len(args) > 0 || planFile != "") && !explicitReadOnly {
+		readOnlyMode = true
+	}
+
+	if !readOnlyMode {
+		flags := append([]string{}, cfg.Terraform.DefaultFlags...)
+		flags = append(flags, splitFlags(tfFlags)...)
+		if len(overrideFlags) > 0 {
+			flags = append(flags, overrideFlags...)
+		}
+		if presetName != "" {
+			preset, ok := cfg.PresetByName(presetName)
+			if !ok {
+				return fmt.Errorf("preset not found: %s", presetName)
+			}
+			if preset.WorkDir != "" {
+				workDir = preset.WorkDir
+			}
+			if len(preset.Flags) > 0 {
+				flags = append(flags, preset.Flags...)
+			}
+			if preset.Theme != "" && themeName == "" {
+				cfg.Theme.Name = preset.Theme
+			}
+			if envName == "" && preset.Environment != "" {
+				envName = preset.Environment
+			}
+		}
+		appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
+		if err != nil {
+			return err
+		}
+		appStyles := styles.NewStyles(appTheme)
+		if workspaceName != "" && folderPath != "" {
+			return errors.New("cannot use --workspace and --folder together")
+		}
+		if folderPath != "" {
+			resolved, err := resolveFolderSelection(workDir, folderPath)
+			if err != nil {
+				return err
+			}
+			workDir = resolved
+		}
+		if workspaceName != "" {
+			manager, err := newWorkspaceManager(workDir)
+			if err != nil {
+				return fmt.Errorf("failed to initialize workspace manager: %w", err)
+			}
+			if err := manager.Switch(context.Background(), workspaceName); err != nil {
+				return fmt.Errorf("failed to select workspace %s: %w", workspaceName, err)
+			}
+		}
+		var execOpts []terraform.ExecutorOption
+		execOpts = append(execOpts, terraform.WithDefaultFlags(flags))
+		if strings.TrimSpace(cfg.Terraform.Binary) != "" {
+			execOpts = append(execOpts, terraform.WithTerraformPath(cfg.Terraform.Binary))
+		}
+		if cfg.Terraform.Timeout > 0 {
+			execOpts = append(execOpts, terraform.WithTimeout(cfg.Terraform.Timeout))
+		}
+		exec, err := executorFactory(workDir, execOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to initialize terraform: %w", err)
 		}
@@ -69,13 +209,44 @@ func run(_ *cobra.Command, args []string) error {
 			useJSON = false
 		}
 
-		model := ui.NewExecutionModel(nil, ui.ExecutionConfig{
-			Executor:  exec,
-			AutoPlan:  autoPlan,
-			Flags:     flags,
-			UseJSON:   useJSON,
-			ForceJSON: forceJSON,
-		})
+		selectedEnv := envName
+		if workspaceName != "" {
+			selectedEnv = workspaceName
+		}
+		if folderPath != "" {
+			selectedEnv = filepath.Base(workDir)
+		}
+
+		var historyStore *history.Store
+		var historyLogger *history.Logger
+		if cfg.History.Enabled {
+			opts := []history.StoreOption{
+				history.WithCompressionThreshold(cfg.History.CompressionThreshold),
+			}
+			if strings.TrimSpace(cfg.History.Path) != "" {
+				historyStore, err = history.Open(cfg.History.Path, opts...)
+			} else {
+				historyStore, err = history.OpenDefault(opts...)
+			}
+			if err != nil {
+				return fmt.Errorf("history store: %w", err)
+			}
+			historyLogger = history.NewLogger(historyStore, history.Level(cfg.History.Level))
+		}
+
+		model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
+			Executor:       exec,
+			AutoPlan:       autoPlan,
+			Flags:          flags,
+			UseJSON:        useJSON,
+			ForceJSON:      forceJSON,
+			WorkDir:        workDir,
+			EnvName:        selectedEnv,
+			HistoryStore:   historyStore,
+			HistoryLogger:  historyLogger,
+			HistoryEnabled: cfg.History.Enabled,
+			Config:         &cfg,
+		}, appStyles)
 		return programRunner(model)
 	}
 
@@ -98,7 +269,12 @@ func run(_ *cobra.Command, args []string) error {
 	}
 
 	// Create and run the TUI
-	model := ui.NewModel(plan)
+	appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
+	if err != nil {
+		return err
+	}
+	appStyles := styles.NewStyles(appTheme)
+	model := ui.NewModelWithStyles(plan, appStyles)
 	return programRunner(model)
 }
 
@@ -110,7 +286,7 @@ func runProgram(model tea.Model) error {
 		options = append(options, tea.WithMouseCellMotion())
 	}
 
-	p := tea.NewProgram(model, options...)
+	p := newProgram(model, options...)
 
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running TUI: %w", err)
@@ -157,4 +333,42 @@ func splitFlags(flags string) []string {
 	}
 	flush()
 	return args
+}
+
+func resolveFolderSelection(baseDir, folder string) (string, error) {
+	if strings.TrimSpace(folder) == "" {
+		return baseDir, nil
+	}
+	// Prevent path traversal attacks
+	if strings.Contains(folder, "..") {
+		return "", fmt.Errorf("path traversal detected in folder path: %s", folder)
+	}
+	manager, err := newFolderManager(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize folder manager: %w", err)
+	}
+	if err := manager.Validate(context.Background(), folder); err != nil {
+		return "", fmt.Errorf("invalid folder %s: %w", folder, err)
+	}
+	var resolved string
+	if filepath.IsAbs(folder) {
+		resolved, err = filepath.Abs(folder)
+	} else {
+		resolved, err = filepath.Abs(filepath.Join(baseDir, folder))
+	}
+	if err != nil {
+		return "", err
+	}
+	// Verify resolved path is within baseDir (unless folder was absolute)
+	if !filepath.IsAbs(folder) {
+		absBase, err := filepath.Abs(baseDir)
+		if err != nil {
+			return "", err
+		}
+		relPath, err := filepath.Rel(absBase, resolved)
+		if err != nil || strings.HasPrefix(relPath, "..") {
+			return "", fmt.Errorf("resolved path %s is outside base directory %s", resolved, absBase)
+		}
+	}
+	return resolved, nil
 }
