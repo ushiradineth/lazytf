@@ -42,7 +42,16 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 
 	diffs := d.diffEngine.GetResourceDiffs(resource)
 	if len(diffs) == 0 {
-		content = d.styles.Dimmed.Render("No changes for selected resource")
+		if resource.Action != terraform.ActionNoOp {
+			action := actionLabel(resource.Action)
+			if action == "" {
+				action = string(resource.Action)
+			}
+			msg := fmt.Sprintf("Planned %s (details unavailable in streaming mode)", action)
+			content = d.styles.Dimmed.Render(msg)
+		} else {
+			content = d.styles.Dimmed.Render("No changes for selected resource")
+		}
 		return d.pad(content)
 	}
 

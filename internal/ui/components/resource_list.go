@@ -72,6 +72,7 @@ func (r *ResourceList) SetSize(width, height int) {
 func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 	r.resources = resources
 	r.selectedIndex = 0
+	r.diffEngine.ResetCache()
 	r.updateViewport()
 }
 
@@ -160,7 +161,12 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 
 // View renders the resource list
 func (r *ResourceList) View() string {
-	view := r.viewport.View()
+	var view string
+	if len(r.visibleItems) == 0 {
+		view = r.viewport.View()
+	} else {
+		view = r.renderVisibleItems()
+	}
 	if r.width > 0 && r.height > 0 {
 		return lipgloss.NewStyle().Width(r.width).Height(r.height).Render(view)
 	}
@@ -203,6 +209,7 @@ func (r *ResourceList) updateViewport() {
 	if len(filtered) == 0 {
 		r.selectedIndex = 0
 		r.visibleItems = nil
+		r.viewport.YOffset = 0
 		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
 		return
 	}
@@ -210,6 +217,7 @@ func (r *ResourceList) updateViewport() {
 	r.visibleItems = r.buildVisibleItems(filtered)
 	if len(r.visibleItems) == 0 {
 		r.selectedIndex = 0
+		r.viewport.YOffset = 0
 		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
 		return
 	}
@@ -217,20 +225,7 @@ func (r *ResourceList) updateViewport() {
 	if r.selectedIndex >= len(r.visibleItems) {
 		r.selectedIndex = len(r.visibleItems) - 1
 	}
-
-	var content strings.Builder
-	for i, item := range r.visibleItems {
-		isSelected := i == r.selectedIndex
-		switch item.kind {
-		case itemGroup:
-			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent))
-		case itemResource:
-			content.WriteString(r.renderResource(*item.resource, isSelected, item.indent))
-		}
-		content.WriteString("\n")
-	}
-
-	r.viewport.SetContent(content.String())
+	r.viewport.SetContent(strings.Repeat("\n", len(r.visibleItems)-1))
 	r.adjustViewportOffset()
 }
 
@@ -279,17 +274,59 @@ func (r *ResourceList) adjustViewportOffset() {
 	}
 }
 
+func (r *ResourceList) renderVisibleItems() string {
+	if len(r.visibleItems) == 0 {
+		return ""
+	}
+
+	start := r.viewport.YOffset
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(r.visibleItems) {
+		start = len(r.visibleItems) - 1
+	}
+	end := len(r.visibleItems)
+	if r.viewport.Height > 0 {
+		end = start + r.viewport.Height
+		if end > len(r.visibleItems) {
+			end = len(r.visibleItems)
+		}
+	}
+
+	var content strings.Builder
+	for i := start; i < end; i++ {
+		item := r.visibleItems[i]
+		isSelected := i == r.selectedIndex
+		switch item.kind {
+		case itemGroup:
+			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent))
+		case itemResource:
+			content.WriteString(r.renderResource(item.resource, isSelected, item.indent))
+		}
+		content.WriteString("\n")
+	}
+
+	if r.viewport.Height > 0 {
+		for i := end - start; i < r.viewport.Height; i++ {
+			content.WriteString("\n")
+		}
+	}
+
+	return content.String()
+}
+
 // renderResource renders a single resource line.
-func (r *ResourceList) renderResource(resource terraform.ResourceChange, isSelected bool, indent int) string {
+func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSelected bool, indent int) string {
 	var output strings.Builder
 
 	// Get action style and icon
 	actionIcon := resource.Action.GetActionIcon()
 	actionStyle := r.getActionStyle(resource.Action)
-	statusBadge, elapsed := r.getStatusDisplay(resource)
+	statusBadge, elapsed := r.getStatusDisplay(*resource)
 
 	// Calculate change count
-	changeCount := r.diffEngine.CountChanges(&resource)
+	changeCount := r.diffEngine.CountChanges(resource)
 
 	// Render the header line
 	prefix := ""
@@ -598,7 +635,7 @@ func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (stri
 	}
 	elapsedText := ""
 	if elapsed > 0 {
-		elapsedText = fmt.Sprintf("%s", formatShortDuration(elapsed))
+		elapsedText = formatShortDuration(elapsed)
 	}
 	return badge, elapsedText
 }

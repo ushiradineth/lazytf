@@ -530,7 +530,7 @@ func TestViewerNarrowWidthNoPanic(t *testing.T) {
 			After:   map[string]any{"a": 2},
 		},
 	}
-	_ = viewer.View(resource)
+	viewer.View(resource)
 }
 
 func TestViewNoResourceSelectedEmpty(t *testing.T) {

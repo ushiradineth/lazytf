@@ -37,3 +37,34 @@ func TestEngine_GetResourceDiffsNilMaps(t *testing.T) {
 		t.Fatalf("unexpected diff: %s %v", diffs[0].Action, diffs[0].Path)
 	}
 }
+
+func TestEngine_ResetCache(t *testing.T) {
+	e := NewEngine()
+	rc := &terraform.ResourceChange{
+		Change: &terraform.Change{
+			Before: map[string]any{
+				"version": "v1",
+			},
+			After: map[string]any{
+				"version": "v2",
+			},
+		},
+	}
+
+	diffs := e.GetResourceDiffs(rc)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d", len(diffs))
+	}
+
+	rc.Change.After["name"] = "app"
+	cached := e.GetResourceDiffs(rc)
+	if len(cached) != 1 {
+		t.Fatalf("expected cached diffs to remain at 1, got %d", len(cached))
+	}
+
+	e.ResetCache()
+	updated := e.GetResourceDiffs(rc)
+	if len(updated) != 2 {
+		t.Fatalf("expected 2 diffs after cache reset, got %d", len(updated))
+	}
+}
