@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ushiradineth/tftui/internal/diff"
+	"github.com/ushiradineth/lazytf/internal/diff"
 )
 
 func formatValue(val any) string {

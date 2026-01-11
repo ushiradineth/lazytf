@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestCalculateDiffs_OrderedKeys(t *testing.T) {

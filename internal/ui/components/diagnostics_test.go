@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestDiagnosticsPanelEmptyAndParsed(t *testing.T) {

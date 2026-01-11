@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ushiradineth/tftui/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 // PlanView renders an apply confirmation dialog.

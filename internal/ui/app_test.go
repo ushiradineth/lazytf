@@ -14,13 +14,13 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ushiradineth/tftui/internal/environment"
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/terraform"
-	tfparser "github.com/ushiradineth/tftui/internal/terraform/parser"
-	"github.com/ushiradineth/tftui/internal/ui/components"
-	"github.com/ushiradineth/tftui/internal/ui/views"
-	"github.com/ushiradineth/tftui/internal/utils"
+	"github.com/ushiradineth/lazytf/internal/environment"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/ui/components"
+	"github.com/ushiradineth/lazytf/internal/ui/views"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 func TestModelViewStates(t *testing.T) {
@@ -206,7 +206,7 @@ func TestRenderHelpContent(t *testing.T) {
 	m.height = 24
 
 	out := m.renderHelp()
-	if !strings.Contains(out, "tftui keybinds") {
+	if !strings.Contains(out, "lazytf keybinds") {
 		t.Fatalf("expected help title in output")
 	}
 	if !strings.Contains(out, "Navigation") {
@@ -506,12 +506,12 @@ func TestEnvStatusLabel(t *testing.T) {
 
 func TestFormatLogTimestamp(t *testing.T) {
 	ts := "2024-01-02T03:04:05Z"
-	if got := formatLogTimestamp(ts); got != "2024-01-02 03:04:05 +00:00" {
+	if got := utils.FormatLogTimestamp(ts); got != "2024-01-02 03:04:05 +00:00" {
 		t.Fatalf("expected formatted timestamp, got %q", got)
 	}
 
 	raw := "not-a-timestamp"
-	if got := formatLogTimestamp(raw); got != raw {
+	if got := utils.FormatLogTimestamp(raw); got != raw {
 		t.Fatalf("expected raw fallback, got %q", got)
 	}
 }
@@ -1434,7 +1434,7 @@ func TestViewModalStates(t *testing.T) {
 	}
 
 	m.modalState = ModalHelp
-	if out := m.View(); !strings.Contains(out, "tftui keybinds") {
+	if out := m.View(); !strings.Contains(out, "lazytf keybinds") {
 		t.Fatalf("expected help view")
 	}
 

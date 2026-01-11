@@ -16,16 +16,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ushiradineth/tftui/internal/config"
-	"github.com/ushiradineth/tftui/internal/diff"
-	"github.com/ushiradineth/tftui/internal/environment"
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
-	tfparser "github.com/ushiradineth/tftui/internal/terraform/parser"
-	"github.com/ushiradineth/tftui/internal/ui/components"
-	"github.com/ushiradineth/tftui/internal/ui/views"
-	"github.com/ushiradineth/tftui/internal/utils"
+	"github.com/ushiradineth/lazytf/internal/config"
+	"github.com/ushiradineth/lazytf/internal/diff"
+	"github.com/ushiradineth/lazytf/internal/environment"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/ui/components"
+	"github.com/ushiradineth/lazytf/internal/ui/views"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // Model is the main application model
@@ -1022,7 +1022,7 @@ func (m *Model) renderHelp() string {
 	}
 
 	var lines []string
-	lines = append(lines, m.styles.Title.Render("tftui keybinds"))
+	lines = append(lines, m.styles.Title.Render("lazytf keybinds"))
 	for _, section := range sections {
 		lines = append(lines, m.styles.Highlight.Render(section.title))
 		for _, row := range section.rows {
@@ -1537,7 +1537,7 @@ func (m *Model) beginPlan() tea.Cmd {
 		if strings.TrimSpace(workDir) == "" {
 			workDir = "."
 		}
-		planFilePath = filepath.Join(workDir, ".tftui", "tmp", "plan.tfplan")
+		planFilePath = filepath.Join(workDir, ".lazytf", "tmp", "plan.tfplan")
 		planFlags = append(planFlags, "-out="+planFilePath)
 	}
 	m.planRunFlags = planFlags
@@ -1657,7 +1657,7 @@ func (m *Model) prepareTerraformEnv() ([]string, error) {
 	if strings.TrimSpace(workDir) == "" {
 		workDir = "."
 	}
-	tmpDir := filepath.Join(workDir, ".tftui", "tmp")
+	tmpDir := filepath.Join(workDir, ".lazytf", "tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}

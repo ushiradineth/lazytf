@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ushiradineth/tftui/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 func TestApplyViewStatusAndFooter(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 var testMu sync.Mutex
@@ -477,7 +477,7 @@ func TestRunMainSuccess(t *testing.T) {
 	useTempConfig(t)
 
 	sample := filepath.Join("..", "..", "testdata", "plans", "sample.json")
-	os.Args = []string{"tftui", "--read-only", "--file", sample}
+	os.Args = []string{"lazytf", "--read-only", "--file", sample}
 	planFile = ""
 	readOnlyMode = true
 	called := false
@@ -507,7 +507,7 @@ func TestRunMainError(t *testing.T) {
 	})
 	useTempConfig(t)
 
-	os.Args = []string{"tftui", "--read-only"}
+	os.Args = []string{"lazytf", "--read-only"}
 	planFile = ""
 	readOnlyMode = true
 	programRunner = func(_ tea.Model) error {

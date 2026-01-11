@@ -85,11 +85,11 @@ func TestExpandPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	expanded, err := expandPath("~/.config/tftui/config.yaml")
+	expanded, err := expandPath("~/.config/lazytf/config.yaml")
 	if err != nil {
 		t.Fatalf("expand path: %v", err)
 	}
-	expected := filepath.Join(home, ".config", "tftui", "config.yaml")
+	expected := filepath.Join(home, ".config", "lazytf", "config.yaml")
 	if expanded != expected {
 		t.Fatalf("expected %s, got %s", expected, expanded)
 	}
@@ -103,7 +103,7 @@ func TestDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("default path: %v", err)
 	}
-	expected := filepath.Join(home, ".config", "tftui", "config.yaml")
+	expected := filepath.Join(home, ".config", "lazytf", "config.yaml")
 	if path != expected {
 		t.Fatalf("expected %s, got %s", expected, path)
 	}
@@ -120,7 +120,7 @@ func TestNewManagerEmptyPathUsesDefault(t *testing.T) {
 	if manager.Path() == "" {
 		t.Fatalf("expected manager path")
 	}
-	expected := filepath.Join(home, ".config", "tftui", "config.yaml")
+	expected := filepath.Join(home, ".config", "lazytf", "config.yaml")
 	if manager.Path() != expected {
 		t.Fatalf("expected %s, got %s", expected, manager.Path())
 	}
@@ -159,7 +159,7 @@ func TestExpandConfigPaths(t *testing.T) {
 
 	cfg := Config{
 		Terraform: TerraformConfig{WorkingDir: "$CONFIG_TEST_DIR"},
-		History:   HistoryConfig{Path: "~/.config/tftui/history.db"},
+		History:   HistoryConfig{Path: "~/.config/lazytf/history.db"},
 	}
 	if err := expandConfigPaths(&cfg); err != nil {
 		t.Fatalf("expand config paths: %v", err)

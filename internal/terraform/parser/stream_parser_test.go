@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestStreamParserParsesMessagesAndAccumulatesPlan(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 func TestPlanViewRendersSummary(t *testing.T) {

@@ -183,6 +183,6 @@
       "type": "integer"
     }
   },
-  "title": "tftui config",
+  "title": "lazytf config",
   "type": "object"
 }

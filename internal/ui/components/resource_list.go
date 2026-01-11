@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/ushiradineth/tftui/internal/diff"
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/diff"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // ResourceList displays a list of resources.

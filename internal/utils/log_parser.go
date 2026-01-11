@@ -32,7 +32,7 @@ func FormatLogOutput(output string) string {
 				timestamp = val
 			}
 			if message != "" && timestamp != "" {
-				lines = append(lines, "["+formatLogTimestamp(timestamp)+"] "+message)
+				lines = append(lines, "["+FormatLogTimestamp(timestamp)+"] "+message)
 				continue
 			}
 			if message != "" {
@@ -45,7 +45,7 @@ func FormatLogOutput(output string) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatLogTimestamp(value string) string {
+func FormatLogTimestamp(value string) string {
 	ts, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
 		ts, err = time.Parse(time.RFC3339, value)

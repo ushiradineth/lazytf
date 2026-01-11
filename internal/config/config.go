@@ -1,6 +1,6 @@
 // Package config manages application configuration with atomic writes,
 // file locking, and automatic migration. Configuration files are stored
-// in YAML format at ~/.config/tftui/config.yaml by default.
+// in YAML format at ~/.config/lazytf/config.yaml by default.
 //
 // The Manager type provides thread-safe config operations using file locks
 // to prevent concurrent modifications. All writes are atomic using a
@@ -21,7 +21,8 @@ import (
 )
 
 const currentVersion = 1
-const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/tftui/main/internal/config/config.schema.json\n"
+
+const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json\n"
 
 // Config defines the user configuration file schema.
 type Config struct {
@@ -87,12 +88,12 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "tftui", "config.yaml"), nil
+	return filepath.Join(home, ".config", "lazytf", "config.yaml"), nil
 }
 
 // ResolvePath resolves the config path using priority rules.
 func ResolvePath() (string, error) {
-	if env := strings.TrimSpace(os.Getenv("TFTUI_CONFIG")); env != "" {
+	if env := strings.TrimSpace(os.Getenv("LAZYTF_CONFIG")); env != "" {
 		return expandPath(env)
 	}
 
@@ -107,7 +108,7 @@ func ResolvePath() (string, error) {
 	candidates := []string{
 		primary,
 		xdg,
-		"/etc/tftui/config.yaml",
+		"/etc/lazytf/config.yaml",
 	}
 
 	for _, candidate := range candidates {
@@ -426,13 +427,13 @@ func expandPath(value string) (string, error) {
 
 func resolveXDGConfigPath() (string, error) {
 	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
-		return filepath.Join(xdg, "tftui", "config.yaml"), nil
+		return filepath.Join(xdg, "lazytf", "config.yaml"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "tftui", "config.yaml"), nil
+	return filepath.Join(home, ".config", "lazytf", "config.yaml"), nil
 }
 
 func writeFileAtomic(path string, data []byte) error {

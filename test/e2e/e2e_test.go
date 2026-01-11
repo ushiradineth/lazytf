@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/terraform"
-	tfparser "github.com/ushiradineth/tftui/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
 )
 
 func TestE2EPlanApplyHistory(t *testing.T) {

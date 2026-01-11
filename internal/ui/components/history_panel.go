@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 // HistoryPanel renders recent apply history entries.

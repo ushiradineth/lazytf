@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
-	tfparser "github.com/ushiradineth/tftui/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
 )
 
 func TestIntegrationPlanApplyWorkflow(t *testing.T) {

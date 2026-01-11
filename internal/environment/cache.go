@@ -34,7 +34,7 @@ type cachedDetection struct {
 }
 
 func cacheDir(baseDir string) string {
-	return filepath.Join(baseDir, ".tftui")
+	return filepath.Join(baseDir, ".lazytf")
 }
 
 func cacheFilePath(baseDir string) string {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // JSONParser parses Terraform JSON plan output

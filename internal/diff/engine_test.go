@@ -3,7 +3,7 @@ package diff
 import (
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestEngine_GetResourceDiffsNilChange(t *testing.T) {

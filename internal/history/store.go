@@ -90,7 +90,7 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "tftui", "history.db"), nil
+	return filepath.Join(home, ".config", "lazytf", "history.db"), nil
 }
 
 // OpenDefault opens the default history store.

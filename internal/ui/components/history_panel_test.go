@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 func TestHistoryPanelRendersEntries(t *testing.T) {

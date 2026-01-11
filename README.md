@@ -1,6 +1,6 @@
-# tftui
+# lazytf
 
-Terraform TUI :D
+lazygit but for Terraform :D
 
 ## Prerequisites
 

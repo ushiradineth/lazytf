@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/ushiradineth/tftui/internal/environment"
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/environment"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // PlanLoadedMsg is sent when a plan has been successfully loaded

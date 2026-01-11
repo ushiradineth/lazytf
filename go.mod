@@ -1,4 +1,4 @@
-module github.com/ushiradineth/tftui
+module github.com/ushiradineth/lazytf
 
 go 1.25.4
 

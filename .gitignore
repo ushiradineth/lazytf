@@ -15,7 +15,7 @@ go.work
 .cache/
 bin/
 .go/
-.tftui/
+**/.lazytf
 
 # Output of the go coverage tool
 coverage.out

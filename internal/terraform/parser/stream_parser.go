@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // StreamParser parses line-delimited JSON terraform output.

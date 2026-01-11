@@ -3,7 +3,7 @@ package diff
 import (
 	"sync"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 const maxCacheSize = 1000

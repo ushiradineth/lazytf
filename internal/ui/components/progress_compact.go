@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // ProgressCompact renders a compact progress view for streaming operations.

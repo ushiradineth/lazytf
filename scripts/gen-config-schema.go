@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ushiradineth/tftui/internal/config"
+	"github.com/ushiradineth/lazytf/internal/config"
 )
 
 type orderedMap map[string]any
@@ -64,7 +64,7 @@ func normalize(value any) any {
 func main() {
 	root := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"title":   "tftui config",
+		"title":   "lazytf config",
 		"type":    "object",
 	}
 	root["properties"] = schemaForType(reflect.TypeOf(config.Config{}))["properties"]

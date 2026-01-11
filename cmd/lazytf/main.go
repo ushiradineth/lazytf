@@ -11,13 +11,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/ushiradineth/tftui/internal/config"
-	"github.com/ushiradineth/tftui/internal/environment"
-	"github.com/ushiradineth/tftui/internal/history"
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
-	"github.com/ushiradineth/tftui/internal/terraform/parser"
-	"github.com/ushiradineth/tftui/internal/ui"
+	"github.com/ushiradineth/lazytf/internal/config"
+	"github.com/ushiradineth/lazytf/internal/environment"
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/ui"
 )
 
 type workspaceManager interface {
@@ -77,9 +77,9 @@ func runMain() error {
 
 func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "tftui [plan-file]",
+		Use:   "lazytf [plan-file]",
 		Short: "A minimal TUI for reviewing Terraform plans",
-		Long: `tftui is a Terminal User Interface for reviewing Terraform plans.
+		Long: `lazytf is a Terminal User Interface for reviewing Terraform plans.
 It displays plan changes in a clean, minimal interface inspired by Terraform Cloud,
 showing only changed attributes in a git-style diff format.`,
 		Version: version,
@@ -258,7 +258,7 @@ func run(cmd *cobra.Command, args []string) error {
 	case planFile != "":
 		planPath = planFile
 	default:
-		return errors.New("no plan file specified. Usage: tftui <plan-file> or tftui --file <plan-file>")
+		return errors.New("no plan file specified. Usage: lazytf <plan-file> or lazytf --file <plan-file>")
 	}
 
 	// Parse the plan

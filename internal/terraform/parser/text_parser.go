@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 // TextParser parses Terraform plan text output.

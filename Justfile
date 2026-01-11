@@ -1,5 +1,5 @@
-binary_name := "tftui"
-main_package := "./cmd/tftui"
+binary_name := "lazytf"
+main_package := "./cmd/lazytf"
 coverage_file := "coverage.out"
 coverage_html := "coverage.html"
 

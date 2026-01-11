@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ushiradineth/tftui/internal/diff"
-	"github.com/ushiradineth/tftui/internal/styles"
-	"github.com/ushiradineth/tftui/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/diff"
+	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestRenderInlineChangeReplaceMarker(t *testing.T) {
