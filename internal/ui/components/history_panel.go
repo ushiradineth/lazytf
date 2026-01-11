@@ -124,16 +124,16 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", int(d.Minutes()))
 }
 
-func trimString(val string, max int) string {
-	if max <= 0 {
+func trimString(val string, maxLen int) string {
+	if maxLen <= 0 {
 		return ""
 	}
 	runes := []rune(val)
-	if len(runes) <= max {
+	if len(runes) <= maxLen {
 		return val
 	}
-	if max < 3 {
-		return string(runes[:max])
+	if maxLen < 3 {
+		return string(runes[:maxLen])
 	}
-	return string(runes[:max-3]) + "..."
+	return string(runes[:maxLen-3]) + "..."
 }

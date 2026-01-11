@@ -1,8 +1,10 @@
 package history
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -14,7 +16,9 @@ func TestStoreRecordAndGet(t *testing.T) {
 		t.Fatalf("open history store: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = store.Close()
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
 	})
 
 	started := time.Now().UTC().Add(-2 * time.Second)
@@ -65,7 +69,7 @@ func TestStoreMigratesOutputColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	_, err = db.Exec(`CREATE TABLE apply_history (
+	_, err = db.ExecContext(context.Background(), `CREATE TABLE apply_history (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		started_at TEXT NOT NULL,
 		finished_at TEXT NOT NULL,
@@ -78,14 +82,18 @@ func TestStoreMigratesOutputColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create old schema: %v", err)
 	}
-	_ = db.Close()
+	if closeErr := db.Close(); closeErr != nil {
+		t.Fatalf("close db: %v", closeErr)
+	}
 
 	store, err := Open(path)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = store.Close()
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
 	})
 
 	entry := Entry{
@@ -99,4 +107,116 @@ func TestStoreMigratesOutputColumn(t *testing.T) {
 	if err := store.RecordApply(entry); err != nil {
 		t.Fatalf("record apply after migration: %v", err)
 	}
+}
+
+func TestStoreRecordAndQueryOperation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	started := time.Now().Add(-1 * time.Minute).UTC()
+	finished := time.Now().UTC()
+	entry := OperationEntry{
+		StartedAt:   started,
+		FinishedAt:  finished,
+		Duration:    time.Minute,
+		Action:      "plan",
+		Command:     "terraform plan -out=tfplan",
+		ExitCode:    0,
+		Status:      StatusSuccess,
+		Summary:     "+ 1 to add",
+		User:        "alice",
+		Environment: "prod",
+		Output:      strings.Repeat("ok\n", 70000),
+	}
+
+	if err := store.RecordOperation(entry); err != nil {
+		t.Fatalf("record operation: %v", err)
+	}
+
+	entries, err := store.QueryOperations(OperationFilter{Action: "plan", Environment: "prod", User: "alice", Limit: 5})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Output == "" {
+		t.Fatalf("expected output to be loaded")
+	}
+	if entries[0].ExitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", entries[0].ExitCode)
+	}
+
+	loaded, err := store.GetOperationByID(entries[0].ID)
+	if err != nil {
+		t.Fatalf("get operation by id: %v", err)
+	}
+	if loaded.Command != entry.Command {
+		t.Fatalf("expected command %q, got %q", entry.Command, loaded.Command)
+	}
+	if !loaded.StartedAt.UTC().Equal(started) {
+		t.Fatalf("expected started at %v, got %v", started, loaded.StartedAt)
+	}
+}
+
+func TestDefaultPathAndOpenDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path, err := DefaultPath()
+	if err != nil {
+		t.Fatalf("default path: %v", err)
+	}
+	if path == "" {
+		t.Fatalf("expected default path")
+	}
+
+	store, err := OpenDefault()
+	if err != nil {
+		t.Fatalf("open default: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+}
+
+func TestWithCompressionThreshold(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path, WithCompressionThreshold(1234))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+	if store.compressionThreshold != 1234 {
+		t.Fatalf("expected compression threshold to be set")
+	}
+}
+
+func TestOpenTildePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join("~", "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open tilde path: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
 }

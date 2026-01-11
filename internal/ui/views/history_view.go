@@ -16,7 +16,6 @@ type HistoryView struct {
 	styles   *styles.Styles
 	title    string
 	width    int
-	height   int
 }
 
 // NewHistoryView creates a new history view.
@@ -30,7 +29,6 @@ func NewHistoryView(s *styles.Styles) *HistoryView {
 // SetSize updates the layout size.
 func (v *HistoryView) SetSize(width, height int) {
 	v.width = width
-	v.height = height
 	headerHeight := 1
 	footerHeight := 1
 	bodyHeight := height - headerHeight - footerHeight
