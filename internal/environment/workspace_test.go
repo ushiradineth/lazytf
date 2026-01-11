@@ -1,0 +1,172 @@
+package environment
+
+import (
+	"context"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestParseWorkspaceListOutput(t *testing.T) {
+	output := "  default\n* dev\n  staging\n\n"
+	parsed := parseWorkspaceListOutput(output)
+	wantList := []string{"default", "dev", "staging"}
+	if !reflect.DeepEqual(parsed.Workspaces, wantList) {
+		t.Fatalf("expected workspaces %v, got %v", wantList, parsed.Workspaces)
+	}
+	if parsed.Current != "dev" {
+		t.Fatalf("expected current dev, got %q", parsed.Current)
+	}
+}
+
+func TestWorkspaceManagerListAndCurrent(t *testing.T) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+		return "  default\n* prod\n", nil
+	}))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	workspaces, err := manager.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	wantList := []string{"default", "prod"}
+	if !reflect.DeepEqual(workspaces, wantList) {
+		t.Fatalf("expected %v, got %v", wantList, workspaces)
+	}
+
+	current, err := manager.Current(context.Background())
+	if err != nil {
+		t.Fatalf("current: %v", err)
+	}
+	if current != "prod" {
+		t.Fatalf("expected current prod, got %q", current)
+	}
+}
+
+func TestWorkspaceManagerCurrentMissing(t *testing.T) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+		return "default\n", nil
+	}))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	_, err = manager.Current(context.Background())
+	if err == nil {
+		t.Fatal("expected error for missing current workspace")
+	}
+}
+
+func TestWorkspaceManagerSwitchValidates(t *testing.T) {
+	selected := ""
+	manager, err := NewWorkspaceManager(t.TempDir(),
+		WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+			return "* dev\n  prod\n", nil
+		}),
+		WithWorkspaceSelectFunc(func(_ context.Context, _ string, name string) error {
+			selected = name
+			return nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	if err := manager.Switch(context.Background(), "prod"); err != nil {
+		t.Fatalf("switch: %v", err)
+	}
+	if selected != "prod" {
+		t.Fatalf("expected selection prod, got %q", selected)
+	}
+
+	if err := manager.Switch(context.Background(), "unknown"); err == nil {
+		t.Fatal("expected error for unknown workspace")
+	}
+}
+
+func TestWorkspaceManagerListError(t *testing.T) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+		return "", errors.New("boom")
+	}))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	_, err = manager.List(context.Background())
+	if err == nil {
+		t.Fatal("expected list error")
+	}
+}
+
+func TestWithWorkspaceListOutputFuncNil(t *testing.T) {
+	_, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(nil))
+	if err == nil {
+		t.Fatalf("expected error for nil list func")
+	}
+}
+
+func TestWithWorkspaceSelectFuncNil(t *testing.T) {
+	_, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceSelectFunc(nil))
+	if err == nil {
+		t.Fatalf("expected error for nil select func")
+	}
+}
+
+func TestTerraformWorkspaceListOutputMissingBinary(t *testing.T) {
+	t.Setenv("PATH", "")
+	_, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	if err == nil {
+		t.Fatalf("expected error when terraform binary missing")
+	}
+}
+
+func TestTerraformWorkspaceSelectMissingBinary(t *testing.T) {
+	t.Setenv("PATH", "")
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err == nil {
+		t.Fatalf("expected error when terraform binary missing")
+	}
+}
+
+func TestTerraformWorkspaceListOutputSuccess(t *testing.T) {
+	setupFakeTerraform(t)
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "default") || !strings.Contains(out, "dev") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestTerraformWorkspaceSelectSuccess(t *testing.T) {
+	setupFakeTerraform(t)
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTerraformWorkspaceSelectErrorOutput(t *testing.T) {
+	setupFakeTerraformError(t)
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err == nil {
+		t.Fatalf("expected error when terraform workspace select fails")
+	}
+}
+
+func TestWorkspaceManagerNil(t *testing.T) {
+	var manager *WorkspaceManager
+	if _, err := manager.List(context.Background()); err == nil {
+		t.Fatalf("expected list error for nil manager")
+	}
+	if _, err := manager.Current(context.Background()); err == nil {
+		t.Fatalf("expected current error for nil manager")
+	}
+	if err := manager.Switch(context.Background(), "dev"); err == nil {
+		t.Fatalf("expected switch error for nil manager")
+	}
+	if err := manager.Validate(context.Background(), "dev"); err == nil {
+		t.Fatalf("expected validate error for nil manager")
+	}
+}

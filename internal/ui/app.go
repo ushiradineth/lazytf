@@ -2,10 +2,12 @@ package ui
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,30 +16,33 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ushiradineth/tftui/internal/config"
 	"github.com/ushiradineth/tftui/internal/diff"
+	"github.com/ushiradineth/tftui/internal/environment"
 	"github.com/ushiradineth/tftui/internal/history"
 	"github.com/ushiradineth/tftui/internal/styles"
 	"github.com/ushiradineth/tftui/internal/terraform"
 	tfparser "github.com/ushiradineth/tftui/internal/terraform/parser"
 	"github.com/ushiradineth/tftui/internal/ui/components"
 	"github.com/ushiradineth/tftui/internal/ui/views"
+	"github.com/ushiradineth/tftui/internal/utils"
 )
 
 // Model is the main application model
 type Model struct {
-	plan         *terraform.Plan
-	resourceList *components.ResourceList
-	diffEngine   *diff.Engine
-	diffViewer   *components.DiffViewer
-	styles       *styles.Styles
-	width        int
-	height       int
+	plan              *terraform.Plan
+	resourceList      *components.ResourceList
+	diffEngine        *diff.Engine
+	diffViewer        *components.DiffViewer
+	styles            *styles.Styles
+	width             int
+	height            int
 	diagnosticsHeight int
-	ready        bool
-	err          error
-	quitting     bool
-	showHelp     bool
-	showSplit    bool
+	ready             bool
+	err               error
+	quitting          bool
+	modalState        ModalState
+	showSplit         bool
 
 	searchInput textinput.Model
 	searching   bool
@@ -56,6 +61,7 @@ type Model struct {
 	autoPlan            bool
 	planFlags           []string
 	applyFlags          []string
+	planRunFlags        []string
 	planRunning         bool
 	applyRunning        bool
 	outputChan          <-chan string
@@ -66,6 +72,8 @@ type Model struct {
 	useJSON             bool
 	streamMsgChan       <-chan terraform.StreamMessage
 	streamParser        *tfparser.StreamParser
+	streamDone          chan struct{}
+	planFilePath        string
 	operationState      *terraform.OperationState
 	progressCompact     *components.ProgressCompact
 	diagnosticsPanel    *components.DiagnosticsPanel
@@ -73,17 +81,26 @@ type Model struct {
 	showCompactProgress bool
 	showRawLogs         bool
 
-	historyStore    *history.Store
-	historyPanel    *components.HistoryPanel
-	historyEntries  []history.Entry
-	showHistory     bool
-	historyHeight   int
-	historySelected int
-	historyFocused  bool
+	historyStore       *history.Store
+	historyPanel       *components.HistoryPanel
+	historyEntries     []history.Entry
+	showHistory        bool
+	historyHeight      int
+	historySelected    int
+	historyFocused     bool
 	diagnosticsFocused bool
-	historyView     *views.HistoryView
-	historyDetail   *history.Entry
-	lastPlanOutput  string
+	historyView        *views.HistoryView
+	historyDetail      *history.Entry
+	historyLogger      *history.Logger
+	lastPlanOutput     string
+	config             *config.Config
+	configView         *views.ConfigView
+	envWorkDir         string
+	envCurrent         string
+	envStrategy        environment.StrategyType
+	envDetection       *environment.DetectionResult
+	envOptions         []environment.Environment
+	envView            *views.EnvView
 
 	toastMessage string
 	toastIsError bool
@@ -101,18 +118,58 @@ const (
 	viewDiagnostics
 )
 
+// ModalState represents which modal overlay is active.
+type ModalState int
+
+const (
+	ModalNone ModalState = iota
+	ModalHelp
+	ModalSettings
+	ModalEnvSelector
+)
+
+type environmentDetector interface {
+	Detect(ctx context.Context) (environment.DetectionResult, error)
+}
+
+type workspaceManager interface {
+	Current(ctx context.Context) (string, error)
+	Switch(ctx context.Context, name string) error
+}
+
+var newEnvironmentDetector = func(workDir string) (environmentDetector, error) {
+	return environment.NewDetector(workDir)
+}
+
+var newWorkspaceManager = func(workDir string) (workspaceManager, error) {
+	return environment.NewWorkspaceManager(workDir)
+}
+
 // ExecutionConfig configures execution mode behavior.
 type ExecutionConfig struct {
-	Executor  *terraform.Executor
-	AutoPlan  bool
-	Flags     []string
-	UseJSON   bool
-	ForceJSON bool
+	Executor       *terraform.Executor
+	AutoPlan       bool
+	Flags          []string
+	UseJSON        bool
+	ForceJSON      bool
+	WorkDir        string
+	EnvName        string
+	HistoryStore   *history.Store
+	HistoryLogger  *history.Logger
+	HistoryEnabled bool
+	Config         *config.Config
 }
 
 // NewModel creates a new application model
 func NewModel(plan *terraform.Plan) *Model {
-	appStyles := styles.DefaultStyles()
+	return NewModelWithStyles(plan, styles.DefaultStyles())
+}
+
+// NewModelWithStyles creates a model with the provided styles.
+func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
+	if appStyles == nil {
+		appStyles = styles.DefaultStyles()
+	}
 	resourceList := components.NewResourceList(appStyles)
 	diffEngine := diff.NewEngine()
 	diffViewer := components.NewDiffViewer(appStyles, diffEngine)
@@ -145,6 +202,8 @@ func NewModel(plan *terraform.Plan) *Model {
 		filterDelete:  true,
 		filterReplace: true,
 		execView:      viewMain,
+		envView:       views.NewEnvView(appStyles),
+		configView:    views.NewConfigView(appStyles),
 	}
 
 	// Calculate diffs for all resources
@@ -160,12 +219,20 @@ func NewModel(plan *terraform.Plan) *Model {
 
 // NewExecutionModel creates a model configured for terraform execution.
 func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
-	m := NewModel(plan)
+	return NewExecutionModelWithStyles(plan, cfg, styles.DefaultStyles())
+}
+
+// NewExecutionModelWithStyles creates a model configured for terraform execution with styles.
+func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appStyles *styles.Styles) *Model {
+	m := NewModelWithStyles(plan, appStyles)
 	m.executionMode = true
 	m.executor = cfg.Executor
 	m.autoPlan = cfg.AutoPlan
 	m.planFlags = append([]string{}, cfg.Flags...)
 	m.applyFlags = append([]string{}, cfg.Flags...)
+	m.envWorkDir = cfg.WorkDir
+	m.envCurrent = cfg.EnvName
+	m.envStrategy = environment.StrategyUnknown
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
 	m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
@@ -197,15 +264,32 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 	m.historyHeight = 6
 	m.showHistory = false
 	m.historyView = views.NewHistoryView(m.styles)
-	store, err := history.OpenDefault()
-	if err != nil {
-		m.err = err
-	} else {
+	m.envView = views.NewEnvView(m.styles)
+	m.config = cfg.Config
+	m.configView = views.NewConfigView(m.styles)
+	if m.configView != nil {
+		m.configView.SetConfig(m.config)
+	}
+	if cfg.HistoryEnabled {
+		store := cfg.HistoryStore
+		if store == nil {
+			var err error
+			store, err = history.OpenDefault()
+			if err != nil {
+				m.err = err
+			}
+		}
 		m.historyStore = store
-		if entries, err := store.ListRecent(5); err == nil {
-			m.historyEntries = entries
-			m.historyPanel.SetEntries(entries)
-			m.syncHistorySelection()
+		m.historyLogger = cfg.HistoryLogger
+		if m.historyLogger == nil && store != nil {
+			m.historyLogger = history.NewLogger(store, history.LevelStandard)
+		}
+		if store != nil {
+			if entries, err := m.loadHistoryEntries(); err == nil {
+				m.historyEntries = entries
+				m.historyPanel.SetEntries(entries)
+				m.syncHistorySelection()
+			}
 		}
 	}
 	return m
@@ -214,6 +298,11 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{textinput.Blink}
+	if m.executionMode {
+		if cmd := m.detectEnvironmentsCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
 	if m.executionMode && m.autoPlan {
 		if cmd := m.beginPlan(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -249,6 +338,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.historyView != nil {
 			m.historyView.SetSize(m.width, m.height)
 		}
+		if m.configView != nil {
+			m.configView.SetSize(m.width, m.height)
+		}
+		if m.envView != nil {
+			m.envView.SetSize(m.width, m.height)
+		}
 		if m.progressCompact != nil {
 			m.progressCompact.SetSize(m.width, m.height)
 		}
@@ -266,7 +361,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.useJSON {
 			return m, nil
 		}
-		return m, m.streamPlanOutputCmd()
+		cmd := m.streamPlanOutputCmd()
+		return m, cmd
 
 	case PlanCompleteMsg:
 		return m.handlePlanComplete(msg)
@@ -281,7 +377,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.useJSON {
 			return m, nil
 		}
-		return m, m.streamApplyOutputCmd()
+		cmd := m.streamApplyOutputCmd()
+		return m, cmd
 
 	case ApplyCompleteMsg:
 		return m.handleApplyComplete(msg)
@@ -298,7 +395,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Error != nil {
 			m.toastMessage = fmt.Sprintf("History error: %v", msg.Error)
 			m.toastIsError = true
-			return m, m.clearToastCmd(3 * time.Second)
+			cmd := m.clearToastCmd(3 * time.Second)
+			return m, cmd
 		}
 		m.historyDetail = &msg.Entry
 		if m.historyView != nil {
@@ -310,8 +408,43 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			content := strings.TrimRight(msg.Entry.Output, "\n")
 			if content == "" {
 				content = "No stored output for this apply."
+			} else {
+				parsed := utils.FormatLogOutput(content)
+				if strings.TrimSpace(parsed) != "" {
+					content = parsed
+				}
 			}
 			m.historyView.SetContent(content)
+		}
+		return m, nil
+	case EnvironmentDetectedMsg:
+		if msg.Error != nil {
+			m.toastMessage = fmt.Sprintf("Environment detection failed: %v", msg.Error)
+			m.toastIsError = true
+			cmd := m.clearToastCmd(4 * time.Second)
+			return m, cmd
+		}
+		m.envDetection = &msg.Result
+		strategy := msg.Result.Strategy
+		current := msg.Current
+		if msg.Preference != nil {
+			if msg.Preference.Strategy != "" && strategyAvailable(msg.Result, msg.Preference.Strategy) {
+				strategy = msg.Preference.Strategy
+			}
+			if msg.Preference.Environment != "" {
+				current = msg.Preference.Environment
+			}
+		}
+		m.envStrategy = strategy
+		m.envCurrent = current
+		m.setEnvironmentOptions(msg.Result, m.envStrategy, m.envCurrent)
+		if m.envCurrent != "" {
+			if option, ok := m.findEnvironmentOption(m.envCurrent); ok {
+				_ = m.applyEnvironmentSelection(option)
+			}
+		}
+		if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
+			m.openEnvSelector()
 		}
 		return m, nil
 	case ClearToastMsg:
@@ -319,7 +452,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toastIsError = false
 		return m, nil
 	case StreamMessageMsg:
-		return m, m.handleStreamMessage(msg.Message)
+		cmd := m.handleStreamMessage(msg.Message)
+		return m, cmd
 	case OperationStateUpdateMsg:
 		if m.diagnosticsPanel != nil && m.operationState != nil {
 			m.diagnosticsPanel.SetDiagnostics(m.operationState.GetDiagnostics())
@@ -333,6 +467,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.diagnosticsFocused && m.diagnosticsPanel != nil && m.execView == viewMain {
 			switch msg.String() {
 			case "q", "ctrl+c":
+				if m.envView != nil && m.envView.Filtering() {
+					return m, cmd
+				}
 				m.quitting = true
 				return m, tea.Quit
 			case "esc", "D":
@@ -346,17 +483,132 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
 			return m, cmd
 		}
-		if m.showHelp {
+		if m.modalState == ModalSettings {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "esc", ",":
+				m.modalState = ModalNone
+				return m, nil
+			default:
+				return m, nil
+			}
+		}
+
+		if m.modalState == ModalHelp {
 			switch msg.String() {
 			case "q", "ctrl+c":
 				m.quitting = true
 				return m, tea.Quit
 			case "?", "esc":
-				m.showHelp = false
+				m.modalState = ModalNone
 				return m, nil
 			default:
 				return m, nil
 			}
+		}
+
+		if m.modalState == ModalEnvSelector {
+			if m.envView != nil {
+				m.envView, cmd = m.envView.Update(msg)
+			}
+			if m.envView != nil && m.envView.Filtering() {
+				return m, cmd
+			}
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "esc", "e":
+				if m.envView != nil && m.envView.Filtering() {
+					return m, cmd
+				}
+				if m.envView != nil && m.envView.Mode() == views.EnvViewEnvironments && m.envDetection != nil && m.envDetection.Strategy == environment.StrategyMixed {
+					m.envView.SetMode(views.EnvViewStrategy)
+					return m, cmd
+				}
+				m.modalState = ModalNone
+				return m, nil
+			case "enter":
+				if m.envView == nil {
+					return m, nil
+				}
+				if m.envView.Filtering() {
+					return m, cmd
+				}
+				if m.envView.Mode() == views.EnvViewStrategy {
+					selection := m.envView.SelectedStrategy()
+					if selection == environment.StrategyUnknown {
+						return m, nil
+					}
+					if m.envDetection == nil {
+						return m, nil
+					}
+					m.envStrategy = selection
+					m.setEnvironmentOptions(*m.envDetection, m.envStrategy, m.envCurrent)
+					if err := m.saveEnvPreference(m.envStrategy, ""); err != nil {
+						m.toastMessage = fmt.Sprintf("Failed to save environment preference: %v", err)
+						m.toastIsError = true
+						return m, m.clearToastCmd(3 * time.Second)
+					}
+					m.refreshEnvSelector()
+					m.envView.SetMode(views.EnvViewEnvironments)
+					return m, nil
+				}
+				selected := m.envView.SelectedEnvironment()
+				if selected == nil {
+					return m, nil
+				}
+				if err := m.applyEnvironmentSelection(*selected); err != nil {
+					m.toastMessage = fmt.Sprintf("Failed to switch environment: %v", err)
+					m.toastIsError = true
+					cmd := m.clearToastCmd(4 * time.Second)
+					return m, cmd
+				}
+				m.envCurrent = envSelectionValue(*selected)
+				if entries, err := m.loadHistoryEntries(); err == nil {
+					m.historyEntries = entries
+					if m.historyPanel != nil {
+						m.historyPanel.SetEntries(entries)
+						m.syncHistorySelection()
+					}
+				}
+				if err := m.saveEnvPreference(m.envStrategy, m.envCurrent); err != nil {
+					m.toastMessage = fmt.Sprintf("Failed to save environment preference: %v", err)
+					m.toastIsError = true
+					return m, m.clearToastCmd(3 * time.Second)
+				}
+				m.modalState = ModalNone
+				m.toastMessage = "Environment set to " + m.envDisplayName()
+				m.toastIsError = false
+				cmd := m.clearToastCmd(2 * time.Second)
+				return m, cmd
+			}
+			return m, cmd
+		}
+
+		if m.searching {
+			switch msg.String() {
+			case "esc":
+				m.searching = false
+				m.searchInput.Blur()
+				m.searchInput.SetValue("")
+				m.resourceList.SetSearchQuery("")
+				return m, nil
+			case "enter":
+				m.searching = false
+				m.searchInput.Blur()
+				return m, nil
+			default:
+				m.searchInput, cmd = m.searchInput.Update(msg)
+				m.resourceList.SetSearchQuery(m.searchInput.Value())
+				return m, cmd
+			}
+		}
+
+		if m.inputCaptured() {
+			return m, cmd
 		}
 
 		if m.executionMode {
@@ -381,25 +633,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.searching {
-			switch msg.String() {
-			case "esc":
-				m.searching = false
-				m.searchInput.Blur()
-				m.searchInput.SetValue("")
-				m.resourceList.SetSearchQuery("")
-				return m, nil
-			case "enter":
-				m.searching = false
-				m.searchInput.Blur()
-				return m, nil
-			default:
-				m.searchInput, cmd = m.searchInput.Update(msg)
-				m.resourceList.SetSearchQuery(m.searchInput.Value())
-				return m, cmd
-			}
-		}
-
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -417,7 +650,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "?":
-			m.showHelp = !m.showHelp
+			if m.modalState == ModalHelp {
+				m.modalState = ModalNone
+			} else {
+				m.modalState = ModalHelp
+			}
+			return m, nil
+
+		case ",":
+			if m.modalState == ModalSettings {
+				m.modalState = ModalNone
+			} else {
+				m.modalState = ModalSettings
+			}
+			return m, nil
+
+		case "e":
+			if m.modalState == ModalEnvSelector {
+				m.modalState = ModalNone
+			} else {
+				m.openEnvSelector()
+			}
 			return m, nil
 
 		case "c":
@@ -443,6 +696,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrorMsg:
 		m.err = msg.Err
 		return m, nil
+	}
+
+	if m.modalState == ModalEnvSelector && m.envView != nil {
+		m.envView, cmd = m.envView.Update(msg)
+		return m, cmd
 	}
 
 	if m.executionMode {
@@ -484,8 +742,16 @@ func (m *Model) View() string {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
-	if m.showHelp {
+	if m.modalState == ModalSettings {
+		return m.renderSettings()
+	}
+
+	if m.modalState == ModalHelp {
 		return m.renderHelp()
+	}
+
+	if m.modalState == ModalEnvSelector {
+		return m.renderEnvSelector()
 	}
 
 	if m.executionMode {
@@ -517,7 +783,7 @@ func (m *Model) View() string {
 		return m.renderToast(m.toastMessage, m.toastIsError)
 	}
 
-	if m.plan == nil {
+	if m.plan == nil && !m.executionMode {
 		return "No plan loaded\n"
 	}
 
@@ -595,7 +861,7 @@ func (m *Model) renderStatusBar() string {
 		totalResources = len(m.plan.Resources)
 	}
 
-	helpText := "q: quit | ↑↓/jk: navigate | enter/space: toggle group | t: toggle all | c/u/d/r: filter | /: search | ?: help"
+	helpText := "q: quit | ↑↓/jk: navigate | enter/space: toggle group | t: toggle all | c/u/d/r: filter | /: search | e: environments | ,: settings | ?: keybinds"
 	if m.executionMode {
 		execHelp := "p: plan | a: apply | h: history | tab: focus history | ctrl+c: cancel"
 		if m.useJSON {
@@ -605,10 +871,26 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	statusText := fmt.Sprintf("%d resources | %s", totalResources, helpText)
+	if m.executionMode {
+		statusText = fmt.Sprintf("%d resources | env: %s | %s", totalResources, m.envStatusLabel(), helpText)
+	} else {
+		statusText = fmt.Sprintf("%d resources | read-only | %s", totalResources, helpText)
+	}
 
 	return m.styles.StatusBar.
 		Width(m.width).
 		Render(statusText)
+}
+
+func (m *Model) envStatusLabel() string {
+	label := m.envDisplayName()
+	if label == "" {
+		label = "unknown"
+	}
+	if m.envStrategy != environment.StrategyUnknown {
+		return fmt.Sprintf("%s (%s)", label, m.envStrategy)
+	}
+	return label
 }
 
 // countResourcesByAction counts resources of a specific action type
@@ -703,7 +985,9 @@ func (m *Model) renderHelp() string {
 		{
 			title: "General",
 			rows: []helpRow{
-				{keys: "?", desc: "toggle help"},
+				{keys: "e", desc: "select environment"},
+				{keys: ",", desc: "open settings"},
+				{keys: "?", desc: "toggle keybinds"},
 				{keys: "q or ctrl+c", desc: "quit"},
 			},
 		},
@@ -738,7 +1022,7 @@ func (m *Model) renderHelp() string {
 	}
 
 	var lines []string
-	lines = append(lines, m.styles.Title.Render("tftui help"))
+	lines = append(lines, m.styles.Title.Render("tftui keybinds"))
 	for _, section := range sections {
 		lines = append(lines, m.styles.Highlight.Render(section.title))
 		for _, row := range section.rows {
@@ -756,6 +1040,253 @@ func (m *Model) renderHelp() string {
 		Render(content)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+func (m *Model) renderSettings() string {
+	if m.styles == nil {
+		return ""
+	}
+	if m.configView == nil {
+		lines := []string{
+			m.styles.Highlight.Render("Settings"),
+			"",
+			"No configuration loaded.",
+			"",
+			"esc: back",
+		}
+		content := strings.TrimRight(strings.Join(lines, "\n"), "\n")
+		box := m.styles.Border.Width(minInt(50, m.width-4)).Render(content)
+		if m.width == 0 || m.height == 0 {
+			return box
+		}
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	}
+	m.configView.SetConfig(m.config)
+	return m.configView.View()
+}
+
+func (m *Model) detectEnvironmentsCmd() tea.Cmd {
+	workDir := m.envWorkDir
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	return func() tea.Msg {
+		absWorkDir, err := filepath.Abs(workDir)
+		if err != nil {
+			return EnvironmentDetectedMsg{Error: err}
+		}
+		pref, err := environment.LoadPreference(absWorkDir)
+		if err != nil {
+			return EnvironmentDetectedMsg{Error: err}
+		}
+		detector, err := newEnvironmentDetector(workDir)
+		if err != nil {
+			return EnvironmentDetectedMsg{Error: err}
+		}
+		result, err := detector.Detect(context.Background())
+		if err != nil {
+			return EnvironmentDetectedMsg{Error: err}
+		}
+		current := m.envCurrent
+		if current == "" {
+			for _, folder := range result.FolderPaths {
+				if folder == absWorkDir {
+					current = folder
+					break
+				}
+			}
+		}
+		if current == "" && len(result.Workspaces) > 0 {
+			if manager, err := newWorkspaceManager(workDir); err == nil {
+				if name, err := manager.Current(context.Background()); err == nil {
+					current = name
+				}
+			}
+		}
+		if current == "" && (result.Strategy == environment.StrategyFolder || result.Strategy == environment.StrategyMixed) {
+			current = absWorkDir
+		}
+		return EnvironmentDetectedMsg{Result: result, Current: current, Preference: pref}
+	}
+}
+
+func (m *Model) setEnvironmentOptions(result environment.DetectionResult, strategy environment.StrategyType, current string) {
+	options := make([]environment.Environment, 0, len(result.Environments))
+	for _, env := range result.Environments {
+		if !strategyMatches(strategy, env.Strategy) {
+			continue
+		}
+		if envMatchesCurrent(env, current) {
+			env.IsCurrent = true
+		}
+		options = append(options, env)
+	}
+	m.envOptions = options
+	m.refreshEnvSelector()
+}
+
+func (m *Model) renderEnvSelector() string {
+	if m.styles == nil {
+		return ""
+	}
+	if m.envView == nil {
+		return ""
+	}
+	if m.envDetection != nil {
+		m.envView.SetWarnings(m.envDetection.Warnings)
+	} else {
+		m.envView.SetWarnings(nil)
+	}
+	return m.envView.View()
+}
+
+func (m *Model) inputCaptured() bool {
+	if m.searching {
+		return true
+	}
+	if m.modalState == ModalEnvSelector && m.envView != nil && m.envView.Filtering() {
+		return true
+	}
+	return false
+}
+
+func (m *Model) openEnvSelector() {
+	if m.envView == nil || m.envDetection == nil {
+		return
+	}
+	if m.envDetection.Strategy == environment.StrategyMixed {
+		m.envView.SetMode(views.EnvViewStrategy)
+		m.envView.SetStrategies(buildStrategyOptions(*m.envDetection))
+	} else {
+		m.envView.SetMode(views.EnvViewEnvironments)
+	}
+	m.refreshEnvSelector()
+	m.modalState = ModalEnvSelector
+}
+
+func (m *Model) refreshEnvSelector() {
+	if m.envView == nil {
+		return
+	}
+	baseDir := m.envWorkDir
+	if strings.TrimSpace(baseDir) == "" {
+		baseDir = "."
+	}
+	m.envView.SetEnvironments(m.envOptions, m.envStrategy, m.envCurrent, baseDir)
+}
+
+func (m *Model) shouldPromptEnvironment() bool {
+	if m.envDetection == nil {
+		return false
+	}
+	if m.envDetection.Strategy == environment.StrategyMixed {
+		return true
+	}
+	return len(m.envOptions) > 1
+}
+
+func (m *Model) findEnvironmentOption(value string) (environment.Environment, bool) {
+	for _, option := range m.envOptions {
+		if envMatchesCurrent(option, value) {
+			return option, true
+		}
+	}
+	return environment.Environment{}, false
+}
+
+func (m *Model) saveEnvPreference(strategy environment.StrategyType, current string) error {
+	baseDir := m.envWorkDir
+	if strings.TrimSpace(baseDir) == "" {
+		baseDir = "."
+	}
+	absDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return err
+	}
+	return environment.SavePreference(absDir, environment.Preference{
+		Strategy:    strategy,
+		Environment: current,
+		UpdatedAt:   time.Now(),
+	})
+}
+
+func buildStrategyOptions(result environment.DetectionResult) []views.StrategyOption {
+	options := []views.StrategyOption{}
+	if len(result.Workspaces) > 0 {
+		options = append(options, views.StrategyOption{
+			Label:    "Terraform workspaces",
+			Detail:   fmt.Sprintf("%d workspaces", len(result.Workspaces)),
+			Strategy: environment.StrategyWorkspace,
+		})
+	}
+	if len(result.FolderPaths) > 0 {
+		options = append(options, views.StrategyOption{
+			Label:    "Folder-based environments",
+			Detail:   fmt.Sprintf("%d folders", len(result.FolderPaths)),
+			Strategy: environment.StrategyFolder,
+		})
+	}
+	if len(result.Workspaces) > 0 && len(result.FolderPaths) > 0 {
+	}
+	return options
+}
+
+func strategyMatches(selected, candidate environment.StrategyType) bool {
+	switch selected {
+	case environment.StrategyUnknown, environment.StrategyMixed:
+		return true
+	default:
+		return selected == candidate
+	}
+}
+
+func strategyAvailable(result environment.DetectionResult, strategy environment.StrategyType) bool {
+	switch strategy {
+	case environment.StrategyWorkspace:
+		return len(result.Workspaces) > 0
+	case environment.StrategyFolder:
+		return len(result.FolderPaths) > 0
+	case environment.StrategyMixed:
+		return len(result.Workspaces) > 0 && len(result.FolderPaths) > 0
+	default:
+		return false
+	}
+}
+
+func envMatchesCurrent(env environment.Environment, current string) bool {
+	if current == "" {
+		return env.IsCurrent
+	}
+	if env.Strategy == environment.StrategyWorkspace {
+		return env.Name == current
+	}
+	if env.Path == current {
+		return true
+	}
+	return filepath.Base(env.Path) == current
+}
+
+func envSelectionValue(env environment.Environment) string {
+	if env.Strategy == environment.StrategyFolder {
+		return env.Path
+	}
+	return env.Name
+}
+
+func (m *Model) envDisplayName() string {
+	if m.envStrategy == environment.StrategyFolder {
+		baseDir := m.envWorkDir
+		if strings.TrimSpace(baseDir) == "" {
+			baseDir = "."
+		}
+		if rel, err := filepath.Rel(baseDir, m.envCurrent); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+		if m.envCurrent != "" {
+			return filepath.Base(m.envCurrent)
+		}
+	}
+	return m.envCurrent
 }
 
 func (m *Model) updateLayout() {
@@ -833,17 +1364,23 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			m.execView = viewMain
 			return true, nil
 		case "ctrl+c":
-			return true, m.cancelExecution()
+			m.cancelExecution()
+			return true, nil
 		}
 	case viewPlanOutput, viewApplyOutput:
 		switch key {
 		case "q":
+			if !m.planRunning && !m.applyRunning {
+				m.execView = viewMain
+				return true, nil
+			}
 			m.quitting = true
 			return true, tea.Quit
 		case "ctrl+c":
-			return true, m.cancelExecution()
+			m.cancelExecution()
+			return true, nil
 		case "C":
-			if m.useJSON && (m.planRunning || m.applyRunning) {
+			if m.useJSON {
 				m.showCompactProgress = !m.showCompactProgress
 				m.showDiagnostics = false
 				if !m.showCompactProgress && m.applyView != nil {
@@ -853,11 +1390,9 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				return true, nil
 			}
 		case "D":
-			if m.useJSON {
-				m.showDiagnostics = !m.showDiagnostics
-				m.updateExecutionViewForStreaming()
-				return true, nil
-			}
+			m.showDiagnostics = !m.showDiagnostics
+			m.updateExecutionViewForStreaming()
+			return true, nil
 		case "esc":
 			if !m.planRunning && !m.applyRunning {
 				m.execView = viewMain
@@ -867,12 +1402,18 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case viewCompactProgress, viewDiagnostics:
 		switch key {
 		case "q":
+			if !m.planRunning && !m.applyRunning {
+				m.execView = viewMain
+				m.showDiagnostics = false
+				return true, nil
+			}
 			m.quitting = true
 			return true, tea.Quit
 		case "ctrl+c":
-			return true, m.cancelExecution()
+			m.cancelExecution()
+			return true, nil
 		case "C":
-			if m.useJSON && (m.planRunning || m.applyRunning) {
+			if m.useJSON {
 				m.showCompactProgress = !m.showCompactProgress
 				m.showDiagnostics = false
 				if !m.showCompactProgress && m.applyView != nil {
@@ -882,11 +1423,9 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				return true, nil
 			}
 		case "D":
-			if m.useJSON {
-				m.showDiagnostics = !m.showDiagnostics
-				m.updateExecutionViewForStreaming()
-				return true, nil
-			}
+			m.showDiagnostics = !m.showDiagnostics
+			m.updateExecutionViewForStreaming()
+			return true, nil
 		case "esc":
 			if !m.planRunning && !m.applyRunning {
 				m.execView = viewMain
@@ -934,7 +1473,7 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				m.showCompactProgress = !m.showCompactProgress
 				m.showDiagnostics = false
 				if !m.showCompactProgress && m.applyView != nil {
-					m.applyView.AppendLine("Streaming JSON output enabled. Press \"C\" for compact progress.")
+					m.applyView.AppendLine("Streaming JSON output enabled. Press 'C' for compact progress.")
 				}
 				m.updateExecutionViewForStreaming()
 				return true, nil
@@ -960,7 +1499,8 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			}
 		case "ctrl+c":
 			if m.planRunning || m.applyRunning {
-				return true, m.cancelExecution()
+				m.cancelExecution()
+				return true, nil
 			}
 		}
 		if m.showHistory && m.historyFocused {
@@ -982,6 +1522,26 @@ func (m *Model) beginPlan() tea.Cmd {
 		return nil
 	}
 	m.err = nil
+	planEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	planFlags := append([]string{}, m.planFlags...)
+	planFilePath := planOutputPath(planFlags)
+	if planFilePath == "" {
+		workDir := m.envWorkDir
+		if m.executor != nil {
+			workDir = m.executor.WorkDir()
+		}
+		if strings.TrimSpace(workDir) == "" {
+			workDir = "."
+		}
+		planFilePath = filepath.Join(workDir, ".tftui", "tmp", "plan.tfplan")
+		planFlags = append(planFlags, "-out="+planFilePath)
+	}
+	m.planRunFlags = planFlags
+	m.planFilePath = planFilePath
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.planRunning = true
@@ -1000,9 +1560,51 @@ func (m *Model) beginPlan() tea.Cmd {
 	m.updateExecutionViewForStreaming()
 
 	return func() tea.Msg {
-		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{Flags: m.planFlags, UseJSON: m.useJSON})
+		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{
+			Flags:   planFlags,
+			UseJSON: m.useJSON,
+			Env:     planEnv,
+		})
 		return PlanStartMsg{Result: result, Output: output, Error: err}
 	}
+}
+
+func (m *Model) applyEnvironmentSelection(option environment.Environment) error {
+	if m.planRunning || m.applyRunning {
+		return errors.New("cannot change environment while a command is running")
+	}
+	switch option.Strategy {
+	case environment.StrategyWorkspace:
+		manager, err := newWorkspaceManager(m.envWorkDir)
+		if err != nil {
+			return err
+		}
+		if err := manager.Switch(context.Background(), option.Name); err != nil {
+			return err
+		}
+	case environment.StrategyFolder:
+		if m.executor == nil {
+			return errors.New("terraform executor not configured")
+		}
+		exec, err := m.executor.CloneWithWorkDir(option.Path)
+		if err != nil {
+			return err
+		}
+		m.executor = exec
+	default:
+		return fmt.Errorf("unsupported environment strategy: %s", option.Strategy)
+	}
+
+	m.setPlan(nil)
+	m.planFilePath = ""
+	m.planRunFlags = nil
+	if m.planView != nil {
+		m.planView.SetSummary(m.planSummary())
+	}
+	if m.operationState != nil {
+		m.operationState.InitializeFromPlan(nil)
+	}
+	return nil
 }
 
 func (m *Model) beginApply() tea.Cmd {
@@ -1014,6 +1616,11 @@ func (m *Model) beginApply() tea.Cmd {
 		return nil
 	}
 	m.err = nil
+	applyEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.applyRunning = true
@@ -1036,17 +1643,32 @@ func (m *Model) beginApply() tea.Cmd {
 			Flags:       m.applyFlags,
 			AutoApprove: true,
 			UseJSON:     m.useJSON,
+			Env:         applyEnv,
 		})
 		return ApplyStartMsg{Result: result, Output: output, Error: err}
 	}
 }
 
-func (m *Model) cancelExecution() tea.Cmd {
+func (m *Model) prepareTerraformEnv() ([]string, error) {
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	tmpDir := filepath.Join(workDir, ".tftui", "tmp")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	return []string{"TMPDIR=" + tmpDir}, nil
+}
+
+func (m *Model) cancelExecution() {
 	if m.cancelFunc != nil {
 		m.cancelFunc()
 		m.cancelFunc = nil
 	}
-	return nil
 }
 
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
@@ -1083,18 +1705,22 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.cancelFunc = nil
 	m.outputChan = nil
 	m.streamMsgChan = nil
+	m.streamDone = nil
 
 	if msg.Error != nil {
 		if m.applyView != nil {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Plan failed: %v", msg.Error))
 		}
+		m.planFilePath = ""
+		m.planRunFlags = nil
 		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
 		if m.diagnosticsPanel != nil {
 			m.diagnosticsPanel.SetLogText(msg.Output)
-			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Output))
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
 		}
-		return m, nil
+		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
+		return m, cmd
 	}
 
 	if msg.Plan != nil {
@@ -1110,7 +1736,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.lastPlanOutput = msg.Output
 		if m.diagnosticsPanel != nil {
 			m.diagnosticsPanel.SetLogText(msg.Output)
-			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Output))
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
 		}
 	}
 	if m.applyView != nil {
@@ -1119,7 +1745,8 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.streamParser = nil
 	m.showDiagnostics = false
 	m.updateExecutionViewForStreaming()
-	return m, nil
+	cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
+	return m, cmd
 }
 
 func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
@@ -1156,6 +1783,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.cancelFunc = nil
 	m.outputChan = nil
 	m.streamMsgChan = nil
+	m.streamDone = nil
 	if msg.Error != nil || !msg.Success {
 		if m.applyView != nil {
 			m.applyView.SetStatus(views.ApplyFailed)
@@ -1165,7 +1793,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Result != nil && m.diagnosticsPanel != nil {
 			m.diagnosticsPanel.SetLogText(msg.Result.Output)
-			m.diagnosticsPanel.SetParsedText(formatLogOutput(msg.Result.Output))
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
 		}
 		if msg.Error != nil {
 			output := ""
@@ -1185,7 +1813,14 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 			status = history.StatusCanceled
 		}
 		m.streamParser = nil
-		return m, m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error)
+		opErr := msg.Error
+		if opErr == nil && !msg.Success {
+			opErr = errors.New("apply failed")
+		}
+		return m, tea.Batch(
+			m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error),
+			m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr),
+		)
 	}
 
 	if m.applyView != nil {
@@ -1195,7 +1830,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	if m.diagnosticsPanel != nil {
 		parsed := ""
 		if msg.Result != nil {
-			parsed = formatLogOutput(msg.Result.Output)
+			parsed = utils.FormatLogOutput(msg.Result.Output)
 		}
 		if strings.TrimSpace(parsed) == "" {
 			parsed = "Apply complete"
@@ -1203,7 +1838,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		m.diagnosticsPanel.SetParsedText(parsed)
 	}
 	if m.applyView != nil && msg.Result != nil {
-		parsed := formatLogOutput(msg.Result.Output)
+		parsed := utils.FormatLogOutput(msg.Result.Output)
 		if strings.TrimSpace(parsed) == "" {
 			parsed = strings.TrimSpace(msg.Result.Output)
 		}
@@ -1212,8 +1847,13 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.showDiagnostics = false
 	m.execView = viewApplyOutput
 	m.setPlan(&terraform.Plan{Resources: nil})
+	m.planFilePath = ""
+	m.planRunFlags = nil
 	m.streamParser = nil
-	return m, m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil)
+	return m, tea.Batch(
+		m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil),
+		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil),
+	)
 }
 
 func (m *Model) handleStreamMessage(msg terraform.StreamMessage) tea.Cmd {
@@ -1325,55 +1965,6 @@ func (m *Model) addErrorDiagnostic(summary string, err error, output string) {
 	}
 }
 
-func formatLogOutput(output string) string {
-	if strings.TrimSpace(output) == "" {
-		return ""
-	}
-	lines := make([]string, 0, 16)
-	for _, line := range strings.Split(strings.TrimRight(output, "\n"), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		var payload map[string]any
-		if json.Unmarshal([]byte(trimmed), &payload) == nil {
-			message := ""
-			if val, ok := payload["@message"].(string); ok {
-				message = val
-			} else if val, ok := payload["message"].(string); ok {
-				message = val
-			}
-			timestamp := ""
-			if val, ok := payload["@timestamp"].(string); ok {
-				timestamp = val
-			} else if val, ok := payload["timestamp"].(string); ok {
-				timestamp = val
-			}
-			if message != "" && timestamp != "" {
-				lines = append(lines, "["+formatLogTimestamp(timestamp)+"] "+message)
-				continue
-			}
-			if message != "" {
-				lines = append(lines, message)
-				continue
-			}
-		}
-		lines = append(lines, trimmed)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatLogTimestamp(value string) string {
-	ts, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil {
-		ts, err = time.Parse(time.RFC3339, value)
-	}
-	if err != nil {
-		return value
-	}
-	return ts.Format("2006-01-02 15:04:05 -07:00")
-}
-
 func (m *Model) streamPlanOutputCmd() tea.Cmd {
 	return func() tea.Msg {
 		if m.outputChan == nil {
@@ -1408,11 +1999,17 @@ func (m *Model) processJSONStream(output <-chan string) tea.Cmd {
 	parser := tfparser.NewStreamParser()
 	m.streamParser = parser
 	m.streamMsgChan = msgChan
+	done := make(chan struct{})
+	m.streamDone = done
 
 	reader := chanToReader(output)
 	go func() {
-		_ = parser.Parse(reader, msgChan)
+		if err := parser.Parse(reader, msgChan); err != nil {
+			// Best effort parse; stream errors do not block completion.
+			_ = err
+		}
 		close(msgChan)
+		close(done)
 	}()
 	return m.streamJSONMessagesCmd()
 }
@@ -1437,16 +2034,47 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 		}
 		<-result.Done()
 		if result.Error != nil {
-			return PlanCompleteMsg{Error: result.Error}
+			return PlanCompleteMsg{Error: result.Error, Result: result, Output: result.Output}
 		}
 
 		output := result.Output
 		if output == "" {
 			output = result.Stdout
 		}
+
+		if m.executor != nil && m.planFilePath != "" {
+			planEnv, err := m.prepareTerraformEnv()
+			if err != nil {
+				planEnv = nil
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			showResult, showErr := m.executor.ShowJSON(ctx, m.planFilePath, terraform.ShowOptions{Env: planEnv})
+			cancel()
+			if showErr == nil && showResult != nil {
+				jsonParser := tfparser.NewJSONParser()
+				plan, parseErr := jsonParser.Parse(strings.NewReader(showResult.Output))
+				if parseErr == nil {
+					return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
+				}
+			}
+		}
+
 		if m.useJSON && m.streamParser != nil {
+			if m.streamDone != nil {
+				select {
+				case <-m.streamDone:
+				case <-time.After(2 * time.Second):
+				}
+			}
 			if plan := m.streamParser.GetAccumulatedPlan(); plan != nil {
-				return PlanCompleteMsg{Plan: plan, Output: output}
+				return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
+			}
+			if strings.TrimSpace(output) != "" {
+				fallback := tfparser.NewStreamParser()
+				_ = fallback.Parse(strings.NewReader(output), nil)
+				if plan := fallback.GetAccumulatedPlan(); plan != nil {
+					return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
+				}
 			}
 		}
 
@@ -1456,11 +2084,11 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 			jsonParser := tfparser.NewJSONParser()
 			jsonPlan, jsonErr := jsonParser.Parse(strings.NewReader(output))
 			if jsonErr != nil {
-				return PlanCompleteMsg{Error: fmt.Errorf("parse plan output: %w", err), Output: output}
+				return PlanCompleteMsg{Error: fmt.Errorf("parse plan output: %w", err), Result: result, Output: output}
 			}
-			return PlanCompleteMsg{Plan: jsonPlan, Output: output}
+			return PlanCompleteMsg{Plan: jsonPlan, Result: result, Output: output}
 		}
-		return PlanCompleteMsg{Plan: plan, Output: output}
+		return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
 	}
 }
 
@@ -1497,11 +2125,12 @@ func (m *Model) recordHistoryCmd(status history.Status, summary string, planOutp
 		return nil
 	}
 	entry := history.Entry{
-		StartedAt:  m.applyStartedAt,
-		FinishedAt: time.Now(),
-		Duration:   time.Since(m.applyStartedAt),
-		Status:     status,
-		Summary:    summary,
+		StartedAt:   m.applyStartedAt,
+		FinishedAt:  time.Now(),
+		Duration:    time.Since(m.applyStartedAt),
+		Status:      status,
+		Summary:     summary,
+		Environment: m.envCurrent,
 	}
 	if m.executor != nil {
 		entry.WorkDir = m.executor.WorkDir()
@@ -1519,12 +2148,48 @@ func (m *Model) recordHistoryCmd(status history.Status, summary string, planOutp
 		if recordErr := m.historyStore.RecordApply(entry); recordErr != nil {
 			return HistoryLoadedMsg{Error: recordErr}
 		}
-		entries, listErr := m.historyStore.ListRecent(5)
+		entries, listErr := m.loadHistoryEntries()
 		if listErr != nil {
 			return HistoryLoadedMsg{Error: listErr}
 		}
 		return HistoryLoadedMsg{Entries: entries}
 	}
+}
+
+func (m *Model) recordOperationCmd(action string, flags []string, autoApprove bool, startedAt time.Time, result *terraform.ExecutionResult, output string, opErr error) tea.Cmd {
+	if m.historyLogger == nil {
+		return nil
+	}
+	entry := history.OperationEntry{
+		StartedAt:   startedAt,
+		Action:      action,
+		Command:     m.buildCommand(action, flags, m.useJSON, autoApprove),
+		Summary:     m.flattenSummary(m.planSummary()),
+		User:        currentUserName(),
+		Environment: m.envCurrent,
+		Output:      selectOperationOutput(output, result),
+	}
+	if result != nil {
+		entry.ExitCode = result.ExitCode
+		entry.Duration = result.Duration
+	}
+	entry.Status = operationStatus(opErr)
+	return func() tea.Msg {
+		if err := m.historyLogger.RecordOperation(entry); err != nil {
+			return HistoryLoadedMsg{Error: err}
+		}
+		return nil
+	}
+}
+
+func (m *Model) loadHistoryEntries() ([]history.Entry, error) {
+	if m.historyStore == nil {
+		return nil, nil
+	}
+	if m.envCurrent == "" {
+		return m.historyStore.ListRecent(5)
+	}
+	return m.historyStore.ListRecentForEnvironment(m.envCurrent, 5)
 }
 
 func (m *Model) renderToast(message string, isError bool) string {
@@ -1550,6 +2215,87 @@ func (m *Model) flattenSummary(summary string) string {
 	parts := strings.Fields(summary)
 	return strings.Join(parts, " ")
 }
+
+func operationStatus(err error) history.Status {
+	if err == nil {
+		return history.StatusSuccess
+	}
+	if errors.Is(err, context.Canceled) {
+		return history.StatusCanceled
+	}
+	return history.StatusFailed
+}
+
+func selectOperationOutput(output string, result *terraform.ExecutionResult) string {
+	if strings.TrimSpace(output) != "" {
+		return output
+	}
+	if result == nil {
+		return ""
+	}
+	if result.Output != "" {
+		return result.Output
+	}
+	if result.Stdout != "" {
+		return result.Stdout
+	}
+	return result.Stderr
+}
+
+func (m *Model) buildCommand(action string, flags []string, useJSON bool, autoApprove bool) string {
+	args := []string{action}
+	args = append(args, flags...)
+	if useJSON && !containsFlag(args, "-json") {
+		args = append(args, "-json")
+	}
+	if autoApprove && !containsFlag(args, "-auto-approve") {
+		args = append(args, "-auto-approve")
+	}
+	return "terraform " + strings.Join(args, " ")
+}
+
+func containsFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag {
+			return true
+		}
+	}
+	return false
+}
+
+func planOutputPath(flags []string) string {
+	for i, flag := range flags {
+		if flag == "-out" && i+1 < len(flags) {
+			return flags[i+1]
+		}
+		if strings.HasPrefix(flag, "-out=") {
+			value := strings.TrimPrefix(flag, "-out=")
+			if value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func (m *Model) planFlagsForRecord() []string {
+	if len(m.planRunFlags) > 0 {
+		return m.planRunFlags
+	}
+	return m.planFlags
+}
+
+func currentUserName() string {
+	if current, err := currentUserFunc(); err == nil && current != nil && current.Username != "" {
+		return current.Username
+	}
+	if value := os.Getenv("USER"); value != "" {
+		return value
+	}
+	return os.Getenv("USERNAME")
+}
+
+var currentUserFunc = user.Current
 
 func (m *Model) syncHistorySelection() {
 	if m.historyPanel == nil {
@@ -1621,9 +2367,18 @@ func chanToReader(input <-chan string) io.Reader {
 	pr, pw := io.Pipe()
 	go func() {
 		for line := range input {
-			_, _ = io.WriteString(pw, line+"\n")
+			if _, err := io.WriteString(pw, line+"\n"); err != nil {
+				if closeErr := pw.CloseWithError(err); closeErr != nil {
+					// Best effort close after pipe write failure.
+					_ = closeErr
+				}
+				return
+			}
 		}
-		_ = pw.Close()
+		if err := pw.Close(); err != nil {
+			// Best effort close after stream completion.
+			_ = err
+		}
 	}()
 	return pr
 }
@@ -1670,7 +2425,7 @@ type KeyMap struct {
 	ToggleAll key.Binding
 	Filter    key.Binding
 	Quit      key.Binding
-	Help      key.Binding
+	Keybinds  key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings
@@ -1700,9 +2455,9 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
 		),
-		Help: key.NewBinding(
+		Keybinds: key.NewBinding(
 			key.WithKeys("?"),
-			key.WithHelp("?", "toggle help"),
+			key.WithHelp("?", "toggle keybinds"),
 		),
 	}
 }

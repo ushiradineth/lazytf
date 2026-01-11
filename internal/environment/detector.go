@@ -1,3 +1,13 @@
+// Package environment provides automatic detection and management of
+// Terraform environment strategies (workspace-based or folder-based).
+//
+// The Detector analyzes a Terraform project to determine whether it uses
+// workspaces, folder-based environments, or a combination of both. It
+// provides confidence scores for each strategy to help guide environment
+// selection.
+//
+// WorkspaceManager handles workspace selection and validation, while
+// FolderManager handles folder-based environment switching.
 package environment
 
 import (
@@ -26,11 +36,14 @@ const defaultMaxDepth = 6
 
 // DetectionResult captures environment detection details.
 type DetectionResult struct {
-	Strategy    StrategyType
-	Confidence  map[StrategyType]float64
-	Workspaces  []string
-	FolderPaths []string
-	Warnings    []string
+	Strategy        StrategyType
+	Confidence      map[StrategyType]float64
+	ConfidenceScore float64
+	Workspaces      []string
+	FolderPaths     []string
+	Warnings        []string
+	BaseDir         string
+	Environments    []Environment
 }
 
 // WorkspaceListFunc returns available workspaces for the given directory.
@@ -75,14 +88,14 @@ func NewDetector(workDir string, opts ...DetectorOption) (*Detector, error) {
 	}
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve workdir: %w", err)
+		return nil, fmt.Errorf("resolve working directory %s: %w", workDir, err)
 	}
 	info, err := os.Stat(absDir)
 	if err != nil {
-		return nil, fmt.Errorf("workdir not found: %w", err)
+		return nil, fmt.Errorf("working directory not found %s: %w", absDir, err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("workdir is not a directory: %s", absDir)
+		return nil, fmt.Errorf("working directory is not a directory: %s", absDir)
 	}
 
 	detector := &Detector{
@@ -109,6 +122,7 @@ func (d *Detector) Detect(ctx context.Context) (DetectionResult, error) {
 
 	result := DetectionResult{
 		Strategy: StrategyUnknown,
+		BaseDir:  d.workDir,
 		Confidence: map[StrategyType]float64{
 			StrategyWorkspace: 0,
 			StrategyFolder:    0,
@@ -123,7 +137,7 @@ func (d *Detector) Detect(ctx context.Context) (DetectionResult, error) {
 		result.Workspaces = workspaces
 	}
 
-	folders, err := scanTerraformFolders(d.workDir, d.maxDepth)
+	folders, err := scanTerraformFolders(ctx, d.workDir, d.maxDepth)
 	if err != nil {
 		return result, err
 	}
@@ -134,18 +148,22 @@ func (d *Detector) Detect(ctx context.Context) (DetectionResult, error) {
 	result.Confidence[StrategyWorkspace] = workspaceScore
 	result.Confidence[StrategyFolder] = folderScore
 
-	if workspaceScore > 0 && folderScore > 0 {
+	switch {
+	case workspaceScore > 0 && folderScore > 0:
 		mixedScore := (workspaceScore+folderScore)/2 + 0.1
 		if mixedScore > 1 {
 			mixedScore = 1
 		}
 		result.Confidence[StrategyMixed] = mixedScore
 		result.Strategy = StrategyMixed
-	} else if workspaceScore >= folderScore && workspaceScore > 0 {
+	case workspaceScore >= folderScore && workspaceScore > 0:
 		result.Strategy = StrategyWorkspace
-	} else if folderScore > 0 {
+	case folderScore > 0:
 		result.Strategy = StrategyFolder
 	}
+
+	result.ConfidenceScore = result.Confidence[result.Strategy]
+	result.Environments = BuildEnvironments(result, "")
 
 	return result, nil
 }
@@ -188,11 +206,18 @@ func parseWorkspaceList(output string) []string {
 	return workspaces
 }
 
-func scanTerraformFolders(root string, maxDepth int) ([]string, error) {
+func scanTerraformFolders(ctx context.Context, root string, maxDepth int) ([]string, error) {
 	folders := make(map[string]struct{})
 	baseDepth := pathDepth(root)
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		if err != nil {
 			return err
 		}

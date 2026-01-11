@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/ushiradineth/tftui/internal/environment"
 	"github.com/ushiradineth/tftui/internal/history"
 	"github.com/ushiradineth/tftui/internal/terraform"
 )
@@ -43,6 +44,7 @@ type PlanOutputMsg struct{ Line string }
 // PlanCompleteMsg signals plan completion.
 type PlanCompleteMsg struct {
 	Plan   *terraform.Plan
+	Result *terraform.ExecutionResult
 	Error  error
 	Output string
 }
@@ -86,3 +88,11 @@ type HistoryDetailMsg struct {
 
 // ClearToastMsg clears transient notifications.
 type ClearToastMsg struct{}
+
+// EnvironmentDetectedMsg delivers detected environment data.
+type EnvironmentDetectedMsg struct {
+	Result     environment.DetectionResult
+	Current    string
+	Preference *environment.Preference
+	Error      error
+}
