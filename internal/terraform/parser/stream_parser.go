@@ -69,6 +69,57 @@ type baseMessage struct {
 	Type terraform.StreamMessageType `json:"type"`
 }
 
+type streamResource struct {
+	Addr            string `json:"addr"`
+	Address         string `json:"address"`
+	Module          string `json:"module"`
+	Type            string `json:"type"`
+	Name            string `json:"name"`
+	ResourceType    string `json:"resource_type"`
+	ResourceName    string `json:"resource_name"`
+	ProviderName    string `json:"provider_name"`
+	ImpliedProvider string `json:"implied_provider"`
+}
+
+func (r streamResource) empty() bool {
+	return strings.TrimSpace(r.Addr) == "" &&
+		strings.TrimSpace(r.Address) == "" &&
+		strings.TrimSpace(r.ResourceType) == "" &&
+		strings.TrimSpace(r.Type) == "" &&
+		strings.TrimSpace(r.ResourceName) == "" &&
+		strings.TrimSpace(r.Name) == ""
+}
+
+func (r streamResource) toResourceInstance() terraform.ResourceInstance {
+	address := r.Addr
+	if address == "" {
+		address = r.Address
+	}
+	resourceType := r.ResourceType
+	if resourceType == "" {
+		resourceType = r.Type
+	}
+	resourceName := r.ResourceName
+	if resourceName == "" {
+		resourceName = r.Name
+	}
+	provider := r.ProviderName
+	if provider == "" {
+		provider = r.ImpliedProvider
+	}
+	var modulePath terraform.ModuleAddress
+	if strings.TrimSpace(r.Module) != "" {
+		modulePath = terraform.ModuleAddress{r.Module}
+	}
+	return terraform.ResourceInstance{
+		Address:      address,
+		ModulePath:   modulePath,
+		ResourceType: resourceType,
+		ResourceName: resourceName,
+		ProviderName: provider,
+	}
+}
+
 func parseStreamMessage(line []byte) (terraform.StreamMessage, error) {
 	var base baseMessage
 	if err := json.Unmarshal(line, &base); err != nil {
@@ -91,15 +142,34 @@ func parseStreamMessage(line []byte) (terraform.StreamMessage, error) {
 		}
 	case terraform.MessageTypePlannedChange:
 		var payload struct {
-			Change   terraform.Change           `json:"change"`
-			Resource terraform.ResourceInstance `json:"resource"`
+			Change   json.RawMessage `json:"change"`
+			Resource streamResource  `json:"resource"`
 		}
 		if err := json.Unmarshal(line, &payload); err != nil {
 			return msg, err
 		}
+		var change terraform.Change
+		if err := json.Unmarshal(payload.Change, &change); err != nil {
+			return msg, err
+		}
+		var changeMeta struct {
+			Actions  []string       `json:"actions"`
+			Action   string         `json:"action"`
+			Resource streamResource `json:"resource"`
+		}
+		if err := json.Unmarshal(payload.Change, &changeMeta); err != nil {
+			return msg, err
+		}
+		if len(change.Actions) == 0 && strings.TrimSpace(changeMeta.Action) != "" {
+			change.Actions = []string{changeMeta.Action}
+		}
+		resource := payload.Resource
+		if resource.empty() {
+			resource = changeMeta.Resource
+		}
 		msg.PlannedChange = &terraform.PlannedChange{
-			Resource: payload.Resource,
-			Change:   payload.Change,
+			Resource: resource.toResourceInstance(),
+			Change:   change,
 		}
 	case terraform.MessageTypeChangeSummary:
 		var payload struct {
@@ -118,12 +188,52 @@ func parseStreamMessage(line []byte) (terraform.StreamMessage, error) {
 	case terraform.MessageTypeApplyStart,
 		terraform.MessageTypeApplyProgress,
 		terraform.MessageTypeApplyComplete,
-		terraform.MessageTypeApplyErrored:
+		terraform.MessageTypeApplyErrored,
+		terraform.MessageTypeProvisionStart,
+		terraform.MessageTypeProvisionProgress,
+		terraform.MessageTypeProvisionComplete,
+		terraform.MessageTypeProvisionErrored,
+		terraform.MessageTypeRefreshStart,
+		terraform.MessageTypeRefreshComplete:
 		hook, err := decodeHook(line)
 		if err != nil {
 			return msg, err
 		}
 		msg.Hook = hook
+	case terraform.MessageTypeInitOutput:
+		var payload struct {
+			MessageCode string `json:"message_code"`
+		}
+		if err := json.Unmarshal(line, &payload); err != nil {
+			return msg, err
+		}
+		msg.InitOutput = &terraform.InitOutputMessage{
+			MessageCode: payload.MessageCode,
+		}
+	case terraform.MessageTypeTestFile:
+		var payload struct {
+			TestFile terraform.TestFileMessage `json:"test_file"`
+		}
+		if err := json.Unmarshal(line, &payload); err != nil {
+			return msg, err
+		}
+		msg.TestFile = &payload.TestFile
+	case terraform.MessageTypeTestRun:
+		var payload struct {
+			TestRun terraform.TestRunMessage `json:"test_run"`
+		}
+		if err := json.Unmarshal(line, &payload); err != nil {
+			return msg, err
+		}
+		msg.TestRun = &payload.TestRun
+	case terraform.MessageTypeTestSummary:
+		var payload struct {
+			TestSummary terraform.TestSummaryMessage `json:"test_summary"`
+		}
+		if err := json.Unmarshal(line, &payload); err != nil {
+			return msg, err
+		}
+		msg.TestSummary = &payload.TestSummary
 	case terraform.MessageTypeDiagnostic:
 		var payload struct {
 			Diagnostic terraform.Diagnostic `json:"diagnostic"`
@@ -134,15 +244,34 @@ func parseStreamMessage(line []byte) (terraform.StreamMessage, error) {
 		msg.Diagnostic = &payload.Diagnostic
 	case terraform.MessageTypeResourceDrift:
 		var payload struct {
-			Change   terraform.Change           `json:"change"`
-			Resource terraform.ResourceInstance `json:"resource"`
+			Change   json.RawMessage `json:"change"`
+			Resource streamResource  `json:"resource"`
 		}
 		if err := json.Unmarshal(line, &payload); err != nil {
 			return msg, err
 		}
+		var change terraform.Change
+		if err := json.Unmarshal(payload.Change, &change); err != nil {
+			return msg, err
+		}
+		var changeMeta struct {
+			Actions  []string       `json:"actions"`
+			Action   string         `json:"action"`
+			Resource streamResource `json:"resource"`
+		}
+		if err := json.Unmarshal(payload.Change, &changeMeta); err != nil {
+			return msg, err
+		}
+		if len(change.Actions) == 0 && strings.TrimSpace(changeMeta.Action) != "" {
+			change.Actions = []string{changeMeta.Action}
+		}
+		resource := payload.Resource
+		if resource.empty() {
+			resource = changeMeta.Resource
+		}
 		msg.ResourceDrift = &terraform.ResourceDrift{
-			Resource: payload.Resource,
-			Change:   payload.Change,
+			Resource: resource.toResourceInstance(),
+			Change:   change,
 		}
 	case terraform.MessageTypeOutputs:
 		var payload struct {

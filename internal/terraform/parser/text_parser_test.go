@@ -220,6 +220,42 @@ func TestTextParserNestedBlocksAndListValues(t *testing.T) {
 	}
 }
 
+func TestParseTerraformValueAndComments(t *testing.T) {
+	if got, _ := parseTerraformValue("true"); got != true {
+		t.Fatalf("expected true")
+	}
+	if got, _ := parseTerraformValue("null"); got != nil {
+		t.Fatalf("expected nil")
+	}
+	if got, _ := parseTerraformValue("3.14"); got == nil {
+		t.Fatalf("expected numeric value")
+	}
+	if got, _ := parseTerraformValue("\"value\""); got != "value" {
+		t.Fatalf("expected string value")
+	}
+	if got := stripInlineComment("value # comment"); got != "value" {
+		t.Fatalf("expected comment to be stripped")
+	}
+}
+
+func TestApplyHeredocValuePrefixes(t *testing.T) {
+	builder := newPlanBuilder(NewCleaner())
+	builder.before = make(map[string]any)
+	builder.after = make(map[string]any)
+	builder.pathStack = []string{"root"}
+
+	builder.applyHeredocValue("key", "-", "before")
+	builder.applyHeredocValue("key", "+", "after")
+	builder.applyHeredocValue("key", "~", "updated")
+
+	if builder.before["root"].(map[string]any)["key"] != "before" {
+		t.Fatalf("expected before value")
+	}
+	if builder.after["root"].(map[string]any)["key"] != "updated" {
+		t.Fatalf("expected after value to be updated")
+	}
+}
+
 func TestTextParserParseStreamMatchesParse(t *testing.T) {
 	input := `Terraform will perform the following actions:
 
