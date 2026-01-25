@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	envCacheFileName  = "env-cache.json"
 	envConfigFileName = "env-config.json"
 )
 
@@ -22,83 +21,12 @@ type Preference struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
-type cachedDetection struct {
-	DetectedAt      time.Time                `json:"detected_at"`
-	Strategy        StrategyType             `json:"strategy"`
-	Confidence      map[StrategyType]float64 `json:"confidence,omitempty"`
-	ConfidenceScore float64                  `json:"confidence_score,omitempty"`
-	Workspaces      []string                 `json:"workspaces,omitempty"`
-	FolderPaths     []string                 `json:"folder_paths,omitempty"`
-	Warnings        []string                 `json:"warnings,omitempty"`
-	BaseDir         string                   `json:"base_dir,omitempty"`
-}
-
 func cacheDir(baseDir string) string {
 	return filepath.Join(baseDir, ".lazytf")
 }
 
-func cacheFilePath(baseDir string) string {
-	return filepath.Join(cacheDir(baseDir), envCacheFileName)
-}
-
 func preferenceFilePath(baseDir string) string {
 	return filepath.Join(cacheDir(baseDir), envConfigFileName)
-}
-
-func loadDetectionCache(baseDir string, ttl time.Duration) (DetectionResult, bool, error) {
-	if strings.TrimSpace(baseDir) == "" {
-		return DetectionResult{}, false, errors.New("base dir required for cache")
-	}
-	if ttl <= 0 {
-		return DetectionResult{}, false, nil
-	}
-	path := cacheFilePath(baseDir)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return DetectionResult{}, false, nil
-		}
-		return DetectionResult{}, false, fmt.Errorf("read environment cache: %w", err)
-	}
-
-	var cached cachedDetection
-	if err := json.Unmarshal(data, &cached); err != nil {
-		return DetectionResult{}, false, fmt.Errorf("decode environment cache: %w", err)
-	}
-	if cached.DetectedAt.IsZero() || time.Since(cached.DetectedAt) > ttl {
-		return DetectionResult{}, false, nil
-	}
-	result := DetectionResult{
-		Strategy:        cached.Strategy,
-		Confidence:      cached.Confidence,
-		ConfidenceScore: cached.ConfidenceScore,
-		Workspaces:      cached.Workspaces,
-		FolderPaths:     cached.FolderPaths,
-		Warnings:        cached.Warnings,
-		BaseDir:         cached.BaseDir,
-	}
-	if result.BaseDir == "" {
-		result.BaseDir = baseDir
-	}
-	result.Environments = BuildEnvironments(result, "")
-	return result, true, nil
-}
-
-func saveDetectionCache(baseDir string, result DetectionResult) error {
-	if strings.TrimSpace(baseDir) == "" {
-		return errors.New("base dir required for cache")
-	}
-	cache := cachedDetection{
-		DetectedAt:      time.Now(),
-		Strategy:        result.Strategy,
-		Confidence:      result.Confidence,
-		ConfidenceScore: result.ConfidenceScore,
-		Workspaces:      result.Workspaces,
-		FolderPaths:     result.FolderPaths,
-		Warnings:        result.Warnings,
-		BaseDir:         result.BaseDir,
-	}
-	return writeJSONAtomic(cacheFilePath(baseDir), cache)
 }
 
 // LoadPreference reads the user's environment preference.
