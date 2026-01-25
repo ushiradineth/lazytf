@@ -5,7 +5,6 @@ package e2e_test
 import (
 	"context"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -36,9 +35,9 @@ func TestE2EPlanApplyHistory(t *testing.T) {
 		t.Fatalf("init failed: %s", initResult.Output)
 	}
 
-	plan, planOutput, planResult := planWithJSON(t, executor, ctx)
+	plan, planOutput, planResult := planWithText(t, executor, ctx)
 	if plan == nil || len(plan.Resources) == 0 {
-		t.Fatal("expected planned resources from JSON output")
+		t.Fatal("expected planned resources from text output")
 	}
 
 	applyResult, applyOutput := applyAutoApprove(t, executor, ctx)
@@ -81,17 +80,9 @@ func TestE2EPlanApplyHistory(t *testing.T) {
 	}
 }
 
-func TestE2EJSONPlanModuleFixture(t *testing.T) {
+func TestE2EPlanModuleFixture(t *testing.T) {
 	workdir := copyFixture(t, "module")
 	executor := newTerraformExecutor(t, workdir)
-
-	supports, err := executor.SupportsJSON()
-	if err != nil {
-		t.Skipf("terraform version unavailable: %v", err)
-	}
-	if !supports {
-		t.Skip("terraform does not support -json streaming output")
-	}
 
 	ctx := context.Background()
 	initResult, err := executor.Init(ctx)
@@ -106,9 +97,9 @@ func TestE2EJSONPlanModuleFixture(t *testing.T) {
 		t.Fatalf("init failed: %s", initResult.Output)
 	}
 
-	plan, _, _ := planWithJSON(t, executor, ctx)
+	plan, _, _ := planWithText(t, executor, ctx)
 	if plan == nil {
-		t.Fatal("expected plan from JSON output")
+		t.Fatal("expected plan from text output")
 	}
 	found := false
 	for _, resource := range plan.Resources {
@@ -208,35 +199,15 @@ func newTerraformExecutor(t *testing.T, workdir string) *terraform.Executor {
 	return executor
 }
 
-func planWithJSON(t *testing.T, executor *terraform.Executor, ctx context.Context) (*terraform.Plan, string, *terraform.ExecutionResult) {
+func planWithText(t *testing.T, executor *terraform.Executor, ctx context.Context) (*terraform.Plan, string, *terraform.ExecutionResult) {
 	t.Helper()
-	result, output, err := executor.Plan(ctx, terraform.PlanOptions{UseJSON: true})
+	result, output, err := executor.Plan(ctx, terraform.PlanOptions{})
 	if err != nil {
 		t.Fatalf("plan error: %v", err)
 	}
 
-	reader, writer := io.Pipe()
-	writeDone := make(chan struct{})
-	var outputBuf strings.Builder
-	go func() {
-		defer close(writeDone)
-		for line := range output {
-			outputBuf.WriteString(line)
-			outputBuf.WriteString("\n")
-			if _, writeErr := io.WriteString(writer, line+"\n"); writeErr != nil {
-				_ = writer.CloseWithError(writeErr)
-				return
-			}
-		}
-		_ = writer.Close()
-	}()
-
-	parser := tfparser.NewStreamParser()
-	if err := parser.Parse(reader, nil); err != nil {
-		t.Fatalf("parse JSON plan: %v", err)
-	}
+	outputText := collectOutput(output)
 	<-result.Done()
-	<-writeDone
 
 	if result.ExitCode != 0 {
 		t.Fatalf("plan failed: %s", result.Output)
@@ -245,7 +216,13 @@ func planWithJSON(t *testing.T, executor *terraform.Executor, ctx context.Contex
 		t.Fatalf("plan error: %v", result.Error)
 	}
 
-	return parser.GetAccumulatedPlan(), strings.TrimRight(outputBuf.String(), "\n"), result
+	parser := tfparser.NewTextParser()
+	plan, parseErr := parser.Parse(strings.NewReader(outputText))
+	if parseErr != nil {
+		t.Fatalf("parse text plan: %v", parseErr)
+	}
+
+	return plan, outputText, result
 }
 
 func applyAutoApprove(t *testing.T, executor *terraform.Executor, ctx context.Context) (*terraform.ExecutionResult, string) {

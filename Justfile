@@ -29,7 +29,7 @@ build:
 	@echo "Build complete: bin/{{binary_name}}"
 
 # Install the application to $GOPATH/bin
-install:
+install: build
     @echo "Installing {{binary_name}}..."
     go install {{main_package}}
     @echo "Install complete: {{binary_name}} installed to $(go env GOPATH)/bin"

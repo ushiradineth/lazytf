@@ -110,7 +110,6 @@ type PlanOptions struct {
 	Flags   []string
 	Timeout time.Duration
 	Env     []string
-	UseJSON bool
 }
 
 // ApplyOptions controls apply execution.
@@ -119,7 +118,6 @@ type ApplyOptions struct {
 	Timeout     time.Duration
 	Env         []string
 	AutoApprove bool
-	UseJSON     bool
 }
 
 // ShowOptions controls terraform show execution.
@@ -181,9 +179,6 @@ func (e *Executor) Plan(ctx context.Context, opts PlanOptions) (*ExecutionResult
 	args := []string{"plan"}
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
-	if opts.UseJSON && !containsFlag(args, "-json") {
-		args = append(args, "-json")
-	}
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
 }
 
@@ -192,21 +187,18 @@ func (e *Executor) Apply(ctx context.Context, opts ApplyOptions) (*ExecutionResu
 	args := []string{"apply"}
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
-	if opts.UseJSON && !containsFlag(args, "-json") {
-		args = append(args, "-json")
-	}
 	if opts.AutoApprove && !containsFlag(args, "-auto-approve") {
 		args = append(args, "-auto-approve")
 	}
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
 }
 
-// ShowJSON runs terraform show -json on a plan file.
-func (e *Executor) ShowJSON(ctx context.Context, planFile string, opts ShowOptions) (*ExecutionResult, error) {
+// Show runs terraform show on a plan file.
+func (e *Executor) Show(ctx context.Context, planFile string, opts ShowOptions) (*ExecutionResult, error) {
 	if strings.TrimSpace(planFile) == "" {
 		return nil, errors.New("plan file path is required")
 	}
-	args := []string{"show", "-json", planFile}
+	args := []string{"show", planFile}
 	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
 	if err != nil {
 		return nil, err
@@ -231,19 +223,6 @@ func (e *Executor) Version() (string, error) {
 		return "", result.Error
 	}
 	return strings.TrimSpace(result.Stdout), nil
-}
-
-// SupportsJSON checks if the terraform version supports streaming JSON output.
-func (e *Executor) SupportsJSON() (bool, error) {
-	versionOutput, err := e.Version()
-	if err != nil {
-		return false, err
-	}
-	parsed, err := parseTerraformVersion(versionOutput)
-	if err != nil {
-		return false, err
-	}
-	return versionAtLeast(parsed, semVersion{major: 0, minor: 15, patch: 3}), nil
 }
 
 // WorkDir returns the executor working directory.
@@ -485,42 +464,4 @@ func containsFlag(flags []string, target string) bool {
 		}
 	}
 	return false
-}
-
-type semVersion struct {
-	major int
-	minor int
-	patch int
-}
-
-func parseTerraformVersion(output string) (semVersion, error) {
-	lines := strings.Split(output, "\n")
-	if len(lines) == 0 {
-		return semVersion{}, errors.New("empty version output")
-	}
-	first := strings.TrimSpace(lines[0])
-	first = strings.TrimPrefix(first, "Terraform ")
-	first = strings.TrimPrefix(first, "v")
-	first = strings.TrimPrefix(first, "Terraform v")
-	first = strings.TrimSpace(first)
-	if idx := strings.IndexFunc(first, func(r rune) bool { return (r < '0' || r > '9') && r != '.' }); idx >= 0 {
-		first = first[:idx]
-	}
-
-	var v semVersion
-	_, err := fmt.Sscanf(first, "%d.%d.%d", &v.major, &v.minor, &v.patch)
-	if err != nil {
-		return semVersion{}, fmt.Errorf("parse version: %w", err)
-	}
-	return v, nil
-}
-
-func versionAtLeast(version semVersion, minimum semVersion) bool {
-	if version.major != minimum.major {
-		return version.major > minimum.major
-	}
-	if version.minor != minimum.minor {
-		return version.minor > minimum.minor
-	}
-	return version.patch >= minimum.patch
 }

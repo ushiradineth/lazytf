@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"context"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -67,17 +66,9 @@ func TestIntegrationPlanApplyWorkflow(t *testing.T) {
 	}
 }
 
-func TestIntegrationJSONPlanParsingModuleFixture(t *testing.T) {
+func TestIntegrationPlanParsingModuleFixture(t *testing.T) {
 	workdir := copyFixture(t, "module")
 	executor := newTerraformExecutor(t, workdir)
-
-	supports, err := executor.SupportsJSON()
-	if err != nil {
-		t.Skipf("terraform version unavailable: %v", err)
-	}
-	if !supports {
-		t.Skip("terraform does not support -json streaming output")
-	}
 
 	ctx := context.Background()
 	initResult, err := executor.Init(ctx)
@@ -89,9 +80,9 @@ func TestIntegrationJSONPlanParsingModuleFixture(t *testing.T) {
 		t.Fatalf("init failed: %s", initResult.Output)
 	}
 
-	plan := planWithJSON(t, executor, ctx)
+	plan := planWithText(t, executor, ctx)
 	if plan == nil {
-		t.Fatal("expected plan from JSON stream")
+		t.Fatal("expected plan from text output")
 	}
 	if len(plan.Resources) == 0 {
 		t.Fatal("expected planned resources")
@@ -187,32 +178,15 @@ func newTerraformExecutor(t *testing.T, workdir string) *terraform.Executor {
 	return executor
 }
 
-func planWithJSON(t *testing.T, executor *terraform.Executor, ctx context.Context) *terraform.Plan {
+func planWithText(t *testing.T, executor *terraform.Executor, ctx context.Context) *terraform.Plan {
 	t.Helper()
-	result, output, err := executor.Plan(ctx, terraform.PlanOptions{UseJSON: true})
+	result, output, err := executor.Plan(ctx, terraform.PlanOptions{})
 	if err != nil {
 		t.Fatalf("plan error: %v", err)
 	}
 
-	reader, writer := io.Pipe()
-	writeDone := make(chan struct{})
-	go func() {
-		defer close(writeDone)
-		for line := range output {
-			if _, writeErr := io.WriteString(writer, line+"\n"); writeErr != nil {
-				_ = writer.CloseWithError(writeErr)
-				return
-			}
-		}
-		_ = writer.Close()
-	}()
-
-	parser := tfparser.NewStreamParser()
-	if err := parser.Parse(reader, nil); err != nil {
-		t.Fatalf("parse JSON plan: %v", err)
-	}
+	outputText := collectOutput(output)
 	<-result.Done()
-	<-writeDone
 
 	if result.ExitCode != 0 {
 		t.Fatalf("plan failed: %s", result.Output)
@@ -221,5 +195,20 @@ func planWithJSON(t *testing.T, executor *terraform.Executor, ctx context.Contex
 		t.Fatalf("plan error: %v", result.Error)
 	}
 
-	return parser.GetAccumulatedPlan()
+	parser := tfparser.NewTextParser()
+	plan, parseErr := parser.Parse(strings.NewReader(outputText))
+	if parseErr != nil {
+		t.Fatalf("parse text plan: %v", parseErr)
+	}
+
+	return plan
+}
+
+func collectOutput(output <-chan string) string {
+	var buf strings.Builder
+	for line := range output {
+		buf.WriteString(line)
+		buf.WriteString("\n")
+	}
+	return strings.TrimRight(buf.String(), "\n")
 }

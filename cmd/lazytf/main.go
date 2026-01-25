@@ -40,9 +40,6 @@ var (
 	autoPlan            bool
 	tfFlags             string
 	workDir             string
-	useJSON             = true
-	forceJSON           bool
-	noJSON              bool
 	envName             string
 	presetName          string
 	workspaceName       string
@@ -87,16 +84,13 @@ showing only changed attributes in a git-style diff format.`,
 		RunE:    run,
 	}
 
-	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan JSON file")
+	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan output file")
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
 	rootCmd.Flags().BoolVar(&readOnlyMode, "read-only", false, "Run in read-only mode (no terraform execution)")
 	rootCmd.Flags().BoolVar(&autoPlan, "auto-plan", false, "Automatically run terraform plan on startup")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
 	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
-	rootCmd.Flags().BoolVar(&useJSON, "json", true, "Enable streaming JSON output (auto-detect by default)")
-	rootCmd.Flags().BoolVar(&forceJSON, "force-json", false, "Force JSON streaming even if version check fails")
-	rootCmd.Flags().BoolVar(&noJSON, "no-json", false, "Disable JSON streaming output")
 	rootCmd.Flags().StringVar(&envName, "env", "", "Environment name to select")
 	rootCmd.Flags().StringVar(&presetName, "preset", "", "Environment preset to apply")
 	rootCmd.Flags().StringVar(&workspaceName, "workspace", "", "Terraform workspace to select")
@@ -174,6 +168,7 @@ func run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		appStyles := styles.NewStyles(appTheme)
+		flags = stripFlag(flags, "-json")
 		if workspaceName != "" && folderPath != "" {
 			return errors.New("cannot use --workspace and --folder together")
 		}
@@ -205,9 +200,6 @@ func run(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize terraform: %w", err)
 		}
-		if noJSON {
-			useJSON = false
-		}
 
 		selectedEnv := envName
 		if workspaceName != "" {
@@ -238,8 +230,6 @@ func run(cmd *cobra.Command, args []string) error {
 			Executor:       exec,
 			AutoPlan:       autoPlan,
 			Flags:          flags,
-			UseJSON:        useJSON,
-			ForceJSON:      forceJSON,
 			WorkDir:        workDir,
 			EnvName:        selectedEnv,
 			HistoryStore:   historyStore,
@@ -261,8 +251,8 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.New("no plan file specified. Usage: lazytf <plan-file> or lazytf --file <plan-file>")
 	}
 
-	// Parse the plan
-	parser := parser.NewJSONParser()
+	// Parse the plan output
+	parser := parser.NewTextParser()
 	plan, err := parser.ParseFile(planPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse plan file: %w", err)
@@ -333,6 +323,20 @@ func splitFlags(flags string) []string {
 	}
 	flush()
 	return args
+}
+
+func stripFlag(flags []string, target string) []string {
+	if len(flags) == 0 {
+		return flags
+	}
+	filtered := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		if flag == target {
+			continue
+		}
+		filtered = append(filtered, flag)
+	}
+	return filtered
 }
 
 func resolveFolderSelection(baseDir, folder string) (string, error) {

@@ -42,9 +42,20 @@ func (p *TextParser) Parse(input io.Reader) (*terraform.Plan, error) {
 
 	plan := builder.finish()
 	if len(plan.Resources) == 0 && !builder.sawNoChanges {
-		return nil, errors.New("no resource changes parsed from plan output; try JSON mode")
+		return nil, errors.New("no resource changes parsed from plan output")
 	}
 	return plan, nil
+}
+
+// ParseFile parses text plan output from a file path.
+func (p *TextParser) ParseFile(filePath string) (*terraform.Plan, error) {
+	file, err := openFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	return p.Parse(file)
 }
 
 // ParseStream parses plan data from a line channel.
@@ -60,7 +71,7 @@ func (p *TextParser) ParseStream(lines <-chan string) (*terraform.Plan, error) {
 
 	plan := builder.finish()
 	if len(plan.Resources) == 0 && !builder.sawNoChanges {
-		return nil, errors.New("no resource changes parsed from plan output; try JSON mode")
+		return nil, errors.New("no resource changes parsed from plan output")
 	}
 	return plan, nil
 }

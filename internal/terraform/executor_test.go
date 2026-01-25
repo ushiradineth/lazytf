@@ -331,7 +331,7 @@ func TestExecutionResultDoneNil(t *testing.T) {
 	}
 }
 
-func TestExecutorInitAndShowJSON(t *testing.T) {
+func TestExecutorInitAndShow(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell script test not supported on windows")
 	}
@@ -351,31 +351,12 @@ func TestExecutorInitAndShowJSON(t *testing.T) {
 	if err := os.WriteFile(planFile, []byte("plan"), 0o644); err != nil {
 		t.Fatalf("write plan: %v", err)
 	}
-	showResult, err := exec.ShowJSON(context.Background(), planFile, ShowOptions{})
+	showResult, err := exec.Show(context.Background(), planFile, ShowOptions{})
 	if err != nil {
-		t.Fatalf("show json error: %v", err)
+		t.Fatalf("show error: %v", err)
 	}
-	if !strings.Contains(showResult.Output, "format_version") {
+	if !strings.Contains(showResult.Output, "show output") {
 		t.Fatalf("unexpected show output: %q", showResult.Output)
-	}
-}
-
-func TestExecutorSupportsJSON(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell script test not supported on windows")
-	}
-	dir := t.TempDir()
-	tfPath := writeFakeTerraform(t, dir)
-	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
-	if err != nil {
-		t.Fatalf("new executor: %v", err)
-	}
-	supported, err := exec.SupportsJSON()
-	if err != nil {
-		t.Fatalf("supports json error: %v", err)
-	}
-	if !supported {
-		t.Fatalf("expected json support")
 	}
 }
 
@@ -418,26 +399,6 @@ func TestWithTimeoutOption(t *testing.T) {
 	}
 }
 
-func TestParseTerraformVersion(t *testing.T) {
-	if _, err := parseTerraformVersion(""); err == nil {
-		t.Fatalf("expected error for empty version")
-	}
-	parsed, err := parseTerraformVersion("Terraform v1.2.3\n")
-	if err != nil {
-		t.Fatalf("parse version: %v", err)
-	}
-	if parsed.major != 1 || parsed.minor != 2 || parsed.patch != 3 {
-		t.Fatalf("unexpected parsed version: %#v", parsed)
-	}
-	parsed, err = parseTerraformVersion("Terraform v1.2.3-beta")
-	if err != nil {
-		t.Fatalf("parse version: %v", err)
-	}
-	if !versionAtLeast(parsed, semVersion{major: 1, minor: 2, patch: 3}) {
-		t.Fatalf("expected version to be at least minimum")
-	}
-}
-
 func TestResolveTerraformPath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell script test not supported on windows")
@@ -469,15 +430,6 @@ func TestExecutorWorkDirNil(t *testing.T) {
 	}
 }
 
-func TestVersionAtLeast(t *testing.T) {
-	if !versionAtLeast(semVersion{major: 1, minor: 2, patch: 3}, semVersion{major: 1, minor: 2, patch: 0}) {
-		t.Fatalf("expected version to be at least minimum")
-	}
-	if versionAtLeast(semVersion{major: 0, minor: 14, patch: 0}, semVersion{major: 0, minor: 15, patch: 0}) {
-		t.Fatalf("expected version to be below minimum")
-	}
-}
-
 func writeFakeTerraform(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "terraform")
@@ -489,7 +441,7 @@ if [ "$cmd" = "version" ]; then
   exit 0
 fi
 if [ "$cmd" = "show" ]; then
-  echo "{\"format_version\":\"1.0\",\"resource_changes\":[]}"
+  echo "show output"
   exit 0
 fi
 if [ "$cmd" = "plan" ] || [ "$cmd" = "apply" ]; then

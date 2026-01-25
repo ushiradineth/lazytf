@@ -393,7 +393,7 @@ func TestRun_InvalidTheme(t *testing.T) {
 	useTempConfig(t)
 
 	readOnlyMode = true
-	planFile = filepath.Join("..", "..", "testdata", "plans", "sample.json")
+	planFile = filepath.Join("..", "..", "testdata", "plans", "sample.txt")
 	themeName = "missing-theme"
 
 	err := run(&cobra.Command{}, nil)
@@ -421,7 +421,7 @@ func TestRun_PlanArgDisablesExecute(t *testing.T) {
 		return nil
 	}
 
-	err := run(&cobra.Command{}, []string{filepath.Join("..", "..", "testdata", "plans", "sample.json")})
+	err := run(&cobra.Command{}, []string{filepath.Join("..", "..", "testdata", "plans", "sample.txt")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestRunMainSuccess(t *testing.T) {
 	})
 	useTempConfig(t)
 
-	sample := filepath.Join("..", "..", "testdata", "plans", "sample.json")
+	sample := filepath.Join("..", "..", "testdata", "plans", "sample.txt")
 	os.Args = []string{"lazytf", "--read-only", "--file", sample}
 	planFile = ""
 	readOnlyMode = true
