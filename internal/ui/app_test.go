@@ -3,8 +3,6 @@ package ui
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -17,7 +15,6 @@ import (
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
-	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
 	"github.com/ushiradineth/lazytf/internal/utils"
@@ -109,54 +106,6 @@ func TestApplyWithoutPlanShowsToast(t *testing.T) {
 	}
 }
 
-func TestModelRenderFilterBarCounts(t *testing.T) {
-	plan := &terraform.Plan{
-		Resources: []terraform.ResourceChange{
-			{Address: "a", Action: terraform.ActionCreate},
-			{Address: "b", Action: terraform.ActionUpdate},
-			{Address: "c", Action: terraform.ActionDelete},
-			{Address: "d", Action: terraform.ActionReplace},
-		},
-	}
-	m := NewModel(plan)
-	m.ready = true
-	m.width = 80
-
-	bar := m.renderFilterBar()
-	for _, want := range []string{"Create (1)", "Update (1)", "Delete (1)", "Replace (1)"} {
-		if !strings.Contains(bar, want) {
-			t.Fatalf("missing %q in filter bar: %q", want, bar)
-		}
-	}
-}
-
-func TestSearchFocusAndClear(t *testing.T) {
-	m := NewModel(&terraform.Plan{
-		Resources: []terraform.ResourceChange{
-			{Address: "aws_instance.web", Action: terraform.ActionCreate},
-		},
-	})
-	m.ready = true
-
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-	if !m.searching {
-		t.Fatalf("expected searching to be true")
-	}
-
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
-	if m.searchInput.Value() == "" {
-		t.Fatalf("expected search input to update")
-	}
-
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.searching {
-		t.Fatalf("expected searching to be false")
-	}
-	if m.searchInput.Value() != "" {
-		t.Fatalf("expected search input cleared")
-	}
-}
-
 func TestHelpBlocksInput(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.ready = true
@@ -170,8 +119,13 @@ func TestHelpBlocksInput(t *testing.T) {
 
 func TestModelInitReturnsCommand(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
+	if cmd := m.Init(); cmd != nil {
+		t.Fatalf("expected nil init command in non-execution mode")
+	}
+
+	m.executionMode = true
 	if cmd := m.Init(); cmd == nil {
-		t.Fatalf("expected init command to be set")
+		t.Fatalf("expected init command to be set in execution mode")
 	}
 }
 
@@ -188,15 +142,21 @@ func TestRenderMainContentSplitAndSingle(t *testing.T) {
 	m.updateLayout()
 
 	split := m.renderMainContent()
-	if split == m.resourceList.View() {
-		t.Fatalf("expected split layout to differ from list-only view")
+	// With new panel layout, main content includes panel borders and layout
+	if split == "" {
+		t.Fatalf("expected non-empty split layout")
 	}
 
 	m.width = 80
 	m.updateLayout()
 	single := m.renderMainContent()
-	if single != m.resourceList.View() {
-		t.Fatalf("expected list-only view when width is narrow")
+	// New panel system always renders panel layout, even with narrow width
+	if single == "" {
+		t.Fatalf("expected non-empty single layout")
+	}
+	// Verify that the resource list content is present in the output
+	if !strings.Contains(single, "Resources") {
+		t.Fatalf("expected Resources panel title in output")
 	}
 }
 
@@ -253,11 +213,13 @@ func TestApplyCompleteTransitions(t *testing.T) {
 	m := NewModel(plan)
 	m.executionMode = true
 	m.applyView = views.NewApplyView(m.styles)
-	m.execView = viewApplyOutput
+	m.applyRunning = true
+	m.execView = viewMain
 
 	m.handleApplyComplete(ApplyCompleteMsg{Success: true, Result: &terraform.ExecutionResult{}})
-	if m.execView != viewApplyOutput {
-		t.Fatalf("expected to stay on output view after success")
+	// In new layout, we stay in viewMain after operations complete
+	if m.execView != viewMain {
+		t.Fatalf("expected to stay in main view after success, got %d", m.execView)
 	}
 	if m.plan == nil || len(m.plan.Resources) != 0 {
 		t.Fatalf("expected plan to be cleared after apply")
@@ -268,11 +230,13 @@ func TestApplyCompleteFailureStaysOnOutput(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
 	m.applyView = views.NewApplyView(m.styles)
-	m.execView = viewApplyOutput
+	m.applyRunning = true
+	m.execView = viewMain
 
 	m.handleApplyComplete(ApplyCompleteMsg{Success: false, Error: errors.New("fail"), Result: &terraform.ExecutionResult{}})
-	if m.execView != viewApplyOutput {
-		t.Fatalf("expected to remain on output view on failure")
+	// In new layout, we stay in viewMain even on failure
+	if m.execView != viewMain {
+		t.Fatalf("expected to remain in main view on failure, got %d", m.execView)
 	}
 }
 
@@ -373,16 +337,20 @@ func TestPlanConfirmApplySuccessFlow(t *testing.T) {
 		cmd()
 	}
 	handled, cmd = m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	if !handled || m.execView != viewApplyOutput {
-		t.Fatalf("expected apply output view")
+	if !handled {
+		t.Fatalf("expected key to be handled")
 	}
 	if cmd != nil {
 		cmd()
 	}
 
+	// In the new layout, we stay in viewMain and main area switches to logs mode
 	m.handleApplyComplete(ApplyCompleteMsg{Success: true, Result: &terraform.ExecutionResult{}})
-	if m.execView != viewApplyOutput {
-		t.Fatalf("expected to stay on output view after apply")
+	if m.execView != viewMain {
+		t.Fatalf("expected to stay in main view after apply, got %d", m.execView)
+	}
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
+		t.Fatalf("expected main area to switch back to diff mode after apply")
 	}
 }
 
@@ -394,8 +362,9 @@ func TestPlanFailureStaysOnOutputView(t *testing.T) {
 
 	m.beginPlan()
 	m.handlePlanComplete(PlanCompleteMsg{Error: errors.New("plan failed")})
-	if m.execView != viewPlanOutput {
-		t.Fatalf("expected to stay on plan output view")
+	// In the new layout, we stay in viewMain with main area in diff mode after operations complete
+	if m.execView != viewMain {
+		t.Fatalf("expected to stay in main view, got %d", m.execView)
 	}
 	if !strings.Contains(m.applyView.View(), "Plan failed") {
 		t.Fatalf("expected plan failure footer")
@@ -575,28 +544,25 @@ func TestSelectOperationOutput(t *testing.T) {
 
 func TestBuildCommandAddsFlags(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
-	cmd := m.buildCommand("plan", []string{"-var-file=dev.tfvars"}, true, true)
-	if !strings.Contains(cmd, "-json") {
-		t.Fatalf("expected json flag in command: %s", cmd)
-	}
+	cmd := m.buildCommand("apply", []string{"-var-file=dev.tfvars"}, true)
 	if !strings.Contains(cmd, "-auto-approve") {
 		t.Fatalf("expected auto-approve flag in command: %s", cmd)
 	}
-
-	cmd = m.buildCommand("apply", []string{"-json", "-auto-approve"}, true, true)
-	if strings.Count(cmd, "-json") != 1 {
-		t.Fatalf("expected single json flag in command: %s", cmd)
+	if !strings.Contains(cmd, "-var-file=dev.tfvars") {
+		t.Fatalf("expected custom flag in command: %s", cmd)
 	}
+
+	cmd = m.buildCommand("apply", []string{"-auto-approve"}, true)
 	if strings.Count(cmd, "-auto-approve") != 1 {
 		t.Fatalf("expected single auto-approve flag in command: %s", cmd)
 	}
 }
 
 func TestContainsFlag(t *testing.T) {
-	if !containsFlag([]string{"plan", "-json"}, "-json") {
+	if !containsFlag([]string{"apply", "-auto-approve"}, "-auto-approve") {
 		t.Fatalf("expected to find flag")
 	}
-	if containsFlag([]string{"plan", "-out=plan"}, "-json") {
+	if containsFlag([]string{"plan", "-out=plan"}, "-auto-approve") {
 		t.Fatalf("did not expect to find flag")
 	}
 }
@@ -640,93 +606,22 @@ func TestSetEnvironmentOptions(t *testing.T) {
 func TestUpdateExecutionViewForStreaming(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.execView = viewMain
-	m.planRunning = true
-	m.showCompactProgress = true
+	m.execView = viewPlanConfirm
 	m.updateExecutionViewForStreaming()
-	if m.execView != viewCompactProgress {
-		t.Fatalf("expected compact progress view, got %v", m.execView)
+	if m.execView != viewPlanConfirm {
+		t.Fatalf("expected plan confirm view to remain, got %v", m.execView)
 	}
 
-	m.planRunning = false
-	m.applyRunning = true
-	m.showCompactProgress = false
-	m.showDiagnostics = true
+	m.execView = viewHistoryDetail
 	m.updateExecutionViewForStreaming()
-	if m.execView != viewDiagnostics {
-		t.Fatalf("expected diagnostics view, got %v", m.execView)
+	if m.execView != viewHistoryDetail {
+		t.Fatalf("expected history detail view to remain, got %v", m.execView)
 	}
 
-	m.showDiagnostics = false
-	m.updateExecutionViewForStreaming()
-	if m.execView != viewApplyOutput {
-		t.Fatalf("expected apply output view, got %v", m.execView)
-	}
-
-	m.applyRunning = false
-	m.execView = viewApplyOutput
+	m.execView = viewCommandLog
 	m.updateExecutionViewForStreaming()
 	if m.execView != viewMain {
-		t.Fatalf("expected return to main view, got %v", m.execView)
-	}
-}
-
-func TestHandleStreamMessageUpdatesOperationState(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.operationState = terraform.NewOperationState()
-
-	startMsg := terraform.StreamMessage{
-		Type: terraform.MessageTypeApplyStart,
-		Hook: &terraform.HookMessage{
-			Resource: terraform.ResourceInstance{Address: "aws_instance.web"},
-			Action:   "create",
-		},
-	}
-	if cmd := m.handleStreamMessage(startMsg); cmd == nil {
-		t.Fatalf("expected stream command")
-	}
-	op := m.operationState.GetResourceStatus("aws_instance.web")
-	if op == nil || op.Status != terraform.StatusInProgress || op.Action != terraform.ActionCreate {
-		t.Fatalf("expected in-progress create status")
-	}
-
-	completeMsg := terraform.StreamMessage{
-		Type: terraform.MessageTypeApplyComplete,
-		Hook: &terraform.HookMessage{
-			Address: "aws_instance.web",
-			IDValue: "i-123",
-		},
-	}
-	m.handleStreamMessage(completeMsg)
-	op = m.operationState.GetResourceStatus("aws_instance.web")
-	if op == nil || op.Status != terraform.StatusComplete || op.IDValue != "i-123" {
-		t.Fatalf("expected completed resource with id")
-	}
-
-	errorMsg := terraform.StreamMessage{
-		Type: terraform.MessageTypeApplyErrored,
-		Hook: &terraform.HookMessage{
-			Address: "aws_instance.web",
-			Error:   "boom",
-		},
-	}
-	m.handleStreamMessage(errorMsg)
-	op = m.operationState.GetResourceStatus("aws_instance.web")
-	if op == nil || op.Status != terraform.StatusErrored || op.Error == "" {
-		t.Fatalf("expected errored resource with error")
-	}
-
-	diagMsg := terraform.StreamMessage{
-		Type: terraform.MessageTypeDiagnostic,
-		Diagnostic: &terraform.Diagnostic{
-			Severity: "error",
-			Summary:  "bad",
-		},
-	}
-	m.handleStreamMessage(diagMsg)
-	diags := m.operationState.GetDiagnostics()
-	if len(diags) != 1 || diags[0].Summary != "bad" {
-		t.Fatalf("expected diagnostic added")
+		t.Fatalf("expected main view, got %v", m.execView)
 	}
 }
 
@@ -746,28 +641,6 @@ func TestAddErrorDiagnostic(t *testing.T) {
 	}
 	if diags[0].Summary != "Plan failed" || !strings.Contains(diags[0].Detail, "details") {
 		t.Fatalf("unexpected diagnostic detail: %q", diags[0].Detail)
-	}
-}
-
-func TestModalEnvSelectorErrorToast(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.ready = true
-	m.modalState = ModalEnvSelector
-	m.envOptions = []environment.Environment{
-		{Name: "invalid", Strategy: environment.StrategyUnknown},
-	}
-	m.envView.SetMode(views.EnvViewEnvironments)
-	m.envView.SetEnvironments(m.envOptions, environment.StrategyUnknown, "", ".")
-
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatalf("expected toast clear command")
-	}
-	if !strings.Contains(m.toastMessage, "Failed to switch environment") {
-		t.Fatalf("expected environment error toast, got %q", m.toastMessage)
-	}
-	if !m.toastIsError {
-		t.Fatalf("expected error toast")
 	}
 }
 
@@ -824,22 +697,6 @@ func TestTruncateOutput(t *testing.T) {
 	}
 }
 
-func TestChanToReader(t *testing.T) {
-	ch := make(chan string, 2)
-	ch <- "one"
-	ch <- "two"
-	close(ch)
-
-	reader := chanToReader(ch)
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("read data: %v", err)
-	}
-	if got := string(data); got != "one\ntwo\n" {
-		t.Fatalf("unexpected reader output: %q", got)
-	}
-}
-
 func TestWaitPlanCompleteCmdNilResult(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	msg := m.waitPlanCompleteCmd(nil)()
@@ -866,28 +723,6 @@ func TestRenderSettings(t *testing.T) {
 	out := m.renderSettings()
 	if !strings.Contains(out, "No configuration loaded.") {
 		t.Fatalf("expected settings fallback text")
-	}
-}
-
-func TestRenderEnvSelector(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.width = 80
-	m.height = 24
-	m.envOptions = []environment.Environment{
-		{Name: "dev", Strategy: environment.StrategyWorkspace},
-	}
-	m.envCurrent = "dev"
-	m.envStrategy = environment.StrategyWorkspace
-	m.envDetection = &environment.DetectionResult{Warnings: []string{"warning"}}
-	m.envView.SetMode(views.EnvViewEnvironments)
-	m.refreshEnvSelector()
-
-	out := m.renderEnvSelector()
-	if !strings.Contains(out, "Select Environment") || !strings.Contains(out, "dev") {
-		t.Fatalf("expected environment selector content")
-	}
-	if !strings.Contains(out, "Warnings:") {
-		t.Fatalf("expected warning section")
 	}
 }
 
@@ -963,39 +798,6 @@ func TestStreamApplyOutputCmd(t *testing.T) {
 	applyMsg, ok := msg.(ApplyOutputMsg)
 	if !ok || applyMsg.Line != "line" {
 		t.Fatalf("expected apply output message")
-	}
-}
-
-func TestStreamJSONMessagesCmd(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	ch := make(chan terraform.StreamMessage, 1)
-	ch <- terraform.StreamMessage{Type: terraform.MessageTypeDiagnostic}
-	close(ch)
-	m.streamMsgChan = ch
-
-	msg := m.streamJSONMessagesCmd()()
-	streamMsg, ok := msg.(StreamMessageMsg)
-	if !ok || streamMsg.Message.Type != terraform.MessageTypeDiagnostic {
-		t.Fatalf("expected stream message")
-	}
-}
-
-func TestProcessJSONStream(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	output := make(chan string)
-	close(output)
-
-	cmd := m.processJSONStream(output)
-	if cmd == nil {
-		t.Fatalf("expected stream command")
-	}
-	if m.streamMsgChan == nil || m.streamDone == nil || m.streamParser == nil {
-		t.Fatalf("expected stream state to be initialized")
-	}
-	select {
-	case <-m.streamDone:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("expected stream to complete")
 	}
 }
 
@@ -1077,16 +879,25 @@ func TestHandleExecutionKeyToggles(t *testing.T) {
 func TestHandleExecutionKeyDiagnosticsFocus(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.useJSON = true
-	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+	m.panelManager = NewPanelManager()
+	m.panelManager.RegisterPanel(PanelCommandLog, m.commandLogPanel)
 	m.planRunning = true
 
 	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
-	if !handled || !m.diagnosticsFocused || !m.showDiagnostics {
-		t.Fatalf("expected diagnostics focus")
+	if !handled {
+		t.Fatalf("expected D key to be handled")
 	}
-	if m.execView != viewDiagnostics {
-		t.Fatalf("expected diagnostics view")
+	// In new layout, D focuses the command log panel instead of switching views
+	if !m.panelManager.IsCommandLogVisible() {
+		t.Fatalf("expected command log to be visible")
+	}
+	if m.panelManager.GetFocusedPanel() != PanelCommandLog {
+		t.Fatalf("expected command log panel to be focused")
+	}
+	// We stay in viewMain
+	if m.execView != viewMain {
+		t.Fatalf("expected to stay in main view, got %v", m.execView)
 	}
 }
 
@@ -1437,14 +1248,6 @@ func TestViewModalStates(t *testing.T) {
 	if out := m.View(); !strings.Contains(out, "lazytf keybinds") {
 		t.Fatalf("expected help view")
 	}
-
-	m.modalState = ModalEnvSelector
-	m.envOptions = []environment.Environment{{Name: "dev", Strategy: environment.StrategyWorkspace}}
-	m.envStrategy = environment.StrategyWorkspace
-	m.envView.SetMode(views.EnvViewEnvironments)
-	if out := m.View(); !strings.Contains(out, "Select Environment") {
-		t.Fatalf("expected env selector view")
-	}
 }
 
 func TestHandleExecutionKeyPlanConfirm(t *testing.T) {
@@ -1476,35 +1279,6 @@ func TestHandleExecutionKeyPlanOutputExit(t *testing.T) {
 	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if !handled || m.execView != viewMain {
 		t.Fatalf("expected plan output to return to main view")
-	}
-}
-
-func TestHandleExecutionKeyCompactProgressExit(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.execView = viewCompactProgress
-	m.showDiagnostics = true
-
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if !handled || m.execView != viewMain || m.showDiagnostics {
-		t.Fatalf("expected compact progress to return to main and clear diagnostics")
-	}
-}
-
-func TestHandleExecutionKeyDiagnosticsToggleCompact(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.useJSON = true
-	m.execView = viewDiagnostics
-	m.planRunning = true
-	m.showDiagnostics = true
-
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
-	if !handled || !m.showCompactProgress {
-		t.Fatalf("expected compact progress toggle")
-	}
-	if m.execView != viewCompactProgress {
-		t.Fatalf("expected compact progress view")
 	}
 }
 
@@ -1642,7 +1416,6 @@ func TestViewExecutionModes(t *testing.T) {
 	m.height = 24
 	m.applyView = views.NewApplyView(m.styles)
 	m.planView = views.NewPlanView("", m.styles)
-	m.progressCompact = components.NewProgressCompact(terraform.NewOperationState(), m.styles)
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsPanel.SetSize(40, 5)
 	m.diagnosticsPanel.SetParsedText("parsed")
@@ -1656,11 +1429,6 @@ func TestViewExecutionModes(t *testing.T) {
 	m.execView = viewApplyOutput
 	if out := m.View(); out == "" {
 		t.Fatalf("expected apply output view")
-	}
-
-	m.execView = viewCompactProgress
-	if out := m.View(); out == "" {
-		t.Fatalf("expected compact progress view")
 	}
 
 	m.execView = viewDiagnostics
@@ -1677,7 +1445,6 @@ func TestViewExecutionModes(t *testing.T) {
 func TestUpdatePlanOutputAppendsLine(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.useJSON = false
 	m.applyView = views.NewApplyView(m.styles)
 	m.applyView.SetSize(80, 10)
 
@@ -1693,7 +1460,6 @@ func TestUpdatePlanOutputAppendsLine(t *testing.T) {
 func TestUpdateApplyOutputAppendsLine(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.useJSON = false
 	m.applyView = views.NewApplyView(m.styles)
 	m.applyView.SetSize(80, 10)
 
@@ -1727,40 +1493,6 @@ func TestUpdateHistoryLoadedSuccess(t *testing.T) {
 	m.Update(HistoryLoadedMsg{Entries: entries})
 	if len(m.historyEntries) != 1 {
 		t.Fatalf("expected history entries to update")
-	}
-}
-
-func TestUpdateStreamMessage(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.operationState = terraform.NewOperationState()
-
-	msg := terraform.StreamMessage{
-		Type: terraform.MessageTypeDiagnostic,
-		Diagnostic: &terraform.Diagnostic{
-			Severity: "warning",
-			Summary:  "note",
-		},
-	}
-	_, cmd := m.Update(StreamMessageMsg{Message: msg})
-	if cmd == nil {
-		t.Fatalf("expected stream command")
-	}
-	if len(m.operationState.GetDiagnostics()) != 1 {
-		t.Fatalf("expected diagnostic to be recorded")
-	}
-}
-
-func TestUpdateOperationStateUpdate(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.operationState = terraform.NewOperationState()
-	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
-	m.diagnosticsPanel.SetSize(40, 5)
-
-	m.operationState.AddDiagnostic(terraform.Diagnostic{Severity: "error", Summary: "bad"})
-	m.Update(OperationStateUpdateMsg{})
-	if m.diagnosticsPanel.View() == "" {
-		t.Fatalf("expected diagnostics to be rendered")
 	}
 }
 
@@ -1833,71 +1565,6 @@ func TestWaitPlanCompleteCmdUsesStdout(t *testing.T) {
 	}
 }
 
-func TestWaitPlanCompleteCmdUsesStreamParser(t *testing.T) {
-	stream := `{"type":"planned_change","resource":{"addr":"aws_instance.web","resource_type":"aws_instance","resource_name":"web"},"change":{"actions":["create"],"before":null,"after":{}}}`
-	parser := tfparser.NewStreamParser()
-	if err := parser.Parse(strings.NewReader(stream), nil); err != nil {
-		t.Fatalf("parse stream: %v", err)
-	}
-
-	done := make(chan struct{})
-	close(done)
-
-	result := terraform.NewExecutionResult()
-	result.Finish()
-
-	m := NewModel(&terraform.Plan{})
-	m.useJSON = true
-	m.streamParser = parser
-	m.streamDone = done
-
-	msg := m.waitPlanCompleteCmd(result)()
-	planMsg, ok := msg.(PlanCompleteMsg)
-	if !ok || planMsg.Plan == nil {
-		t.Fatalf("expected plan from stream parser")
-	}
-	if len(planMsg.Plan.Resources) != 1 {
-		t.Fatalf("expected one planned resource")
-	}
-}
-
-func TestWaitPlanCompleteCmdStreamFallback(t *testing.T) {
-	stream := `{"type":"planned_change","resource":{"addr":"aws_instance.web","resource_type":"aws_instance","resource_name":"web"},"change":{"actions":["create"],"before":null,"after":{}}}`
-	result := terraform.NewExecutionResult()
-	result.Output = stream
-	result.Finish()
-
-	m := NewModel(&terraform.Plan{})
-	m.useJSON = true
-	m.streamParser = tfparser.NewStreamParser()
-
-	msg := m.waitPlanCompleteCmd(result)()
-	planMsg, ok := msg.(PlanCompleteMsg)
-	if !ok || planMsg.Plan == nil {
-		t.Fatalf("expected plan from stream fallback")
-	}
-}
-
-func TestWaitPlanCompleteCmdJSONFallback(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "plans", "sample.json"))
-	if err != nil {
-		t.Fatalf("read sample plan: %v", err)
-	}
-	result := terraform.NewExecutionResult()
-	result.Output = string(data)
-	result.Finish()
-
-	m := NewModel(&terraform.Plan{})
-	msg := m.waitPlanCompleteCmd(result)()
-	planMsg, ok := msg.(PlanCompleteMsg)
-	if !ok || planMsg.Plan == nil {
-		t.Fatalf("expected plan from json fallback")
-	}
-	if len(planMsg.Plan.Resources) == 0 {
-		t.Fatalf("expected plan resources")
-	}
-}
-
 func TestWaitPlanCompleteCmdParseError(t *testing.T) {
 	result := terraform.NewExecutionResult()
 	result.Output = "not a plan"
@@ -1942,16 +1609,6 @@ func TestLoadHistoryDetailCmdNilStore(t *testing.T) {
 	}
 }
 
-func TestChanToReaderWriteError(_ *testing.T) {
-	ch := make(chan string, 1)
-	reader := chanToReader(ch)
-	if closer, ok := reader.(io.Closer); ok {
-		_ = closer.Close()
-	}
-	ch <- "line"
-	close(ch)
-}
-
 func TestHandleExecutionKeyPlanOutputQuitWhileRunning(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
@@ -1975,39 +1632,6 @@ func TestHandleExecutionKeyHistoryDetailQuit(t *testing.T) {
 	}
 }
 
-func TestUpdateSearchClearWhenInactive(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.ready = true
-	m.searchInput.SetValue("query")
-
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.searchInput.Value() != "" {
-		t.Fatalf("expected search to clear")
-	}
-}
-
-func TestUpdateEnvSelectorNavigation(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.ready = true
-	m.modalState = ModalEnvSelector
-	m.envOptions = []environment.Environment{
-		{Name: "one", Strategy: environment.StrategyWorkspace},
-		{Name: "two", Strategy: environment.StrategyWorkspace},
-	}
-	m.envView.SetMode(views.EnvViewEnvironments)
-	m.envView.SetEnvironments(m.envOptions, environment.StrategyWorkspace, "", ".")
-	m.envView.SetSize(60, 10)
-
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	if selected := m.envView.SelectedEnvironment(); selected == nil || selected.Name != "two" {
-		t.Fatalf("expected selection to move down")
-	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-	if selected := m.envView.SelectedEnvironment(); selected == nil || selected.Name != "one" {
-		t.Fatalf("expected selection to move up")
-	}
-}
-
 func TestUpdateExecViewAppliesToApplyView(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
@@ -2017,18 +1641,6 @@ func TestUpdateExecViewAppliesToApplyView(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	if updated == nil {
 		t.Fatalf("expected model update")
-	}
-}
-
-func TestHandleExecutionKeyCompactToggleInPlanOutput(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.execView = viewPlanOutput
-	m.useJSON = true
-
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
-	if !handled || !m.showCompactProgress {
-		t.Fatalf("expected compact progress toggle")
 	}
 }
 
@@ -2059,15 +1671,6 @@ func TestSyncHistorySelectionNilPanel(_ *testing.T) {
 	m.syncHistorySelection()
 }
 
-func TestRenderSearchBarPlaceholder(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.width = 80
-	out := m.renderSearchBar()
-	if !strings.Contains(out, "Search:") {
-		t.Fatalf("expected search placeholder")
-	}
-}
-
 func TestStreamCmdsHandleNilChannels(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	if msg := m.streamPlanOutputCmd()(); msg != nil {
@@ -2075,9 +1678,6 @@ func TestStreamCmdsHandleNilChannels(t *testing.T) {
 	}
 	if msg := m.streamApplyOutputCmd()(); msg != nil {
 		t.Fatalf("expected nil apply output message")
-	}
-	if msg := m.streamJSONMessagesCmd()(); msg != nil {
-		t.Fatalf("expected nil stream message")
 	}
 }
 
@@ -2099,18 +1699,6 @@ func TestHandleHistoryKeysUnknown(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatalf("expected no command")
-	}
-}
-
-func TestUpdatePlanOutputWhenJSON(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.useJSON = true
-	m.applyView = views.NewApplyView(m.styles)
-
-	_, cmd := m.Update(PlanOutputMsg{Line: "line"})
-	if cmd != nil {
-		t.Fatalf("expected nil cmd when JSON streaming")
 	}
 }
 

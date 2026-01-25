@@ -12,7 +12,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
-// DiagnosticsPanel renders diagnostics from streaming JSON output.
+// DiagnosticsPanel renders diagnostics alongside command output.
 type DiagnosticsPanel struct {
 	viewport    viewport.Model
 	diagnostics []terraform.Diagnostic

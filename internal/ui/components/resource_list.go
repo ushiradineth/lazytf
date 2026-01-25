@@ -36,6 +36,13 @@ type ResourceList struct {
 	lastMove       int
 	operationState *terraform.OperationState
 	showStatus     bool
+	focused        bool
+
+	// Summary counts for plan
+	summaryCreate  int
+	summaryUpdate  int
+	summaryDelete  int
+	summaryReplace int
 }
 
 // NewResourceList creates a new resource list component
@@ -110,6 +117,41 @@ func (r *ResourceList) SetSearchQuery(query string) {
 	r.updateViewport()
 }
 
+// SetFocused sets the focus state (implements Panel interface)
+func (r *ResourceList) SetFocused(focused bool) {
+	r.focused = focused
+}
+
+// IsFocused returns whether the panel is focused (implements Panel interface)
+func (r *ResourceList) IsFocused() bool {
+	return r.focused
+}
+
+// HandleKey handles key events (implements Panel interface)
+func (r *ResourceList) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
+	switch {
+	case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
+		r.MoveUp()
+		return true, nil
+	case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
+		r.MoveDown()
+		return true, nil
+	case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
+		r.ToggleGroup()
+		return true, nil
+	}
+	return false, nil
+}
+
+// SetSummary sets the plan summary counts
+func (r *ResourceList) SetSummary(create, update, deleteCount, replace int) {
+	r.summaryCreate = create
+	r.summaryUpdate = update
+	r.summaryDelete = deleteCount
+	r.summaryReplace = replace
+	r.updateViewport()
+}
+
 // MoveUp moves the selection up
 func (r *ResourceList) MoveUp() {
 	if r.selectedIndex > 0 {
@@ -133,8 +175,8 @@ func (r *ResourceList) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles messages
-func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
+// Update handles messages (implements Panel interface)
+func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 	var cmd tea.Cmd
 	handled := false
 
@@ -161,16 +203,111 @@ func (r *ResourceList) Update(msg tea.Msg) (*ResourceList, tea.Cmd) {
 
 // View renders the resource list
 func (r *ResourceList) View() string {
-	var view string
+	// Determine border style based on focus
+	borderStyle := r.styles.Border
+	titleStyle := r.styles.PanelTitle
+	if r.focused {
+		borderStyle = r.styles.FocusedBorder
+		titleStyle = r.styles.FocusedPanelTitle
+	}
+
+	// Build content with summary header
+	var contentParts []string
+
+	// Add summary header if we have counts
+	if r.summaryCreate > 0 || r.summaryUpdate > 0 || r.summaryDelete > 0 || r.summaryReplace > 0 {
+		summary := r.renderSummaryHeader()
+		contentParts = append(contentParts, summary)
+	}
+
+	// Add resource list
+	var listView string
 	if len(r.visibleItems) == 0 {
-		view = r.viewport.View()
+		listView = r.viewport.View()
 	} else {
-		view = r.renderVisibleItems()
+		listView = r.renderVisibleItems()
 	}
-	if r.width > 0 && r.height > 0 {
-		return lipgloss.NewStyle().Width(r.width).Height(r.height).Render(view)
+	contentParts = append(contentParts, listView)
+
+	content := strings.Join(contentParts, "\n")
+
+	// Build panel with border
+	panel := borderStyle.
+		BorderTop(true).
+		BorderBottom(true).
+		BorderLeft(true).
+		BorderRight(true).
+		Width(r.width - 2).
+		Height(r.height - 2).
+		Render(content)
+
+	// Add title to border
+	titleText := "[2] Resources"
+	indicatorText := r.renderFilterIndicators()
+	titleContent := alignTitle(titleText, indicatorText, r.width-4)
+	titleRendered := titleStyle.Render(" " + titleContent + " ")
+
+	lines := strings.Split(panel, "\n")
+	if len(lines) > 0 && r.width > 4 {
+		if line, ok := RenderPanelTitleLine(r.width, borderStyle, titleRendered); ok {
+			lines[0] = line
+		}
 	}
-	return view
+
+	return strings.Join(lines, "\n")
+}
+
+// renderSummaryHeader renders the plan summary counts: +5 ~3 -2 ±1
+func (r *ResourceList) renderSummaryHeader() string {
+	parts := []string{}
+	if r.summaryCreate > 0 {
+		parts = append(parts, r.styles.Create.Render(fmt.Sprintf("+%d", r.summaryCreate)))
+	}
+	if r.summaryUpdate > 0 {
+		parts = append(parts, r.styles.Update.Render(fmt.Sprintf("~%d", r.summaryUpdate)))
+	}
+	if r.summaryDelete > 0 {
+		parts = append(parts, r.styles.Delete.Render(fmt.Sprintf("-%d", r.summaryDelete)))
+	}
+	if r.summaryReplace > 0 {
+		parts = append(parts, r.styles.Replace.Render(fmt.Sprintf("±%d", r.summaryReplace)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ")
+}
+
+func (r *ResourceList) renderFilterIndicators() string {
+	parts := []string{
+		r.filterIndicator(terraform.ActionCreate, "C"),
+		r.filterIndicator(terraform.ActionDelete, "D"),
+		r.filterIndicator(terraform.ActionReplace, "R"),
+		r.filterIndicator(terraform.ActionUpdate, "U"),
+	}
+	return strings.Join(parts, "/")
+}
+
+func (r *ResourceList) filterIndicator(action terraform.ActionType, label string) string {
+	enabled := r.filterActions[action]
+	text := label
+	if enabled {
+		return text
+	}
+	return r.styles.Dimmed.Render(text)
+}
+
+func alignTitle(left, right string, width int) string {
+	if width <= 0 || right == "" {
+		return left
+	}
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	gap := width - leftWidth - rightWidth
+	if gap < 1 {
+		gap = 1
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 // getFilteredResources returns resources that pass the current filter

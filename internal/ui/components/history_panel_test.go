@@ -23,7 +23,7 @@ func TestHistoryPanelRendersEntries(t *testing.T) {
 	panel.SetSelection(0, true)
 
 	out := panel.View()
-	if !strings.Contains(out, "Apply history") {
+	if !strings.Contains(out, "Recent Applies") {
 		t.Fatalf("expected header in output")
 	}
 	if !strings.Contains(out, "ok") {

@@ -66,14 +66,6 @@ type ApplyCompleteMsg struct {
 	Result  *terraform.ExecutionResult
 }
 
-// StreamMessageMsg delivers streaming JSON messages.
-type StreamMessageMsg struct {
-	Message terraform.StreamMessage
-}
-
-// OperationStateUpdateMsg signals that operation state changed.
-type OperationStateUpdateMsg struct{}
-
 // HistoryLoadedMsg delivers history entries.
 type HistoryLoadedMsg struct {
 	Entries []history.Entry
@@ -95,4 +87,17 @@ type EnvironmentDetectedMsg struct {
 	Current    string
 	Preference *environment.Preference
 	Error      error
+}
+
+// PanelFocusChangedMsg is sent when the focused panel changes
+type PanelFocusChangedMsg struct {
+	PanelID PanelID
+}
+
+// ToggleCommandLogMsg toggles command log visibility
+type ToggleCommandLogMsg struct{}
+
+// SetCommandLogVisibleMsg sets command log visibility
+type SetCommandLogVisibleMsg struct {
+	Visible bool
 }

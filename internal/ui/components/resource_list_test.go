@@ -111,12 +111,16 @@ func TestResourceListFilteringAndSelection(t *testing.T) {
 
 func TestResourceListViewEmpty(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
-	r.SetSize(20, 5)
+	r.SetSize(40, 5)
 	r.SetResources(nil)
 	got := r.View()
-	normalized := strings.Join(strings.Fields(got), "")
-	if !strings.Contains(normalized, "Noresourcestodisplay") {
+	// Check that the view contains the expected text
+	if !strings.Contains(got, "No resources") || !strings.Contains(got, "display") {
 		t.Fatalf("unexpected empty view: %q", got)
+	}
+	// Check that it has a border/title (new panel format)
+	if !strings.Contains(got, "Resources") {
+		t.Fatalf("expected Resources title in view: %q", got)
 	}
 }
 

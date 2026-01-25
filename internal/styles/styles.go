@@ -132,6 +132,14 @@ type Styles struct {
 	SelectedLine           lipgloss.Style
 	SelectedLineBackground lipgloss.AdaptiveColor
 	Dimmed                 lipgloss.Style
+
+	// Panel styles
+	FocusedBorder     lipgloss.Style
+	PanelTitle        lipgloss.Style
+	FocusedPanelTitle lipgloss.Style
+	ListItem          lipgloss.Style
+	Bold              lipgloss.Style
+	Help              lipgloss.Style
 }
 
 // NewStyles creates a new set of styles based on a theme
@@ -253,6 +261,28 @@ func NewStyles(theme Theme) *Styles {
 
 	// Dimmed text
 	s.Dimmed = lipgloss.NewStyle().
+		Foreground(theme.DimmedColor)
+
+	// Panel styles
+	s.FocusedBorder = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(theme.SelectedColor)
+
+	s.PanelTitle = lipgloss.NewStyle().
+		Foreground(theme.ForegroundColor).
+		Bold(true)
+
+	s.FocusedPanelTitle = lipgloss.NewStyle().
+		Foreground(theme.SelectedColor).
+		Bold(true)
+
+	s.ListItem = lipgloss.NewStyle().
+		Foreground(theme.ForegroundColor)
+
+	s.Bold = lipgloss.NewStyle().
+		Bold(true)
+
+	s.Help = lipgloss.NewStyle().
 		Foreground(theme.DimmedColor)
 
 	return s

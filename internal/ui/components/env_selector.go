@@ -55,7 +55,7 @@ func (d envItemDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	if detail != "" {
 		detail = d.styles.Dimmed.Render(detail)
 	}
-	rendered := alignLine(line, detail, m.Width())
+	rendered := alignLineList(line, detail, m.Width())
 	if index == m.Index() {
 		rendered = d.styles.Selected.Render(rendered)
 	}
@@ -64,12 +64,11 @@ func (d envItemDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 // EnvSelector renders a list of environments with filtering support.
 type EnvSelector struct {
-	list      list.Model
-	styles    *styles.Styles
-	baseDir   string
-	strategy  environment.EnvironmentStrategy
-	items     []envItem
-	filterSeq int
+	list    list.Model
+	baseDir string
+	items   []envItem
+	filter  string
+	current string
 }
 
 // NewEnvSelector creates a new environment selector list.
@@ -82,15 +81,20 @@ func NewEnvSelector(s *styles.Styles) *EnvSelector {
 	model.Title = "Select Environment"
 	model.SetShowStatusBar(false)
 	model.SetShowPagination(false)
-	model.SetFilteringEnabled(true)
+	model.SetFilteringEnabled(false)
 	model.SetShowHelp(false)
-	model.SetShowFilter(true)
+	model.SetShowFilter(false)
+	model.SetShowTitle(false)
 	model.DisableQuitKeybindings()
 	model.KeyMap.ShowFullHelp.Unbind()
 	return &EnvSelector{
-		list:   model,
-		styles: s,
+		list: model,
 	}
+}
+
+// SetShowTitle toggles the list title display.
+func (e *EnvSelector) SetShowTitle(show bool) {
+	e.list.SetShowTitle(show)
 }
 
 // SetBaseDir configures the directory used for relative labels.
@@ -105,7 +109,6 @@ func (e *EnvSelector) SetSize(width, height int) {
 
 // SetStrategy updates the list title based on strategy.
 func (e *EnvSelector) SetStrategy(strategy environment.EnvironmentStrategy) {
-	e.strategy = strategy
 	title := "Select Environment"
 	switch strategy {
 	case environment.StrategyWorkspace:
@@ -139,21 +142,15 @@ func (e *EnvSelector) SetEnvironments(envs []environment.Environment, current st
 		mapped = append(mapped, item)
 	}
 	e.items = mapped
+	e.current = current
 	e.list.SetItems(items)
-	if currentIndex >= 0 {
-		e.list.Select(currentIndex)
-	}
+	e.applyFilter()
 }
 
 // Update handles list updates.
 func (e *EnvSelector) Update(msg tea.Msg) (*EnvSelector, tea.Cmd) {
-	if debounce, ok := msg.(envFilterDebounceMsg); ok {
-		return e.handleDebounce(debounce)
-	}
-	prevFilter := e.list.FilterInput.Value()
 	var cmd tea.Cmd
 	e.list, cmd = e.list.Update(msg)
-	e.queueDebounce(prevFilter, &cmd)
 	return e, cmd
 }
 
@@ -162,9 +159,51 @@ func (e *EnvSelector) View() string {
 	return e.list.View()
 }
 
+// FilterText returns the current filter string.
+func (e *EnvSelector) FilterText() string {
+	return e.filter
+}
+
+// HandleFilterKey applies a keypress to the filter input for live filtering.
+func (e *EnvSelector) HandleFilterKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if msg.Alt {
+		return nil, false
+	}
+	changed := false
+	switch msg.Type {
+	case tea.KeyRunes:
+		if len(msg.Runes) == 0 {
+			return nil, false
+		}
+		e.filter += string(msg.Runes)
+		changed = true
+	case tea.KeyBackspace:
+		if e.filter == "" {
+			return nil, false
+		}
+		runes := []rune(e.filter)
+		e.filter = string(runes[:len(runes)-1])
+		changed = true
+	case tea.KeyCtrlU:
+		if e.filter == "" {
+			return nil, false
+		}
+		e.filter = ""
+		changed = true
+	default:
+		return nil, false
+	}
+
+	if !changed {
+		return nil, false
+	}
+	e.applyFilter()
+	return nil, true
+}
+
 // Filtering reports whether the list is currently filtering.
 func (e *EnvSelector) Filtering() bool {
-	return e.list.FilterState() == list.Filtering
+	return e.filter != ""
 }
 
 // SelectedEnvironment returns the selected environment.
@@ -175,45 +214,6 @@ func (e *EnvSelector) SelectedEnvironment() *environment.Environment {
 	}
 	selected := item.env
 	return &selected
-}
-
-type envFilterDebounceMsg struct {
-	seq   int
-	value string
-}
-
-func (e *EnvSelector) handleDebounce(msg envFilterDebounceMsg) (*EnvSelector, tea.Cmd) {
-	if msg.seq != e.filterSeq {
-		return e, nil
-	}
-	if e.list.FilterState() != list.Filtering {
-		return e, nil
-	}
-	if e.list.FilterInput.Value() != msg.value {
-		return e, nil
-	}
-	return e, nil
-}
-
-func (e *EnvSelector) queueDebounce(prevFilter string, cmd *tea.Cmd) {
-	if e.list.FilterState() != list.Filtering {
-		return
-	}
-	current := e.list.FilterInput.Value()
-	if current == prevFilter {
-		return
-	}
-	e.filterSeq++
-	seq := e.filterSeq
-	value := current
-	debounce := tea.Tick(200*time.Millisecond, func(time.Time) tea.Msg {
-		return envFilterDebounceMsg{seq: seq, value: value}
-	})
-	if cmd == nil {
-		*cmd = debounce
-		return
-	}
-	*cmd = tea.Batch(*cmd, debounce)
 }
 
 func (e *EnvSelector) envLabel(env environment.Environment) string {
@@ -250,12 +250,67 @@ func formatMetadata(meta environment.EnvironmentMetadata) string {
 		parts = append(parts, "state")
 	}
 	if !meta.LastModified.IsZero() {
-		parts = append(parts, fmt.Sprintf("updated %s", formatAge(meta.LastModified)))
+		parts = append(parts, "updated "+formatAge(meta.LastModified))
 	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return strings.Join(parts, " · ")
+}
+
+func (e *EnvSelector) applyFilter() {
+	filter := strings.ToLower(strings.TrimSpace(e.filter))
+	filtered := make([]list.Item, 0, len(e.items))
+	currentIndex := -1
+	for _, item := range e.items {
+		if filter != "" && !envItemMatchesFilter(item, filter) {
+			continue
+		}
+		filtered = append(filtered, item)
+		if currentIndex == -1 && isCurrentEnv(item.env, e.current) {
+			currentIndex = len(filtered) - 1
+		}
+	}
+	e.list.SetItems(filtered)
+	if currentIndex >= 0 {
+		e.list.Select(currentIndex)
+		return
+	}
+	if len(filtered) > 0 {
+		e.list.Select(0)
+	}
+}
+
+func envItemMatchesFilter(item envItem, query string) bool {
+	label := strings.ToLower(item.label)
+	if fuzzyMatchEnv(query, label) {
+		return true
+	}
+	if item.detailText == "" {
+		return false
+	}
+	return fuzzyMatchEnv(query, strings.ToLower(item.detailText))
+}
+
+func fuzzyMatchEnv(query, candidate string) bool {
+	if query == "" {
+		return true
+	}
+	q := []rune(query)
+	c := []rune(candidate)
+	if len(q) > len(c) {
+		return false
+	}
+	i := 0
+	for _, r := range c {
+		if r == q[i] {
+			i++
+			if i == len(q) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func formatAge(t time.Time) string {
@@ -275,7 +330,7 @@ func formatAge(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
-func alignLine(left, right string, width int) string {
+func alignLineList(left, right string, width int) string {
 	if width <= 0 || right == "" {
 		return left
 	}
