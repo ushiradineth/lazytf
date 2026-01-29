@@ -131,21 +131,29 @@ func (m *Model) handleHistoryKeys(key string) (bool, tea.Cmd) {
 			m.historySelected++
 		}
 	case "enter":
-		if len(m.historyEntries) == 0 || m.historyStore == nil {
-			return true, nil
-		}
-		entry := m.historyEntries[m.historySelected]
-		// Show history detail in main area instead of full-screen view
-		if m.mainArea != nil {
-			m.mainArea.EnterHistoryDetail()
-			m.mainArea.SetHistoryContent("Apply details", "Loading...")
-		}
-		return true, m.loadHistoryDetailCmd(entry.ID)
+		// Enter also loads the detail (same as scroll, for compatibility)
+		m.syncHistorySelection()
+		return true, m.showSelectedHistoryDetail()
 	default:
 		return false, nil
 	}
 	m.syncHistorySelection()
-	return true, nil
+	// Show history detail in main area on scroll
+	return true, m.showSelectedHistoryDetail()
+}
+
+// showSelectedHistoryDetail loads and shows the currently selected history item in the main area.
+func (m *Model) showSelectedHistoryDetail() tea.Cmd {
+	if len(m.historyEntries) == 0 || m.historyStore == nil {
+		return nil
+	}
+	entry := m.historyEntries[m.historySelected]
+	// Show history detail in main area
+	if m.mainArea != nil {
+		m.mainArea.EnterHistoryDetail()
+		m.mainArea.SetHistoryContent("Apply details", "Loading...")
+	}
+	return m.loadHistoryDetailCmd(entry.ID)
 }
 
 // Helper functions for history operations
