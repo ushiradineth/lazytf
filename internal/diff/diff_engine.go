@@ -255,7 +255,9 @@ func interfaceToList(val any) []any {
 func interfaceToStrings(list []any) []string {
 	result := make([]string, 0, len(list))
 	for _, item := range list {
-		result = append(result, item.(string))
+		if s, ok := item.(string); ok {
+			result = append(result, s)
+		}
 	}
 	return result
 }

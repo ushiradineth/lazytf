@@ -48,7 +48,7 @@ func TestViewportPanel_Scrollbar(t *testing.T) {
 	panel.SetSize(40, 5) // Small height
 
 	// Create content that exceeds panel height
-	var lines []string
+	lines := make([]string, 0, 20)
 	for range 20 {
 		lines = append(lines, "Content line")
 	}
@@ -82,7 +82,7 @@ func TestViewportPanel_Navigation(t *testing.T) {
 	panel.SetSize(40, 5)
 
 	// Create scrollable content
-	var lines []string
+	lines := make([]string, 0, 20)
 	for range 20 {
 		lines = append(lines, "Content line")
 	}

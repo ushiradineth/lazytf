@@ -44,33 +44,7 @@ func (p *ProgressCompact) View() string {
 	}
 
 	if total == 0 {
-		if p.state != nil {
-			diags := p.state.GetDiagnostics()
-			if len(diags) > 0 {
-				var latest *terraform.Diagnostic
-				for i := len(diags) - 1; i >= 0; i-- {
-					if diags[i].Severity == "error" {
-						latest = &diags[i]
-						break
-					}
-				}
-				if latest == nil {
-					latest = &diags[len(diags)-1]
-				}
-				summary := strings.TrimSpace(latest.Summary)
-				if summary == "" {
-					summary = "Unknown error"
-				}
-				content := strings.Join([]string{
-					p.styles.Title.Render("Terraform error"),
-					p.styles.Delete.Render("Error: " + summary),
-					p.styles.Dimmed.Render("Check logs or diagnostics for details."),
-				}, "\n")
-				return lipgloss.NewStyle().Width(p.width).Height(p.height).Render(content)
-			}
-		}
-		content := p.styles.Dimmed.Render("Waiting for terraform updates...")
-		return lipgloss.NewStyle().Width(p.width).Height(p.height).Render(content)
+		return p.renderNoProgress()
 	}
 
 	barWidth := p.width - 24
@@ -99,4 +73,49 @@ func (p *ProgressCompact) View() string {
 	}, "\n")
 
 	return lipgloss.NewStyle().Width(p.width).Height(p.height).Render(content)
+}
+
+func (p *ProgressCompact) renderNoProgress() string {
+	if p.state == nil {
+		return p.renderBox(p.styles.Dimmed.Render("Waiting for terraform updates..."))
+	}
+
+	diags := p.state.GetDiagnostics()
+	if len(diags) == 0 {
+		return p.renderBox(p.styles.Dimmed.Render("Waiting for terraform updates..."))
+	}
+
+	latest := latestDiagnostic(diags)
+	if latest == nil {
+		return p.renderBox(p.styles.Dimmed.Render("Waiting for terraform updates..."))
+	}
+
+	summary := strings.TrimSpace(latest.Summary)
+	if summary == "" {
+		summary = "Unknown error"
+	}
+
+	content := strings.Join([]string{
+		p.styles.Title.Render("Terraform error"),
+		p.styles.Delete.Render("Error: " + summary),
+		p.styles.Dimmed.Render("Check logs or diagnostics for details."),
+	}, "\n")
+
+	return p.renderBox(content)
+}
+
+func (p *ProgressCompact) renderBox(content string) string {
+	return lipgloss.NewStyle().Width(p.width).Height(p.height).Render(content)
+}
+
+func latestDiagnostic(diags []terraform.Diagnostic) *terraform.Diagnostic {
+	for i := len(diags) - 1; i >= 0; i-- {
+		if diags[i].Severity == "error" {
+			return &diags[i]
+		}
+	}
+	if len(diags) == 0 {
+		return nil
+	}
+	return &diags[len(diags)-1]
 }

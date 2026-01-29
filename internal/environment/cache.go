@@ -15,6 +15,9 @@ const (
 	filtersDirName    = "filters"
 )
 
+// ErrNoPreference is returned when no environment preference is found.
+var ErrNoPreference = errors.New("no environment preference found")
+
 // Preference stores the user's preferred environment selection.
 type Preference struct {
 	Strategy    StrategyType `json:"strategy"`
@@ -59,7 +62,7 @@ func LoadPreference(baseDir string) (*Preference, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return nil, ErrNoPreference
 		}
 		return nil, fmt.Errorf("read environment preference: %w", err)
 	}
@@ -68,7 +71,7 @@ func LoadPreference(baseDir string) (*Preference, error) {
 		return nil, fmt.Errorf("decode environment preference: %w", err)
 	}
 	if pref.Strategy == "" && pref.Environment == "" {
-		return nil, nil
+		return nil, ErrNoPreference
 	}
 	return &pref, nil
 }

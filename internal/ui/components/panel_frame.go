@@ -138,7 +138,7 @@ func (f *PanelFrame) buildPanel(contentLines []string, borderStyle, titleStyle l
 	titleLine := f.buildTitleLine(topLeft, topRight, horizontal, title, borderStyle)
 
 	// Build content lines with scrollbar
-	var outputLines []string
+	outputLines := make([]string, 0, len(contentLines)+2)
 	outputLines = append(outputLines, titleLine)
 
 	scrollbarChars := f.calculateScrollbar(contentHeight)

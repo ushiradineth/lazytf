@@ -190,11 +190,11 @@ func TestUpdateLayoutUsesMinimumHeight(t *testing.T) {
 }
 
 func TestMinInt(t *testing.T) {
-	if minInt(5, 2) != 2 {
-		t.Fatalf("expected minInt to return smaller value")
+	if utils.MinInt(5, 2) != 2 {
+		t.Fatalf("expected MinInt to return smaller value")
 	}
-	if minInt(2, 5) != 2 {
-		t.Fatalf("expected minInt to return smaller value")
+	if utils.MinInt(2, 5) != 2 {
+		t.Fatalf("expected MinInt to return smaller value")
 	}
 }
 
@@ -692,11 +692,11 @@ func TestPlanFlagsForRecord(t *testing.T) {
 }
 
 func TestMaxInt(t *testing.T) {
-	if maxInt(1, 3) != 3 {
-		t.Fatalf("expected maxInt to return larger value")
+	if utils.MaxInt(1, 3) != 3 {
+		t.Fatalf("expected MaxInt to return larger value")
 	}
-	if maxInt(5, 2) != 5 {
-		t.Fatalf("expected maxInt to return larger value")
+	if utils.MaxInt(5, 2) != 5 {
+		t.Fatalf("expected MaxInt to return larger value")
 	}
 }
 
@@ -826,7 +826,10 @@ func TestHandlePlanStartError(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected no command on error")
 	}
-	model := updated.(*Model)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("expected *Model type")
+	}
 	if model.planRunning {
 		t.Fatalf("expected plan running to be false")
 	}
@@ -845,7 +848,10 @@ func TestHandleApplyStartError(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected no command on error")
 	}
-	model := updated.(*Model)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("expected *Model type")
+	}
 	if model.applyRunning {
 		t.Fatalf("expected apply running to be false")
 	}
@@ -1262,6 +1268,7 @@ func TestViewModalStates(t *testing.T) {
 	}
 
 	m.modalState = ModalHelp
+	m.updateHelpModalContent() // Populate help modal content
 	if out := m.View(); !strings.Contains(out, "Keybinds") {
 		t.Fatalf("expected help view")
 	}
@@ -1338,7 +1345,10 @@ func TestHandlePlanStartSuccess(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected command batch")
 	}
-	model := updated.(*Model)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("expected *Model type")
+	}
 	if model.outputChan == nil {
 		t.Fatalf("expected output channel to be set")
 	}
@@ -1358,7 +1368,10 @@ func TestHandleApplyStartSuccess(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected command batch")
 	}
-	model := updated.(*Model)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("expected *Model type")
+	}
 	if model.outputChan == nil {
 		t.Fatalf("expected output channel to be set")
 	}
@@ -1374,7 +1387,10 @@ func TestHandlePlanCompleteSuccess(t *testing.T) {
 	if cmd != nil {
 		cmd()
 	}
-	model := updated.(*Model)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("expected *Model type")
+	}
 	if model.plan == nil || len(model.plan.Resources) != 1 {
 		t.Fatalf("expected plan to be set")
 	}

@@ -80,9 +80,8 @@ func (v *StateListView) visibleRows() int {
 
 // Update handles input messages.
 func (v *StateListView) Update(msg tea.Msg) (*StateListView, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
 		case "up", "k":
 			v.MoveUp()
 		case "down", "j":

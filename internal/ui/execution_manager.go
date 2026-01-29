@@ -1,0 +1,1064 @@
+package ui
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/terraform"
+	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/ui/views"
+	"github.com/ushiradineth/lazytf/internal/utils"
+)
+
+// Execution-related methods for Model
+
+func (m *Model) beginPlan() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning {
+		return nil
+	}
+	m.err = nil
+	planEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	planFlags := append([]string{}, m.planFlags...)
+	planFilePath := planOutputPath(planFlags)
+	if planFilePath == "" {
+		workDir := m.envWorkDir
+		if m.executor != nil {
+			workDir = m.executor.WorkDir()
+		}
+		if strings.TrimSpace(workDir) == "" {
+			workDir = "."
+		}
+		planFilePath = filepath.Join(workDir, ".lazytf", "tmp", "plan.tfplan")
+		planFlags = append(planFlags, "-out="+planFilePath)
+	}
+	m.planRunFlags = planFlags
+	m.planFilePath = planFilePath
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+	m.planRunning = true
+	m.planStartedAt = time.Now()
+
+	// Keep in main view, switch MainArea to logs mode during plan
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeLogs)
+	}
+
+	// Show command log panel during operations
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if m.applyView != nil {
+		m.applyView.Reset()
+		m.applyView.SetTitle("Running terraform plan...")
+		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed - press esc to return")
+		m.applyView.SetStatus(views.ApplyRunning)
+	}
+	m.updateExecutionViewForStreaming()
+
+	return func() tea.Msg {
+		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{
+			Flags: planFlags,
+			Env:   planEnv,
+		})
+		return PlanStartMsg{Result: result, Output: output, Error: err}
+	}
+}
+
+func (m *Model) beginApply() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning {
+		return nil
+	}
+	m.err = nil
+	applyEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+	m.applyRunning = true
+	m.applyStartedAt = time.Now()
+
+	// Keep in main view, switch MainArea to logs mode during apply
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeLogs)
+	}
+
+	// Show command log panel during operations
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if m.applyView != nil {
+		m.applyView.Reset()
+		m.applyView.SetTitle("Applying changes...")
+		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
+		m.applyView.SetStatus(views.ApplyRunning)
+	}
+	// Transition to main view from confirm view
+	if m.execView == viewPlanConfirm {
+		m.execView = viewMain
+	}
+	m.updateExecutionViewForStreaming()
+
+	return func() tea.Msg {
+		result, output, err := m.executor.Apply(ctx, terraform.ApplyOptions{
+			Flags:       m.applyFlags,
+			AutoApprove: true,
+			Env:         applyEnv,
+		})
+		return ApplyStartMsg{Result: result, Output: output, Error: err}
+	}
+}
+
+func (m *Model) beginRefresh() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	m.err = nil
+	refreshEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+	m.refreshRunning = true
+	m.refreshStartedAt = time.Now()
+
+	// Keep in main view, switch MainArea to logs mode during refresh
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeLogs)
+	}
+
+	// Show command log panel during operations
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if m.applyView != nil {
+		m.applyView.Reset()
+		m.applyView.SetTitle("Running terraform refresh...")
+		m.applyView.SetStatusText("Running...", "Refresh complete", "Refresh failed - press esc to return")
+		m.applyView.SetStatus(views.ApplyRunning)
+	}
+	m.updateExecutionViewForStreaming()
+
+	return func() tea.Msg {
+		result, output, err := m.executor.Refresh(ctx, terraform.RefreshOptions{
+			Env: refreshEnv,
+		})
+		return RefreshStartMsg{Result: result, Output: output, Error: err}
+	}
+}
+
+func (m *Model) handleRefreshStart(msg RefreshStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.refreshRunning = false
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform refresh: %v", msg.Error))
+		}
+		m.addErrorDiagnostic("Refresh failed to start", msg.Error, "")
+		return m, nil
+	}
+
+	m.outputChan = msg.Output
+	cmds := []tea.Cmd{
+		m.waitRefreshCompleteCmd(msg.Result),
+		m.streamRefreshOutputCmd(),
+	}
+	if m.applyView != nil {
+		cmds = append(cmds, m.applyView.Tick())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cmd) {
+	m.refreshRunning = false
+	m.cancelFunc = nil
+	m.outputChan = nil
+
+	// Switch MainArea back to diff mode when refresh completes
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	output := ""
+	if msg.Result != nil {
+		output = msg.Result.Output
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform apply -refresh-only", output)
+	}
+
+	if msg.Error != nil || !msg.Success {
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			if msg.Error != nil {
+				m.applyView.AppendLine(fmt.Sprintf("Refresh failed: %v", msg.Error))
+			}
+		}
+		// Route logs to command log panel
+		if msg.Result != nil {
+			if m.commandLogPanel != nil {
+				m.commandLogPanel.SetLogText(msg.Result.Output)
+				m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			} else if m.diagnosticsPanel != nil {
+				m.diagnosticsPanel.SetLogText(msg.Result.Output)
+				m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			}
+		}
+		if msg.Error != nil {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Refresh failed", msg.Error, output)
+		}
+		m.updateExecutionViewForStreaming()
+		cmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
+		return m, cmd
+	}
+
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplySuccess)
+	}
+	// Route logs to command log panel
+	parsed := ""
+	if msg.Result != nil {
+		parsed = utils.FormatLogOutput(msg.Result.Output)
+	}
+	if strings.TrimSpace(parsed) == "" {
+		parsed = "Refresh complete"
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetParsedText(parsed)
+	} else if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetParsedText(parsed)
+	}
+	m.updateExecutionViewForStreaming()
+	var toastCmd tea.Cmd
+	if m.toast != nil {
+		toastCmd = m.toast.ShowSuccess("State refreshed successfully")
+	}
+	return m, tea.Batch(
+		toastCmd,
+		m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", nil),
+	)
+}
+
+func (m *Model) streamRefreshOutputCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.outputChan == nil {
+			return nil
+		}
+		line, ok := <-m.outputChan
+		if !ok {
+			return nil
+		}
+		return RefreshOutputMsg{Line: line}
+	}
+}
+
+func (m *Model) waitRefreshCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
+	return func() tea.Msg {
+		if result == nil {
+			return RefreshCompleteMsg{Success: false, Error: errors.New("refresh execution result missing")}
+		}
+		<-result.Done()
+		if result.Error != nil {
+			return RefreshCompleteMsg{Success: false, Error: result.Error, Result: result}
+		}
+		return RefreshCompleteMsg{Success: true, Result: result}
+	}
+}
+
+func (m *Model) beginValidate() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Running terraform validate...")
+	}
+	validateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.Validate(ctx, terraform.ValidateOptions{
+			Env: validateEnv,
+		})
+		if err != nil {
+			return ValidateCompleteMsg{Error: err}
+		}
+		// Parse JSON output
+		var validateResult terraform.ValidateResult
+		if result != nil && result.Stdout != "" {
+			if parseErr := json.Unmarshal([]byte(result.Stdout), &validateResult); parseErr != nil {
+				return ValidateCompleteMsg{Error: parseErr, RawOutput: result.Stdout, ExecResult: result}
+			}
+		}
+		return ValidateCompleteMsg{Result: &validateResult, RawOutput: result.Stdout, ExecResult: result}
+	}
+}
+
+func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.addErrorDiagnostic("Validate failed", msg.Error, msg.RawOutput)
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Validate failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	if msg.Result == nil {
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowInfo("Validate completed (no result)")
+		}
+		return m, cmd
+	}
+
+	// Display diagnostics in command log panel
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if len(msg.Result.Diagnostics) > 0 {
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetDiagnostics(msg.Result.Diagnostics)
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetDiagnostics(msg.Result.Diagnostics)
+		}
+	}
+
+	var cmd tea.Cmd
+	if msg.Result.Valid {
+		if m.toast != nil {
+			cmd = m.toast.ShowSuccess("Configuration is valid")
+		}
+	} else {
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Validation failed: %d errors, %d warnings", msg.Result.ErrorCount, msg.Result.WarningCount))
+		}
+	}
+	return m, cmd
+}
+
+func (m *Model) beginFormat() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Running terraform fmt...")
+	}
+	formatEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.Format(ctx, terraform.FormatOptions{
+			Recursive: true,
+			Env:       formatEnv,
+		})
+		if err != nil {
+			return FormatCompleteMsg{Error: err}
+		}
+		// Parse output - each line is a changed file
+		var changedFiles []string
+		if result != nil && result.Stdout != "" {
+			for _, line := range strings.Split(result.Stdout, "\n") {
+				if trimmed := strings.TrimSpace(line); trimmed != "" {
+					changedFiles = append(changedFiles, trimmed)
+				}
+			}
+		}
+		return FormatCompleteMsg{ChangedFiles: changedFiles, ExecResult: result}
+	}
+}
+
+func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.addErrorDiagnostic("Format failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Format failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	var cmd tea.Cmd
+	if len(msg.ChangedFiles) == 0 {
+		if m.toast != nil {
+			cmd = m.toast.ShowInfo("No files changed")
+		}
+	} else {
+		if m.toast != nil {
+			cmd = m.toast.ShowSuccess(fmt.Sprintf("Formatted %d file(s)", len(msg.ChangedFiles)))
+		}
+
+		// Display changed files in command log panel
+		if m.panelManager != nil {
+			m.panelManager.SetCommandLogVisible(true)
+			m.updateLayout()
+		}
+
+		output := "Formatted files:\n" + strings.Join(msg.ChangedFiles, "\n")
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetParsedText(output)
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetParsedText(output)
+		}
+	}
+	return m, cmd
+}
+
+func (m *Model) beginStateList() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Loading state list...")
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.StateList(ctx, terraform.StateListOptions{
+			Env: stateEnv,
+		})
+		if err != nil {
+			return StateListCompleteMsg{Error: err}
+		}
+		if result.Error != nil {
+			return StateListCompleteMsg{Error: result.Error}
+		}
+		// Parse output - each line is a resource address
+		var resources []terraform.StateResource
+		if result.Stdout != "" {
+			for _, line := range strings.Split(result.Stdout, "\n") {
+				if trimmed := strings.TrimSpace(line); trimmed != "" {
+					resources = append(resources, terraform.StateResource{
+						Address: trimmed,
+					})
+				}
+			}
+		}
+		return StateListCompleteMsg{Resources: resources}
+	}
+}
+
+func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, tea.Cmd) {
+	// Hide loading toast
+	if m.toast != nil {
+		m.toast.Hide()
+	}
+
+	if msg.Error != nil {
+		if m.stateListContent != nil {
+			m.stateListContent.SetError(msg.Error.Error())
+		}
+		m.addErrorDiagnostic("State list failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("State list failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	// Update state list content (for tab view)
+	if m.stateListContent != nil {
+		m.stateListContent.SetResources(msg.Resources)
+	}
+
+	// Initialize state list view if needed (for full screen view)
+	if m.stateListView == nil {
+		m.stateListView = views.NewStateListView(m.styles)
+	}
+	m.stateListView.SetSize(m.width, m.height)
+	m.stateListView.SetResources(msg.Resources)
+
+	// If we're on the State tab, stay there; otherwise only switch if explicitly requested
+	// (The 'S' keybinding has been removed, so this only happens when switching tabs)
+
+	return m, nil
+}
+
+func (m *Model) beginStateShow(address string) tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Loading state...")
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.StateShow(ctx, address, terraform.StateShowOptions{
+			Env: stateEnv,
+		})
+		if err != nil {
+			return StateShowCompleteMsg{Address: address, Error: err}
+		}
+		if result.Error != nil {
+			return StateShowCompleteMsg{Address: address, Error: result.Error}
+		}
+		return StateShowCompleteMsg{Address: address, Output: result.Stdout}
+	}
+}
+
+func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, tea.Cmd) {
+	// Log to session history
+	output := msg.Output
+	if msg.Error != nil {
+		output = msg.Error.Error()
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform state show "+msg.Address, output)
+	}
+
+	if m.toast != nil {
+		m.toast.Hide()
+	}
+	if msg.Error != nil {
+		m.addErrorDiagnostic("State show failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("State show failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	// Initialize state show view if needed
+	if m.stateShowView == nil {
+		m.stateShowView = views.NewStateShowView(m.styles)
+	}
+	m.stateShowView.SetSize(m.width, m.height)
+	m.stateShowView.SetAddress(msg.Address)
+	m.stateShowView.SetContent(msg.Output)
+
+	// Switch to state show view
+	m.execView = viewStateShow
+
+	return m, nil
+}
+
+func (m *Model) prepareTerraformEnv() ([]string, error) {
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	tmpDir := filepath.Join(workDir, ".lazytf", "tmp")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	return []string{"TMPDIR=" + tmpDir}, nil
+}
+
+func (m *Model) cancelExecution() {
+	if m.cancelFunc != nil {
+		m.cancelFunc()
+		m.cancelFunc = nil
+	}
+}
+
+func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.planRunning = false
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform plan: %v", msg.Error))
+		}
+		m.addErrorDiagnostic("Plan failed to start", msg.Error, "")
+		return m, nil
+	}
+
+	m.outputChan = msg.Output
+	cmds := []tea.Cmd{
+		m.waitPlanCompleteCmd(msg.Result),
+		m.streamPlanOutputCmd(),
+	}
+	if m.applyView != nil {
+		cmds = append(cmds, m.applyView.Tick())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
+	m.planRunning = false
+	m.cancelFunc = nil
+	m.outputChan = nil
+
+	// Switch MainArea back to diff mode when plan completes
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform plan", msg.Output)
+	}
+
+	if msg.Error != nil {
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("Plan failed: %v", msg.Error))
+		}
+		m.planFilePath = ""
+		m.planRunFlags = nil
+		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
+		// Route logs to command log panel
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetLogText(msg.Output)
+			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Output)
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+		}
+		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
+		return m, cmd
+	}
+
+	if msg.Plan != nil {
+		m.setPlan(msg.Plan)
+		if m.operationState != nil {
+			m.operationState.InitializeFromPlan(msg.Plan)
+		}
+		if m.planView != nil {
+			m.planView.SetSummary(m.planSummary())
+		}
+	}
+	if msg.Output != "" {
+		m.lastPlanOutput = msg.Output
+		// Route logs to command log panel
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetLogText(msg.Output)
+			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Output)
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+		}
+	}
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplySuccess)
+	}
+	m.updateExecutionViewForStreaming()
+	cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
+	return m, cmd
+}
+
+func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.applyRunning = false
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform apply: %v", msg.Error))
+		}
+		m.addErrorDiagnostic("Apply failed to start", msg.Error, "")
+		return m, nil
+	}
+
+	m.outputChan = msg.Output
+	cmds := []tea.Cmd{
+		m.waitApplyCompleteCmd(msg.Result),
+		m.streamApplyOutputCmd(),
+	}
+	if m.applyView != nil {
+		cmds = append(cmds, m.applyView.Tick())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
+	m.applyRunning = false
+	m.cancelFunc = nil
+	m.outputChan = nil
+
+	// Switch MainArea back to diff mode when apply completes
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	output := ""
+	if msg.Result != nil {
+		output = msg.Result.Output
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform apply", output)
+	}
+
+	if msg.Error != nil || !msg.Success {
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			if msg.Error != nil {
+				m.applyView.AppendLine(fmt.Sprintf("Apply failed: %v", msg.Error))
+			}
+		}
+		// Route logs to command log panel
+		if msg.Result != nil {
+			if m.commandLogPanel != nil {
+				m.commandLogPanel.SetLogText(msg.Result.Output)
+				m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			} else if m.diagnosticsPanel != nil {
+				m.diagnosticsPanel.SetLogText(msg.Result.Output)
+				m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			}
+		}
+		if msg.Error != nil {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Apply failed", msg.Error, output)
+		} else if !msg.Success {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Apply failed", errors.New("apply failed"), output)
+		}
+		status := history.StatusFailed
+		if errors.Is(msg.Error, context.Canceled) {
+			status = history.StatusCanceled
+		}
+		opErr := msg.Error
+		if opErr == nil && !msg.Success {
+			opErr = errors.New("apply failed")
+		}
+		m.updateExecutionViewForStreaming()
+		return m, tea.Batch(
+			m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error),
+			m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr),
+		)
+	}
+
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplySuccess)
+	}
+	summary := m.planSummary()
+	// Route logs to command log panel
+	parsed := ""
+	if msg.Result != nil {
+		parsed = utils.FormatLogOutput(msg.Result.Output)
+	}
+	if strings.TrimSpace(parsed) == "" {
+		parsed = "Apply complete"
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetParsedText(parsed)
+	} else if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetParsedText(parsed)
+	}
+	if m.applyView != nil && msg.Result != nil {
+		parsed := utils.FormatLogOutput(msg.Result.Output)
+		if strings.TrimSpace(parsed) == "" {
+			parsed = strings.TrimSpace(msg.Result.Output)
+		}
+		m.applyView.SetOutput(parsed)
+	}
+	// Stay in main view with panel layout
+	m.setPlan(&terraform.Plan{Resources: nil})
+	m.planFilePath = ""
+	m.planRunFlags = nil
+	m.updateExecutionViewForStreaming()
+	return m, tea.Batch(
+		m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil),
+		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil),
+	)
+}
+
+func (m *Model) updateExecutionViewForStreaming() {
+	if m.execView == viewPlanConfirm {
+		return
+	}
+	// Don't interrupt history detail mode when showing in main area
+	if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
+		return
+	}
+	if m.execView != viewMain {
+		m.execView = viewMain
+	}
+}
+
+func (m *Model) addErrorDiagnostic(summary string, err error, output string) {
+	if err == nil {
+		return
+	}
+	detail := err.Error()
+	if strings.TrimSpace(output) != "" {
+		detail = detail + "\n\n" + output
+	}
+	diag := terraform.Diagnostic{
+		Severity: "error",
+		Summary:  summary,
+		Detail:   detail,
+	}
+
+	// Ensure command log is visible when errors occur
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+	}
+
+	if m.operationState != nil {
+		m.operationState.AddDiagnostic(diag)
+		// Route diagnostics to command log panel
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetDiagnostics(m.operationState.GetDiagnostics())
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetDiagnostics(m.operationState.GetDiagnostics())
+		}
+		return
+	}
+	// Route diagnostics to command log panel
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetDiagnostics([]terraform.Diagnostic{diag})
+	} else if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetDiagnostics([]terraform.Diagnostic{diag})
+	}
+}
+
+func (m *Model) streamPlanOutputCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.outputChan == nil {
+			return nil
+		}
+		line, ok := <-m.outputChan
+		if !ok {
+			return nil
+		}
+		return PlanOutputMsg{Line: line}
+	}
+}
+
+func (m *Model) streamApplyOutputCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.outputChan == nil {
+			return nil
+		}
+		line, ok := <-m.outputChan
+		if !ok {
+			return nil
+		}
+		return ApplyOutputMsg{Line: line}
+	}
+}
+
+func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
+	return func() tea.Msg {
+		if result == nil {
+			return PlanCompleteMsg{Error: errors.New("plan execution result missing")}
+		}
+		<-result.Done()
+		if result.Error != nil {
+			return PlanCompleteMsg{Error: result.Error, Result: result, Output: result.Output}
+		}
+
+		output := result.Output
+		if output == "" {
+			output = result.Stdout
+		}
+
+		parseInput := output
+		if m.executor != nil && m.planFilePath != "" {
+			planEnv, err := m.prepareTerraformEnv()
+			if err != nil {
+				planEnv = nil
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			showResult, showErr := m.executor.Show(ctx, m.planFilePath, terraform.ShowOptions{Env: planEnv})
+			cancel()
+			if showErr == nil && showResult != nil && strings.TrimSpace(showResult.Output) != "" {
+				parseInput = showResult.Output
+			}
+		}
+
+		textParser := tfparser.NewTextParser()
+		plan, err := textParser.Parse(strings.NewReader(parseInput))
+		if err != nil {
+			return PlanCompleteMsg{Error: fmt.Errorf("parse plan output: %w", err), Result: result, Output: output}
+		}
+		return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
+	}
+}
+
+func (m *Model) waitApplyCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
+	return func() tea.Msg {
+		if result == nil {
+			return ApplyCompleteMsg{Success: false, Error: errors.New("apply execution result missing")}
+		}
+		<-result.Done()
+		if result.Error != nil {
+			return ApplyCompleteMsg{Success: false, Error: result.Error, Result: result}
+		}
+		return ApplyCompleteMsg{Success: true, Result: result}
+	}
+}
+
+func (m *Model) setPlan(plan *terraform.Plan) {
+	m.plan = plan
+	if plan == nil {
+		m.resourceList.SetResources(nil)
+		return
+	}
+	if err := m.diffEngine.CalculateResourceDiffs(plan); err != nil {
+		m.err = err
+	}
+	m.resourceList.SetResources(plan.Resources)
+	if m.operationState != nil {
+		m.operationState.InitializeFromPlan(plan)
+	}
+}
+
+func (m *Model) renderToast(message string, isError bool) string {
+	if m.styles == nil {
+		return ""
+	}
+	style := m.styles.Highlight
+	if isError {
+		style = m.styles.Delete
+	}
+	content := style.Render(message)
+	box := m.styles.Border.Render(content)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+func (m *Model) clearToastCmd(delay time.Duration) tea.Cmd {
+	return tea.Tick(delay, func(_ time.Time) tea.Msg {
+		return ClearToastMsg{}
+	})
+}
+
+func (m *Model) flattenSummary(summary string) string {
+	parts := strings.Fields(summary)
+	return strings.Join(parts, " ")
+}
+
+func (m *Model) buildCommand(action string, flags []string, autoApprove bool) string {
+	args := []string{action}
+	args = append(args, flags...)
+	if autoApprove && !containsFlag(args, "-auto-approve") {
+		args = append(args, "-auto-approve")
+	}
+	return "terraform " + strings.Join(args, " ")
+}
+
+func containsFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag {
+			return true
+		}
+	}
+	return false
+}
+
+func planOutputPath(flags []string) string {
+	for i, flag := range flags {
+		if flag == "-out" && i+1 < len(flags) {
+			return flags[i+1]
+		}
+		if strings.HasPrefix(flag, "-out=") {
+			value := strings.TrimPrefix(flag, "-out=")
+			if value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func (m *Model) planFlagsForRecord() []string {
+	if len(m.planRunFlags) > 0 {
+		return m.planRunFlags
+	}
+	return m.planFlags
+}
+
+func (m *Model) planSummary() string {
+	if m.plan == nil {
+		return "No changes"
+	}
+	create := m.countResourcesByAction(terraform.ActionCreate)
+	update := m.countResourcesByAction(terraform.ActionUpdate)
+	deleteCount := m.countResourcesByAction(terraform.ActionDelete)
+	replace := m.countResourcesByAction(terraform.ActionReplace)
+
+	lines := []string{
+		fmt.Sprintf("+ %d to create", create),
+		fmt.Sprintf("~ %d to update", update),
+		fmt.Sprintf("- %d to destroy", deleteCount),
+	}
+	if replace > 0 {
+		lines = append(lines, fmt.Sprintf("± %d to replace", replace))
+	}
+	return strings.Join(lines, "\n")
+}

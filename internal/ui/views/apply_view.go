@@ -192,6 +192,8 @@ func (v *ApplyView) renderHeader() string {
 		label = "OK " + title
 	case ApplyFailed:
 		label = "ERR " + title
+	case ApplyPending:
+		// Keep default label
 	}
 	if v.width > 0 {
 		return v.styles.Title.Width(v.width).Render(label)
@@ -200,7 +202,7 @@ func (v *ApplyView) renderHeader() string {
 }
 
 func (v *ApplyView) renderFooter() string {
-	footer := ""
+	var footer string
 	switch v.status {
 	case ApplyRunning:
 		if v.progress != "" {
@@ -212,7 +214,7 @@ func (v *ApplyView) renderFooter() string {
 		footer = v.statusText.success
 	case ApplyFailed:
 		footer = v.statusText.failure
-	default:
+	case ApplyPending:
 		footer = v.statusText.pending
 	}
 	if v.status == ApplySuccess || v.status == ApplyFailed {

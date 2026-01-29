@@ -4,7 +4,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Theme defines the color scheme for the TUI
+// Theme defines the color scheme for the TUI.
 type Theme struct {
 	Name            string
 	CreateColor     lipgloss.AdaptiveColor

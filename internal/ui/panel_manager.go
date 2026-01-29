@@ -249,20 +249,6 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	return layout
 }
 
-func (pm *PanelManager) workspaceSelectorActive() bool {
-	panel, ok := pm.panels[PanelWorkspace]
-	if !ok || panel == nil {
-		return false
-	}
-	type selectorState interface {
-		SelectorActive() bool
-	}
-	if s, ok := panel.(selectorState); ok {
-		return s.SelectorActive()
-	}
-	return false
-}
-
 func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 	if panelsHeight <= 0 {
 		return 0, 0, 0
@@ -325,12 +311,11 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 		diff--
 	}
 	for diff < 0 {
-		if resourcesHeight > minHeight {
-			resourcesHeight--
-			diff++
-		} else {
+		if resourcesHeight <= minHeight {
 			break
 		}
+		resourcesHeight--
+		diff++
 	}
 
 	return workspaceHeight, resourcesHeight, historyHeight

@@ -40,7 +40,6 @@ type EnvironmentPanel struct {
 
 	// Environment state
 	current      string
-	strategy     environment.StrategyType
 	environments []environment.Environment
 
 	// List state
@@ -90,9 +89,8 @@ func (e *EnvironmentPanel) SelectorActive() bool {
 }
 
 // SetEnvironmentInfo updates the environment information
-func (e *EnvironmentPanel) SetEnvironmentInfo(current, _ string, strategy environment.StrategyType, environments []environment.Environment) {
+func (e *EnvironmentPanel) SetEnvironmentInfo(current, _ string, _ environment.StrategyType, environments []environment.Environment) {
 	e.current = current
-	e.strategy = strategy
 	e.environments = environments
 	e.rebuildItems()
 }
@@ -164,6 +162,8 @@ func (e *EnvironmentPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 		case tea.KeyDown:
 			e.moveDown()
 			return true, nil
+		default:
+			// Ignore other key types during filter mode
 		}
 	}
 
@@ -524,13 +524,14 @@ func (e *EnvironmentPanel) renderUnfocusedContent(width, totalHeight int) []stri
 		}
 	}
 
-	if currentItem != nil {
+	switch {
+	case currentItem != nil:
 		// Show current workspace without selection highlighting
 		lines = append(lines, e.renderItem(*currentItem, width, false))
-	} else if len(e.filteredItems) > 0 {
+	case len(e.filteredItems) > 0:
 		// No current marked, show first item
 		lines = append(lines, e.renderItem(e.filteredItems[0], width, false))
-	} else {
+	default:
 		// Empty state
 		lines = append(lines, e.padLine(e.styles.Dimmed.Render("No workspaces"), width))
 	}

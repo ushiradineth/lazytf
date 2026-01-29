@@ -9,6 +9,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // DiffViewer renders a side-by-side diff for the selected resource.
@@ -35,13 +36,13 @@ func (d *DiffViewer) SetSize(width, height int) {
 
 // View renders the diff viewer content.
 func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
-	content := ""
 	if resource == nil {
 		return d.pad("")
 	}
 
 	diffs := d.diffEngine.GetResourceDiffs(resource)
 	if len(diffs) == 0 {
+		var content string
 		if resource.Action != terraform.ActionNoOp {
 			action := actionLabel(resource.Action)
 			if action == "" {
@@ -65,7 +66,7 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 	default:
 		body = d.renderCompactList(diffs, resource.Change)
 	}
-	content = lipgloss.JoinVertical(lipgloss.Left, header, body)
+	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
 	return d.pad(content)
 }
 
@@ -86,7 +87,7 @@ func (d *DiffViewer) renderHeader(resource *terraform.ResourceChange, diffs []di
 }
 
 func (d *DiffViewer) renderTable(diffs []diff.MinimalDiff, change *terraform.Change) string {
-	var rows []string
+	rows := make([]string, 0, len(diffs))
 	for _, item := range diffs {
 		rows = append(rows, d.renderInlineChange(item, change))
 	}
@@ -123,7 +124,7 @@ func (d *DiffViewer) renderBlocks(diffs []diff.MinimalDiff, change *terraform.Ch
 }
 
 func (d *DiffViewer) renderCompactList(diffs []diff.MinimalDiff, change *terraform.Change) string {
-	var rows []string
+	rows := make([]string, 0, len(diffs))
 	for _, item := range diffs {
 		rows = append(rows, d.renderInlineChange(item, change))
 	}
@@ -134,10 +135,9 @@ func (d *DiffViewer) renderInlineChange(item diff.MinimalDiff, change *terraform
 	path := formatPathForDisplay(item.Path)
 	symbol := item.Action.GetActionSymbol()
 	var style lipgloss.Style
-	line := ""
+	var line string
 	marker := replaceMarker(item.Path, change)
-	markerPlain := ""
-	markerStyled := ""
+	var markerPlain, markerStyled string
 	if marker != "" {
 		markerPlain = "  " + marker
 		markerStyled = d.styles.Comment.Render(markerPlain)
@@ -229,10 +229,10 @@ func (d *DiffViewer) renderDiffRow(columns []int, item diff.MinimalDiff, change 
 }
 
 func (d *DiffViewer) renderRow(columns []int, style lipgloss.Style, symbol, path, before, after string) string {
-	symbol = truncateLine(symbol, columns[0]-1)
-	path = truncateLine(path, columns[1]-1)
-	before = truncateLine(before, columns[2]-1)
-	after = truncateLine(after, columns[3]-1)
+	symbol = utils.TruncateEnd(symbol, columns[0]-1)
+	path = utils.TruncateEnd(path, columns[1]-1)
+	before = utils.TruncateEnd(before, columns[2]-1)
+	after = utils.TruncateEnd(after, columns[3]-1)
 
 	symbolCell := style.Width(columns[0]).MaxWidth(columns[0]).Render(symbol)
 	pathCell := style.Width(columns[1]).MaxWidth(columns[1]).Render(path)

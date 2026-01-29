@@ -2,10 +2,10 @@ package components
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/ushiradineth/lazytf/internal/diff"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 func formatValue(val any) string {
@@ -24,11 +24,11 @@ func formatValue(val any) string {
 		return "(known after apply)"
 	}
 
-	if isMap(val) {
+	if utils.IsMap(val) {
 		return "{...}"
 	}
-	if isList(val) {
-		if asList := interfaceToList(val); len(asList) == 1 {
+	if utils.IsList(val) {
+		if asList := utils.InterfaceToList(val); len(asList) == 1 {
 			if s, ok := asList[0].(string); ok {
 				return formatValue(s)
 			}
@@ -37,34 +37,6 @@ func formatValue(val any) string {
 	}
 
 	return fmt.Sprintf("%v", val)
-}
-
-func isMap(val any) bool {
-	if val == nil {
-		return false
-	}
-	return reflect.TypeOf(val).Kind() == reflect.Map
-}
-
-func isList(val any) bool {
-	if val == nil {
-		return false
-	}
-	kind := reflect.TypeOf(val).Kind()
-	return kind == reflect.Slice || kind == reflect.Array
-}
-
-func interfaceToList(val any) []any {
-	v := reflect.ValueOf(val)
-	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-		return nil
-	}
-
-	result := make([]any, v.Len())
-	for i := 0; i < v.Len(); i++ {
-		result[i] = v.Index(i).Interface()
-	}
-	return result
 }
 
 func formatMultilineStringDiff(path, before, after string) string {
@@ -94,22 +66,12 @@ func formatMultilineStringDiff(path, before, after string) string {
 		newLine := stripListMarker(strings.TrimSpace(afterLines[idx]))
 		b.WriteString("\n")
 		b.WriteString("    - ")
-		b.WriteString(truncateLine(oldLine, 140))
+		b.WriteString(utils.TruncateEnd(oldLine, 140))
 		b.WriteString("\n")
 		b.WriteString("    + ")
-		b.WriteString(truncateLine(newLine, 140))
+		b.WriteString(utils.TruncateEnd(newLine, 140))
 	}
 	return b.String()
-}
-
-func truncateLine(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }
 
 func stripListMarker(line string) string {

@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // PlanView renders an apply confirmation dialog.
@@ -57,7 +58,7 @@ func (v *PlanView) View() string {
 	)
 
 	content := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-	box := v.styles.Border.Width(minInt(50, v.width-4)).Render(content)
+	box := v.styles.Border.Width(utils.MinInt(50, v.width-4)).Render(content)
 	if v.width == 0 || v.height == 0 {
 		return box
 	}

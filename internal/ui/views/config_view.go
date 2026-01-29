@@ -8,6 +8,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // ConfigView renders application configuration details.
@@ -39,7 +40,7 @@ func (v *ConfigView) View() string {
 	if v.styles == nil {
 		return ""
 	}
-	width := minInt(70, v.width-4)
+	width := utils.MinInt(70, v.width-4)
 	if width < 34 {
 		width = 34
 	}

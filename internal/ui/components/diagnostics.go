@@ -18,8 +18,6 @@ type DiagnosticsPanel struct {
 	viewport    viewport.Model
 	diagnostics []terraform.Diagnostic
 	logText     string
-	parsedText  string
-	showRaw     bool
 	styles      *styles.Styles
 	width       int
 	height      int
@@ -64,17 +62,16 @@ func (d *DiagnosticsPanel) SetLogText(text string) {
 	d.viewport.GotoBottom()
 }
 
-// SetParsedText sets the parsed summary text for display.
-func (d *DiagnosticsPanel) SetParsedText(text string) {
-	d.parsedText = strings.TrimRight(text, "\n")
-	d.updateViewport()
-	d.viewport.GotoBottom()
+// SetParsedText is a no-op kept for API compatibility.
+// The parsed text was previously stored but never displayed.
+func (d *DiagnosticsPanel) SetParsedText(_ string) {
+	// Intentionally empty - parsed text is not used
 }
 
-// SetShowRaw toggles between raw logs and parsed summary when no diagnostics exist.
-func (d *DiagnosticsPanel) SetShowRaw(show bool) {
-	d.showRaw = show
-	d.updateViewport()
+// SetShowRaw is a no-op kept for API compatibility.
+// The show raw flag was previously stored but never used.
+func (d *DiagnosticsPanel) SetShowRaw(_ bool) {
+	// Intentionally empty - show raw flag is not used
 }
 
 // AppendSessionLog adds a new command log entry to the session history.

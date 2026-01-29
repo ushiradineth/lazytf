@@ -114,8 +114,7 @@ func (t *Toast) IsVisible() bool {
 
 // Update handles tea messages for the toast.
 func (t *Toast) Update(msg tea.Msg) tea.Cmd {
-	switch msg.(type) {
-	case ClearToast:
+	if _, ok := msg.(ClearToast); ok {
 		t.Hide()
 	}
 	return nil

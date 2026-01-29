@@ -12,6 +12,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 func TestFormatValue(t *testing.T) {
@@ -56,11 +57,11 @@ func TestFormatMultilineStringDiff_MismatchOrNoDiff(t *testing.T) {
 	}
 }
 
-func TestTruncateLineAndStripListMarker(t *testing.T) {
-	if got := truncateLine("hello", 3); got != "hel" {
+func TestTruncateEndAndStripListMarker(t *testing.T) {
+	if got := utils.TruncateEnd("hello", 3); got != "hel" {
 		t.Fatalf("unexpected truncation: %q", got)
 	}
-	if got := truncateLine("hello", 5); got != "hello" {
+	if got := utils.TruncateEnd("hello", 5); got != "hello" {
 		t.Fatalf("unexpected truncation: %q", got)
 	}
 	if got := stripListMarker("- item"); got != "item" {
@@ -72,19 +73,19 @@ func TestTruncateLineAndStripListMarker(t *testing.T) {
 }
 
 func TestInterfaceHelpers(t *testing.T) {
-	if !isMap(map[string]any{"a": 1}) {
+	if !utils.IsMap(map[string]any{"a": 1}) {
 		t.Fatalf("expected map to be detected")
 	}
-	if isMap(nil) {
+	if utils.IsMap(nil) {
 		t.Fatalf("expected nil not to be a map")
 	}
-	if !isList([]int{1, 2}) {
+	if !utils.IsList([]int{1, 2}) {
 		t.Fatalf("expected list to be detected")
 	}
-	if isList(nil) {
+	if utils.IsList(nil) {
 		t.Fatalf("expected nil not to be a list")
 	}
-	if got := interfaceToList([]string{"a", "b"}); len(got) != 2 {
+	if got := utils.InterfaceToList([]string{"a", "b"}); len(got) != 2 {
 		t.Fatalf("unexpected list length: %d", len(got))
 	}
 }

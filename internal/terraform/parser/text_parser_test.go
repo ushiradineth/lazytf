@@ -250,10 +250,18 @@ func TestApplyHeredocValuePrefixes(t *testing.T) {
 	builder.applyHeredocValue("key", "+", "after")
 	builder.applyHeredocValue("key", "~", "updated")
 
-	if builder.before["root"].(map[string]any)["key"] != "before" {
+	beforeRoot, ok := builder.before["root"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected before[root] to be map")
+	}
+	if beforeRoot["key"] != "before" {
 		t.Fatalf("expected before value")
 	}
-	if builder.after["root"].(map[string]any)["key"] != "updated" {
+	afterRoot, ok := builder.after["root"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected after[root] to be map")
+	}
+	if afterRoot["key"] != "updated" {
 		t.Fatalf("expected after value to be updated")
 	}
 }

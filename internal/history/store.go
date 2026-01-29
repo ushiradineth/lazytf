@@ -200,6 +200,29 @@ func (s *Store) RecordOperation(entry OperationEntry) error {
 	return err
 }
 
+// scanEntry scans a single row into an Entry struct.
+func scanEntry(rows *sql.Rows) (Entry, error) {
+	var entry Entry
+	var started string
+	var finished string
+	var durationMs int64
+	var status string
+	if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment); err != nil {
+		return Entry{}, err
+	}
+	startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
+	if parseErr == nil {
+		entry.StartedAt = startedAt.Local()
+	}
+	finishedAt, parseErr := time.Parse(time.RFC3339Nano, finished)
+	if parseErr == nil {
+		entry.FinishedAt = finishedAt.Local()
+	}
+	entry.Duration = time.Duration(durationMs) * time.Millisecond
+	entry.Status = Status(status)
+	return entry, nil
+}
+
 // ListRecent returns the most recent apply history entries.
 func (s *Store) ListRecent(limit int) ([]Entry, error) {
 	if s == nil || s.db == nil {
@@ -225,24 +248,10 @@ func (s *Store) ListRecent(limit int) ([]Entry, error) {
 
 	var entries []Entry
 	for rows.Next() {
-		var entry Entry
-		var started string
-		var finished string
-		var durationMs int64
-		var status string
-		if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment); err != nil {
+		entry, err := scanEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-		startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
-		if parseErr == nil {
-			entry.StartedAt = startedAt.Local()
-		}
-		finishedAt, parseErr := time.Parse(time.RFC3339Nano, finished)
-		if parseErr == nil {
-			entry.FinishedAt = finishedAt.Local()
-		}
-		entry.Duration = time.Duration(durationMs) * time.Millisecond
-		entry.Status = Status(status)
 		entries = append(entries, entry)
 	}
 	return entries, rows.Err()
@@ -278,24 +287,10 @@ func (s *Store) ListRecentForEnvironment(environment string, limit int) ([]Entry
 
 	var entries []Entry
 	for rows.Next() {
-		var entry Entry
-		var started string
-		var finished string
-		var durationMs int64
-		var status string
-		if err := rows.Scan(&entry.ID, &started, &finished, &durationMs, &status, &entry.Summary, &entry.Error, &entry.WorkDir, &entry.Environment); err != nil {
+		entry, err := scanEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-		startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
-		if parseErr == nil {
-			entry.StartedAt = startedAt.Local()
-		}
-		finishedAt, parseErr := time.Parse(time.RFC3339Nano, finished)
-		if parseErr == nil {
-			entry.FinishedAt = finishedAt.Local()
-		}
-		entry.Duration = time.Duration(durationMs) * time.Millisecond
-		entry.Status = Status(status)
 		entries = append(entries, entry)
 	}
 	return entries, rows.Err()

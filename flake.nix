@@ -19,6 +19,7 @@
             pkgs.golines
             pkgs.golangci-lint
             pkgs.govulncheck
+            pkgs.go-tools
             pkgs.gow
 
             pkgs.vimPlugins.nvim-treesitter-parsers.go
