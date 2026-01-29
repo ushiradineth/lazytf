@@ -12,6 +12,7 @@ import (
 
 const (
 	envConfigFileName = "env-config.json"
+	filtersDirName    = "filters"
 )
 
 // Preference stores the user's preferred environment selection.
@@ -21,12 +22,32 @@ type Preference struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
+// FilterPreference stores the user's filter toggles per workspace.
+type FilterPreference struct {
+	FilterCreate  bool      `json:"filter_create"`
+	FilterUpdate  bool      `json:"filter_update"`
+	FilterDelete  bool      `json:"filter_delete"`
+	FilterReplace bool      `json:"filter_replace"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 func cacheDir(baseDir string) string {
 	return filepath.Join(baseDir, ".lazytf")
 }
 
 func preferenceFilePath(baseDir string) string {
 	return filepath.Join(cacheDir(baseDir), envConfigFileName)
+}
+
+func filterPreferenceFilePath(baseDir, workspace string) string {
+	// Sanitize workspace name to be filesystem-safe
+	safeName := strings.ReplaceAll(workspace, "/", "_")
+	safeName = strings.ReplaceAll(safeName, "\\", "_")
+	safeName = strings.ReplaceAll(safeName, ":", "_")
+	if safeName == "" {
+		safeName = "default"
+	}
+	return filepath.Join(cacheDir(baseDir), filtersDirName, safeName+".json")
 }
 
 // LoadPreference reads the user's environment preference.
@@ -61,6 +82,43 @@ func SavePreference(baseDir string, pref Preference) error {
 		pref.UpdatedAt = time.Now()
 	}
 	return writeJSONAtomic(preferenceFilePath(baseDir), pref)
+}
+
+// LoadFilterPreference reads the user's filter preference for a workspace.
+func LoadFilterPreference(baseDir, workspace string) (*FilterPreference, error) {
+	if strings.TrimSpace(baseDir) == "" {
+		return nil, errors.New("base dir required for filter preference")
+	}
+	path := filterPreferenceFilePath(baseDir, workspace)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Return default (all filters enabled)
+			return &FilterPreference{
+				FilterCreate:  true,
+				FilterUpdate:  true,
+				FilterDelete:  true,
+				FilterReplace: true,
+			}, nil
+		}
+		return nil, fmt.Errorf("read filter preference: %w", err)
+	}
+	var pref FilterPreference
+	if err := json.Unmarshal(data, &pref); err != nil {
+		return nil, fmt.Errorf("decode filter preference: %w", err)
+	}
+	return &pref, nil
+}
+
+// SaveFilterPreference persists the user's filter preference for a workspace.
+func SaveFilterPreference(baseDir, workspace string, pref FilterPreference) error {
+	if strings.TrimSpace(baseDir) == "" {
+		return errors.New("base dir required for filter preference")
+	}
+	if pref.UpdatedAt.IsZero() {
+		pref.UpdatedAt = time.Now()
+	}
+	return writeJSONAtomic(filterPreferenceFilePath(baseDir, workspace), pref)
 }
 
 func writeJSONAtomic(path string, payload any) error {

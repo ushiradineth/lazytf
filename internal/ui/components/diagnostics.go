@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +23,15 @@ type DiagnosticsPanel struct {
 	styles      *styles.Styles
 	width       int
 	height      int
+	// Session log history - stores all command outputs for the session
+	sessionLogs []SessionLogEntry
+}
+
+// SessionLogEntry represents a single command log entry in the session.
+type SessionLogEntry struct {
+	Command   string
+	Output    string
+	Timestamp string
 }
 
 // NewDiagnosticsPanel creates a diagnostics panel.
@@ -67,6 +77,24 @@ func (d *DiagnosticsPanel) SetShowRaw(show bool) {
 	d.updateViewport()
 }
 
+// AppendSessionLog adds a new command log entry to the session history.
+func (d *DiagnosticsPanel) AppendSessionLog(command, output string) {
+	entry := SessionLogEntry{
+		Command:   command,
+		Output:    output,
+		Timestamp: time.Now().Format("15:04:05"),
+	}
+	d.sessionLogs = append(d.sessionLogs, entry)
+	d.updateViewport()
+	d.viewport.GotoBottom()
+}
+
+// ClearSessionLogs clears all session log entries.
+func (d *DiagnosticsPanel) ClearSessionLogs() {
+	d.sessionLogs = nil
+	d.updateViewport()
+}
+
 // View renders the diagnostics panel.
 func (d *DiagnosticsPanel) View() string {
 	if d == nil || d.styles == nil {
@@ -93,63 +121,67 @@ func (d *DiagnosticsPanel) updateViewport() {
 	if d == nil || d.styles == nil {
 		return
 	}
-	if len(d.diagnostics) == 0 {
-		content := d.parsedText
-		title := "Parsed"
-		if d.showRaw {
-			content = d.logText
-			title = "Logs"
+
+	var sections []string
+
+	// Always show session logs first (all historic commands)
+	if len(d.sessionLogs) > 0 {
+		for _, entry := range d.sessionLogs {
+			header := d.styles.Highlight.Render(fmt.Sprintf("[%s] %s", entry.Timestamp, entry.Command))
+			sections = append(sections, header)
+			if strings.TrimSpace(entry.Output) != "" {
+				output := entry.Output
+				if d.width > 0 {
+					output = wrapText(output, d.width)
+				}
+				sections = append(sections, output)
+			}
+			sections = append(sections, "") // Empty line separator
 		}
-		if strings.TrimSpace(content) == "" {
-			if strings.TrimSpace(d.logText) != "" {
-				content = d.logText
-				title = "Logs"
+	}
+
+	// Show diagnostics if any
+	if len(d.diagnostics) > 0 {
+		var errors []terraform.Diagnostic
+		var warnings []terraform.Diagnostic
+		for _, diag := range d.diagnostics {
+			switch strings.ToLower(diag.Severity) {
+			case "error":
+				errors = append(errors, diag)
+			default:
+				warnings = append(warnings, diag)
 			}
 		}
+
+		sections = append(sections, d.styles.Title.Render("Diagnostics"))
+		if len(errors) > 0 {
+			sections = append(sections, d.styles.Delete.Render("Errors"))
+			for _, diag := range errors {
+				sections = append(sections, formatDiagnostic(diag))
+			}
+		}
+		if len(warnings) > 0 {
+			sections = append(sections, d.styles.Update.Render("Warnings"))
+			for _, diag := range warnings {
+				sections = append(sections, formatDiagnostic(diag))
+			}
+		}
+	}
+
+	// If no session logs and no diagnostics, show current log text
+	if len(sections) == 0 {
+		content := d.logText
 		if strings.TrimSpace(content) == "" {
-			d.viewport.SetContent(d.styles.Dimmed.Render("No diagnostics reported."))
+			d.viewport.SetContent(d.styles.Dimmed.Render("No logs available."))
 			return
 		}
-		logs := content
 		if d.width > 0 {
-			logs = wrapText(logs, d.width)
+			content = wrapText(content, d.width)
 		}
-		lines := []string{
-			d.styles.Title.Render(title),
-			logs,
-		}
-		d.viewport.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
-		return
+		sections = append(sections, content)
 	}
 
-	var errors []terraform.Diagnostic
-	var warnings []terraform.Diagnostic
-	for _, diag := range d.diagnostics {
-		switch strings.ToLower(diag.Severity) {
-		case "error":
-			errors = append(errors, diag)
-		default:
-			warnings = append(warnings, diag)
-		}
-	}
-
-	var lines []string
-	lines = append(lines, d.styles.Title.Render("Diagnostics"))
-
-	if len(errors) > 0 {
-		lines = append(lines, d.styles.Delete.Render("Errors"))
-		for _, diag := range errors {
-			lines = append(lines, formatDiagnostic(diag))
-		}
-	}
-	if len(warnings) > 0 {
-		lines = append(lines, d.styles.Update.Render("Warnings"))
-		for _, diag := range warnings {
-			lines = append(lines, formatDiagnostic(diag))
-		}
-	}
-
-	d.viewport.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
+	d.viewport.SetContent(strings.TrimRight(strings.Join(sections, "\n"), "\n"))
 }
 
 func wrapText(text string, width int) string {

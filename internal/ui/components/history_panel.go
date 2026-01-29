@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/styles"
@@ -96,13 +97,8 @@ func (h *HistoryPanel) View() string {
 		lines = append(lines, h.styles.Dimmed.Render("No history yet"))
 	} else {
 		for i := 0; i < len(h.entries) && i < available; i++ {
-			lines = append(lines, h.renderEntry(h.entries[i], i == h.selected))
+			lines = append(lines, h.renderEntry(h.entries[i], i == h.selected, contentWidth))
 		}
-	}
-
-	// Truncate lines to fit content width
-	for i := range lines {
-		lines[i] = trimString(lines[i], contentWidth)
 	}
 
 	content := strings.Join(lines, "\n")
@@ -117,11 +113,10 @@ func (h *HistoryPanel) View() string {
 		Height(h.height - 2).
 		Render(content)
 
-	// Add title to border - use simple title without extra styling that might cause width issues
+	// Add title to border
 	titleText := " [3] Recent Applies "
 	title := titleStyle.Render(titleText)
 
-	// Add title to border
 	panelLines := strings.Split(panel, "\n")
 	if len(panelLines) > 0 && h.width > 4 {
 		if line, ok := RenderPanelTitleLine(h.width, borderStyle, title); ok {
@@ -132,37 +127,75 @@ func (h *HistoryPanel) View() string {
 	return strings.Join(panelLines, "\n")
 }
 
-func (h *HistoryPanel) renderEntry(entry history.Entry, selected bool) string {
-	status := string(entry.Status)
-	switch entry.Status {
-	case history.StatusSuccess:
-		status = h.styles.Create.Render("ok")
-	case history.StatusFailed:
-		status = h.styles.Delete.Render("fail")
-	case history.StatusCanceled:
-		status = h.styles.Update.Render("cancel")
-	}
-
+func (h *HistoryPanel) renderEntry(entry history.Entry, selected bool, maxWidth int) string {
+	// Get timestamp
 	ts := entry.FinishedAt
 	if ts.IsZero() {
 		ts = entry.StartedAt
 	}
 	when := formatTime(ts)
-	label := strings.TrimSpace(entry.Summary)
-	if label == "" {
-		label = entry.WorkDir
-	}
-	if label == "" {
-		label = "apply"
-	}
-	dur := formatDuration(entry.Duration)
-	if dur != "" {
-		dur = " " + dur
+
+	// Get status with styling
+	var statusText string
+	switch entry.Status {
+	case history.StatusSuccess:
+		statusText = h.styles.Create.Render("ok")
+	case history.StatusFailed:
+		statusText = h.styles.Delete.Render("fail")
+	case history.StatusCanceled:
+		statusText = h.styles.Update.Render("cancel")
+	default:
+		statusText = string(entry.Status)
 	}
 
-	line := fmt.Sprintf("%s %s%s %s", when, status, dur, trimString(label, h.width-14))
+	// Get duration
+	dur := formatDuration(entry.Duration)
+
+	// Get description - prefer Summary (shows what happened), fall back to Environment/WorkDir
+	desc := strings.TrimSpace(entry.Summary)
+	if desc == "" {
+		desc = strings.TrimSpace(entry.Environment)
+	}
+	if desc == "" {
+		// Get last component of WorkDir for brevity
+		wd := strings.TrimSpace(entry.WorkDir)
+		if idx := strings.LastIndex(wd, "/"); idx >= 0 && idx < len(wd)-1 {
+			wd = wd[idx+1:]
+		}
+		desc = wd
+	}
+	if desc == "" {
+		desc = "apply"
+	}
+
+	// Build line: "HH:MM ok 5s + 1 to create" or "HH:MM fail prod"
+	// Calculate available space for description
+	// Fixed parts: "HH:MM " (6) + status (4 visual chars) + space (1) = 11 chars
+	fixedLen := 11
+	if dur != "" {
+		fixedLen += len(dur) + 1 // duration + space
+	}
+	descWidth := maxWidth - fixedLen
+	if descWidth < 3 {
+		descWidth = 3
+	}
+	desc = trimString(desc, descWidth)
+
+	var line string
+	if dur != "" {
+		line = fmt.Sprintf("%s %s %s %s", when, statusText, dur, desc)
+	} else {
+		line = fmt.Sprintf("%s %s %s", when, statusText, desc)
+	}
+
+	// Pad line to maxWidth to ensure consistent selection highlighting
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < maxWidth {
+		line = line + strings.Repeat(" ", maxWidth-lineWidth)
+	}
+
 	if selected && h.focused {
-		return h.styles.Selected.Render(line)
+		return h.styles.Selected.MaxWidth(maxWidth).Render(line)
 	}
 	return line
 }

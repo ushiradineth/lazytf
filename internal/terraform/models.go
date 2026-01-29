@@ -316,3 +316,27 @@ func (a ActionType) GetActionVerb() string {
 		return "unknown action"
 	}
 }
+
+// ValidateResult represents the output of terraform validate -json.
+type ValidateResult struct {
+	FormatVersion string       `json:"format_version"`
+	Valid         bool         `json:"valid"`
+	ErrorCount    int          `json:"error_count"`
+	WarningCount  int          `json:"warning_count"`
+	Diagnostics   []Diagnostic `json:"diagnostics"`
+}
+
+// FormatResult represents the output of terraform fmt.
+type FormatResult struct {
+	ChangedFiles []string
+	Success      bool
+}
+
+// StateResource represents a resource in terraform state.
+type StateResource struct {
+	Address      string
+	ResourceType string
+	Name         string
+	Provider     string
+	Module       string
+}

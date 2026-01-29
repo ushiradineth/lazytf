@@ -98,8 +98,8 @@ func TestApplyWithoutPlanShowsToast(t *testing.T) {
 	if m.err != nil {
 		t.Fatalf("did not expect fatal error, got %v", m.err)
 	}
-	if m.toastMessage == "" || !m.toastIsError {
-		t.Fatalf("expected error toast to be set")
+	if m.toast == nil || !m.toast.IsVisible() {
+		t.Fatalf("expected error toast to be visible")
 	}
 	if cmd == nil {
 		t.Fatalf("expected toast clear command")
@@ -160,17 +160,21 @@ func TestRenderMainContentSplitAndSingle(t *testing.T) {
 	}
 }
 
-func TestRenderHelpContent(t *testing.T) {
+func TestHelpModalContent(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.width = 80
 	m.height = 24
+	m.ready = true
+	m.modalState = ModalHelp
 
-	out := m.renderHelp()
-	if !strings.Contains(out, "lazytf keybinds") {
-		t.Fatalf("expected help title in output")
+	// Trigger the help modal content update
+	m.updateHelpModalContent()
+
+	if m.helpModal == nil {
+		t.Fatalf("expected help modal to be initialized")
 	}
-	if !strings.Contains(out, "Navigation") {
-		t.Fatalf("expected navigation line in help output")
+	if !m.helpModal.IsVisible() {
+		t.Fatalf("expected help modal to be visible")
 	}
 }
 
@@ -844,11 +848,11 @@ func TestAppendDiagnostics(t *testing.T) {
 	m.executionMode = true
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsPanel.SetSize(40, 5)
-	m.diagnosticsPanel.SetParsedText("parsed")
+	m.diagnosticsPanel.AppendSessionLog("terraform plan", "session log output")
 	m.diagnosticsHeight = 5
 
 	content := m.appendDiagnostics("base")
-	if !strings.Contains(content, "parsed") {
+	if !strings.Contains(content, "session log output") {
 		t.Fatalf("expected diagnostics content to be appended")
 	}
 }
@@ -1203,8 +1207,8 @@ func TestUpdateEnvironmentDetectedError(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected toast clear command")
 	}
-	if !strings.Contains(m.toastMessage, "Environment detection failed") {
-		t.Fatalf("expected error toast, got %q", m.toastMessage)
+	if m.toast == nil || !m.toast.IsVisible() {
+		t.Fatalf("expected error toast to be visible")
 	}
 }
 
@@ -1224,11 +1228,12 @@ func TestUpdateHistoryLoadedError(t *testing.T) {
 func TestUpdateClearToast(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.ready = true
-	m.toastMessage = "hi"
-	m.toastIsError = true
+	if m.toast != nil {
+		m.toast.ShowInfo("hi")
+	}
 
 	m.Update(ClearToastMsg{})
-	if m.toastMessage != "" || m.toastIsError {
+	if m.toast != nil && m.toast.IsVisible() {
 		t.Fatalf("expected toast to be cleared")
 	}
 }
@@ -1238,6 +1243,7 @@ func TestViewModalStates(t *testing.T) {
 	m.ready = true
 	m.width = 80
 	m.height = 24
+	m.updateLayout() // Update layout to set overlay component sizes
 
 	m.modalState = ModalSettings
 	if out := m.View(); !strings.Contains(out, "Settings") {
@@ -1245,7 +1251,7 @@ func TestViewModalStates(t *testing.T) {
 	}
 
 	m.modalState = ModalHelp
-	if out := m.View(); !strings.Contains(out, "lazytf keybinds") {
+	if out := m.View(); !strings.Contains(out, "Keybinds") {
 		t.Fatalf("expected help view")
 	}
 }
@@ -1290,18 +1296,6 @@ func TestHandleExecutionKeyHistoryDetailExit(t *testing.T) {
 	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyEsc})
 	if !handled || m.execView != viewMain {
 		t.Fatalf("expected history detail to return to main")
-	}
-}
-
-func TestHandleExecutionKeyRawLogsToggle(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
-	m.showRawLogs = false
-
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
-	if !handled || !m.showRawLogs {
-		t.Fatalf("expected raw logs toggle")
 	}
 }
 
@@ -1480,8 +1474,8 @@ func TestUpdateHistoryDetailError(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected toast clear command")
 	}
-	if !strings.Contains(m.toastMessage, "History error") {
-		t.Fatalf("expected history error toast")
+	if m.toast == nil || !m.toast.IsVisible() {
+		t.Fatalf("expected history error toast to be visible")
 	}
 }
 

@@ -70,8 +70,9 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 func (r *ResourceList) SetSize(width, height int) {
 	r.width = width
 	r.height = height
-	r.viewport.Width = width
-	r.viewport.Height = height
+	// Viewport dimensions are content area (minus borders)
+	r.viewport.Width = width - 2
+	r.viewport.Height = height - 2
 	r.updateViewport()
 }
 

@@ -20,7 +20,7 @@ func NewPanelManager() *PanelManager {
 	return &PanelManager{
 		panels:            make(map[PanelID]Panel),
 		focusedPanel:      PanelResources, // Default to resource list
-		commandLogVisible: false,
+		commandLogVisible: true,           // Command log visible by default
 		commandLogFocused: false,
 	}
 }
@@ -295,17 +295,17 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 		resources float64
 		history   float64
 	}
-	current := ratios{workspace: 0.25, resources: 0.50, history: 0.25}
+	current := ratios{workspace: 0.20, resources: 0.60, history: 0.20}
 	switch pm.focusedPanel {
 	case PanelWorkspace:
-		current = ratios{workspace: 0.50, resources: 0.30, history: 0.20}
+		current = ratios{workspace: 0.60, resources: 0.20, history: 0.20}
 	case PanelResources:
-		current = ratios{workspace: 0.15, resources: 0.65, history: 0.20}
+		current = ratios{workspace: 0.20, resources: 0.60, history: 0.20}
 	case PanelHistory:
-		current = ratios{workspace: 0.20, resources: 0.30, history: 0.50}
+		current = ratios{workspace: 0.20, resources: 0.20, history: 0.60}
 	}
 	if pm.focusedPanel == PanelWorkspace && pm.workspaceSelectorActive() {
-		current = ratios{workspace: 0.50, resources: 0.25, history: 0.25}
+		current = ratios{workspace: 0.60, resources: 0.20, history: 0.20}
 	}
 
 	minHeight := 3
@@ -425,11 +425,6 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, pm.SetFocus(PanelResources)
 		}
 		return true, nil
-	case "D", "d":
-		if pm.commandLogVisible {
-			return true, pm.SetFocus(PanelCommandLog)
-		}
-		return false, nil
 	case "esc":
 		// Return to resource list
 		if pm.focusedPanel != PanelResources || pm.commandLogFocused {

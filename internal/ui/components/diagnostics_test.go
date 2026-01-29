@@ -10,7 +10,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
-func TestDiagnosticsPanelEmptyAndParsed(t *testing.T) {
+func TestDiagnosticsPanelEmptyAndSessionLogs(t *testing.T) {
 	panel := NewDiagnosticsPanel(styles.DefaultStyles())
 	panel.SetSize(40, 5)
 
@@ -18,16 +18,21 @@ func TestDiagnosticsPanelEmptyAndParsed(t *testing.T) {
 		t.Fatalf("expected view to render")
 	}
 
-	panel.SetParsedText("parsed")
+	// Session logs take priority when present
+	panel.AppendSessionLog("terraform plan", "plan output")
 	out := panel.View()
-	if !strings.Contains(out, "parsed") {
-		t.Fatalf("expected parsed content")
+	if !strings.Contains(out, "terraform plan") {
+		t.Fatalf("expected session log command in output")
+	}
+	if !strings.Contains(out, "plan output") {
+		t.Fatalf("expected session log output in output")
 	}
 
-	panel.SetLogText("raw")
-	panel.SetShowRaw(true)
+	// Clear session logs and use raw log text
+	panel.ClearSessionLogs()
+	panel.SetLogText("raw log content")
 	out = panel.View()
-	if !strings.Contains(out, "raw") {
+	if !strings.Contains(out, "raw log content") {
 		t.Fatalf("expected raw log content")
 	}
 }

@@ -66,6 +66,65 @@ type ApplyCompleteMsg struct {
 	Result  *terraform.ExecutionResult
 }
 
+// RefreshStartMsg is sent when a refresh execution begins.
+type RefreshStartMsg struct {
+	Result *terraform.ExecutionResult
+	Output <-chan string
+	Error  error
+}
+
+// RefreshOutputMsg streams refresh output lines.
+type RefreshOutputMsg struct{ Line string }
+
+// RefreshCompleteMsg signals refresh completion.
+type RefreshCompleteMsg struct {
+	Success bool
+	Error   error
+	Result  *terraform.ExecutionResult
+}
+
+// ValidateStartMsg is sent when validation begins.
+type ValidateStartMsg struct{}
+
+// ValidateCompleteMsg signals validation completion.
+type ValidateCompleteMsg struct {
+	Result       *terraform.ValidateResult
+	RawOutput    string
+	Error        error
+	ExecResult   *terraform.ExecutionResult
+}
+
+// FormatStartMsg is sent when formatting begins.
+type FormatStartMsg struct{}
+
+// FormatCompleteMsg signals formatting completion.
+type FormatCompleteMsg struct {
+	ChangedFiles []string
+	Error        error
+	ExecResult   *terraform.ExecutionResult
+}
+
+// StateListStartMsg is sent when state list begins.
+type StateListStartMsg struct{}
+
+// StateListCompleteMsg signals state list completion.
+type StateListCompleteMsg struct {
+	Resources []terraform.StateResource
+	Error     error
+}
+
+// StateShowStartMsg is sent when state show begins.
+type StateShowStartMsg struct {
+	Address string
+}
+
+// StateShowCompleteMsg signals state show completion.
+type StateShowCompleteMsg struct {
+	Address string
+	Output  string
+	Error   error
+}
+
 // HistoryLoadedMsg delivers history entries.
 type HistoryLoadedMsg struct {
 	Entries []history.Entry

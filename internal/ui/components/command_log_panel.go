@@ -24,7 +24,7 @@ func NewCommandLogPanel(s *styles.Styles) *CommandLogPanel {
 	return &CommandLogPanel{
 		diagnosticsPanel: NewDiagnosticsPanel(s),
 		styles:           s,
-		visible:          false,
+		visible:          true, // Visible by default
 	}
 }
 
@@ -150,8 +150,9 @@ func (c *CommandLogPanel) View() string {
 	content := ""
 	if c.diagnosticsPanel != nil {
 		content = c.diagnosticsPanel.View()
-	} else {
-		content = c.styles.Dimmed.Render("No logs available")
+	}
+	if content == "" {
+		content = c.styles.Dimmed.Render("No logs available.")
 	}
 
 	// Build panel with border
@@ -164,20 +165,14 @@ func (c *CommandLogPanel) View() string {
 		Height(c.height - 2).
 		Render(content)
 
-	// Add title to border
-	title := " [4] Command Log "
-	title = titleStyle.Render(title)
+	// Add title to border using consistent styling
+	titleText := " [4] Command Log "
+	title := titleStyle.Render(titleText)
 
 	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 {
-		firstLine := lines[0]
-		// Insert title after the first border character
-		// Note: title may contain ANSI codes, so we need to be careful with length
-		if len(firstLine) > len(title)+1 {
-			lines[0] = string(firstLine[0]) + title + firstLine[len(title)+1:]
-		} else if len(firstLine) > 1 {
-			// If not enough space, just append title and truncate
-			lines[0] = string(firstLine[0]) + title
+	if len(lines) > 0 && c.width > 4 {
+		if line, ok := RenderPanelTitleLine(c.width, borderStyle, title); ok {
+			lines[0] = line
 		}
 	}
 
@@ -187,4 +182,18 @@ func (c *CommandLogPanel) View() string {
 // GetDiagnosticsPanel returns the underlying diagnostics panel
 func (c *CommandLogPanel) GetDiagnosticsPanel() *DiagnosticsPanel {
 	return c.diagnosticsPanel
+}
+
+// AppendSessionLog adds a command log entry to the session history
+func (c *CommandLogPanel) AppendSessionLog(command, output string) {
+	if c.diagnosticsPanel != nil {
+		c.diagnosticsPanel.AppendSessionLog(command, output)
+	}
+}
+
+// ClearSessionLogs clears all session log entries
+func (c *CommandLogPanel) ClearSessionLogs() {
+	if c.diagnosticsPanel != nil {
+		c.diagnosticsPanel.ClearSessionLogs()
+	}
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -59,15 +60,16 @@ type Model struct {
 	planRunFlags     []string
 	planRunning      bool
 	applyRunning     bool
+	refreshRunning   bool
 	outputChan       <-chan string
 	cancelFunc       context.CancelFunc
 	execView         executionView
-	planStartedAt    time.Time
-	applyStartedAt   time.Time
+	planStartedAt     time.Time
+	applyStartedAt    time.Time
+	refreshStartedAt  time.Time
 	planFilePath     string
 	operationState   *terraform.OperationState
 	diagnosticsPanel *components.DiagnosticsPanel
-	showRawLogs      bool
 
 	historyStore       *history.Store
 	historyPanel       *components.HistoryPanel
@@ -80,6 +82,11 @@ type Model struct {
 	historyView        *views.HistoryView
 	historyDetail      *history.Entry
 	historyLogger      *history.Logger
+	stateListView      *views.StateListView
+	stateShowView      *views.StateShowView
+	stateResources     []terraform.StateResource
+	stateListContent   *components.StateListContent
+	resourcesActiveTab int // 0 = Resources, 1 = State
 	lastPlanOutput     string
 	config             *config.Config
 	configView         *views.ConfigView
@@ -89,8 +96,9 @@ type Model struct {
 	envDetection       *environment.DetectionResult
 	envOptions         []environment.Environment
 
-	toastMessage string
-	toastIsError bool
+	// Overlay components
+	toast     *components.Toast
+	helpModal *components.Modal
 
 	// Panel system
 	panelManager     *PanelManager
@@ -109,6 +117,8 @@ const (
 	viewHistoryDetail
 	viewDiagnostics
 	viewCommandLog
+	viewStateList
+	viewStateShow
 )
 
 // ModalState represents which modal overlay is active.
@@ -170,6 +180,11 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	mainArea := NewMainArea(appStyles, diffEngine, nil, nil)
 	commandLogPanel := components.NewCommandLogPanel(appStyles)
 
+	// Initialize overlay components
+	toast := components.NewToast(appStyles)
+	toast.SetPosition(components.ToastTopLeft)
+	helpModal := components.NewModal(appStyles)
+
 	m := &Model{
 		plan:          plan,
 		resourceList:  resourceList,
@@ -184,6 +199,10 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		filterReplace: true,
 		execView:      viewMain,
 		configView:    views.NewConfigView(appStyles),
+
+		// Overlay components
+		toast:     toast,
+		helpModal: helpModal,
 
 		// Panel system
 		panelManager:     panelManager,
@@ -206,6 +225,9 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		}
 		resourceList.SetResources(plan.Resources)
 	}
+
+	// Initialize focus on the default panel (Resources)
+	panelManager.SetFocus(PanelResources)
 
 	return m
 }
@@ -235,7 +257,6 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	m.operationState = terraform.NewOperationState()
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsHeight = 8
-	m.showRawLogs = false
 	m.resourceList.SetOperationState(m.operationState)
 	if plan != nil {
 		m.operationState.InitializeFromPlan(plan)
@@ -244,6 +265,13 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	// Update main area with plan/apply views
 	m.mainArea = NewMainArea(m.styles, m.diffEngine, m.applyView, m.planView)
 	m.panelManager.RegisterPanel(PanelMain, m.mainArea)
+
+	// Initialize state list content for the Resources panel tab
+	m.stateListContent = components.NewStateListContent(m.styles)
+	m.stateListContent.OnSelect = func(address string) tea.Cmd {
+		return m.beginStateShow(address)
+	}
+
 	m.historyPanel = components.NewHistoryPanel(m.styles)
 	m.historyHeight = 6
 	m.showHistory = false
@@ -351,6 +379,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ApplyCompleteMsg:
 		return m.handleApplyComplete(msg)
+
+	case RefreshStartMsg:
+		return m.handleRefreshStart(msg)
+
+	case RefreshOutputMsg:
+		if m.applyView != nil {
+			m.applyView.AppendLine(msg.Line)
+		}
+		cmd := m.streamRefreshOutputCmd()
+		return m, cmd
+
+	case RefreshCompleteMsg:
+		return m.handleRefreshComplete(msg)
+
+	case ValidateCompleteMsg:
+		return m.handleValidateComplete(msg)
+
+	case FormatCompleteMsg:
+		return m.handleFormatComplete(msg)
+
+	case StateListCompleteMsg:
+		return m.handleStateListComplete(msg)
+
+	case StateShowCompleteMsg:
+		return m.handleStateShowComplete(msg)
 	case HistoryLoadedMsg:
 		if msg.Error != nil {
 			m.err = msg.Error
@@ -362,9 +415,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case HistoryDetailMsg:
 		if msg.Error != nil {
-			m.toastMessage = fmt.Sprintf("History error: %v", msg.Error)
-			m.toastIsError = true
-			cmd := m.clearToastCmd(3 * time.Second)
+			var cmd tea.Cmd
+			if m.toast != nil {
+				cmd = m.toast.ShowError(fmt.Sprintf("History error: %v", msg.Error))
+			}
 			return m, cmd
 		}
 		m.historyDetail = &msg.Entry
@@ -388,9 +442,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case EnvironmentDetectedMsg:
 		if msg.Error != nil {
-			m.toastMessage = fmt.Sprintf("Environment detection failed: %v", msg.Error)
-			m.toastIsError = true
-			cmd := m.clearToastCmd(4 * time.Second)
+			var cmd tea.Cmd
+			if m.toast != nil {
+				cmd = m.toast.ShowError(fmt.Sprintf("Environment detection failed: %v", msg.Error))
+			}
 			return m, cmd
 		}
 		m.envDetection = &msg.Result
@@ -414,6 +469,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.environmentPanel.SetWarnings(msg.Result.Warnings)
 		}
 
+		// Load filter preferences for this workspace
+		m.loadFilterPreferences()
+
 		if m.envCurrent != "" {
 			if option, ok := m.findEnvironmentOption(m.envCurrent); ok {
 				_ = m.applyEnvironmentSelection(option)
@@ -428,18 +486,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case ClearToastMsg:
-		m.toastMessage = ""
-		m.toastIsError = false
+	case ClearToastMsg, components.ClearToast:
+		if m.toast != nil {
+			m.toast.Hide()
+		}
 		return m, nil
 
 	case components.EnvironmentChangedMsg:
 		// Apply environment change from environment panel
 		if err := m.applyEnvironmentSelection(msg.Environment); err != nil {
-			m.toastMessage = fmt.Sprintf("Failed to switch environment: %v", err)
-			m.toastIsError = true
-			clearCmd := m.clearToastCmd(4 * time.Second)
-			return m, clearCmd
+			var cmd tea.Cmd
+			if m.toast != nil {
+				cmd = m.toast.ShowError(fmt.Sprintf("Failed to switch environment: %v", err))
+			}
+			return m, cmd
 		}
 		m.envCurrent = envSelectionValue(msg.Environment)
 
@@ -448,9 +508,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
 		}
 
-		m.toastMessage = "Environment changed to " + m.envDisplayName()
-		clearCmd := m.clearToastCmd(2 * time.Second)
-		return m, clearCmd
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowSuccess("Environment changed to " + m.envDisplayName())
+		}
+		return m, cmd
 
 	case tea.KeyMsg:
 		if m.diagnosticsFocused && m.diagnosticsPanel != nil && m.execView == viewMain {
@@ -460,10 +522,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc", "D":
 				m.diagnosticsFocused = false
-				return m, nil
-			case "R":
-				m.showRawLogs = !m.showRawLogs
-				m.diagnosticsPanel.SetShowRaw(m.showRawLogs)
 				return m, nil
 			}
 			m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
@@ -490,6 +548,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "?", "esc":
 				m.modalState = ModalNone
 				return m, nil
+			case "j", "down":
+				if m.helpModal != nil {
+					m.helpModal.ScrollDown()
+				}
+				return m, nil
+			case "k", "up":
+				if m.helpModal != nil {
+					m.helpModal.ScrollUp()
+				}
+				return m, nil
 			default:
 				return m, nil
 			}
@@ -510,10 +578,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.panelManager != nil && m.execView == viewMain {
 			if handled, navCmd := m.panelManager.HandleNavigation(msg); handled {
 				cmds = append(cmds, navCmd)
-				// Update layout if command log visibility changed
-				if msg.String() == "L" {
-					m.updateLayout()
-				}
+				// Update layout when focus changes (affects panel heights)
+				m.updateLayout()
+				// Sync historyFocused state with panel manager
+				m.historyFocused = m.panelManager.GetFocusedPanel() == PanelHistory
 				return m, tea.Batch(cmds...)
 			}
 
@@ -565,6 +633,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.modalState = ModalNone
 			} else {
 				m.modalState = ModalHelp
+				m.updateHelpModalContent()
 			}
 			return m, nil
 
@@ -579,6 +648,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.filterCreate = !m.filterCreate
 			m.resourceList.SetFilter(terraform.ActionCreate, m.filterCreate)
+			m.saveFilterPreferences()
 
 		case "t":
 			m.resourceList.ToggleAllGroups()
@@ -586,14 +656,49 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "u":
 			m.filterUpdate = !m.filterUpdate
 			m.resourceList.SetFilter(terraform.ActionUpdate, m.filterUpdate)
+			m.saveFilterPreferences()
 
 		case "d":
 			m.filterDelete = !m.filterDelete
 			m.resourceList.SetFilter(terraform.ActionDelete, m.filterDelete)
+			m.saveFilterPreferences()
 
 		case "r":
 			m.filterReplace = !m.filterReplace
 			m.resourceList.SetFilter(terraform.ActionReplace, m.filterReplace)
+			m.saveFilterPreferences()
+
+		case "[":
+			// Switch to previous tab in resources panel
+			if m.executionMode && m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
+				if m.resourcesActiveTab > 0 {
+					m.resourcesActiveTab--
+				} else {
+					m.resourcesActiveTab = 1 // Wrap to State tab
+				}
+				// If switching to State tab and no state loaded, load it
+				if m.resourcesActiveTab == 1 && m.stateListContent != nil && m.stateListContent.ResourceCount() == 0 {
+					m.stateListContent.SetLoading(true)
+					return m, m.beginStateList()
+				}
+				return m, nil
+			}
+
+		case "]":
+			// Switch to next tab in resources panel
+			if m.executionMode && m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
+				if m.resourcesActiveTab < 1 {
+					m.resourcesActiveTab++
+				} else {
+					m.resourcesActiveTab = 0 // Wrap to Resources tab
+				}
+				// If switching to State tab and no state loaded, load it
+				if m.resourcesActiveTab == 1 && m.stateListContent != nil && m.stateListContent.ResourceCount() == 0 {
+					m.stateListContent.SetLoading(true)
+					return m, m.beginStateList()
+				}
+				return m, nil
+			}
 		}
 
 	case ErrorMsg:
@@ -608,7 +713,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update resource list
+	// Handle keys for State tab when active
+	if m.executionMode && m.resourcesActiveTab == 1 && m.stateListContent != nil {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			if m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
+				handled, stateCmd := m.stateListContent.HandleKey(keyMsg)
+				if handled {
+					cmds = append(cmds, stateCmd)
+					return m, tea.Batch(cmds...)
+				}
+			}
+		}
+	}
+
+	// Update resource list (for Resources tab)
 	updated, cmd := m.resourceList.Update(msg)
 	if rl, ok := updated.(*components.ResourceList); ok {
 		m.resourceList = rl
@@ -645,10 +763,6 @@ func (m *Model) View() string {
 		return m.renderSettings()
 	}
 
-	if m.modalState == ModalHelp {
-		return m.renderHelp()
-	}
-
 	if m.executionMode {
 		switch m.execView {
 		case viewPlanConfirm:
@@ -662,6 +776,14 @@ func (m *Model) View() string {
 		case viewCommandLog:
 			return m.renderFullScreenCommandLog()
 			// Note: viewDiagnostics removed - diagnostics now show in command log panel
+		case viewStateList:
+			if m.stateListView != nil {
+				return m.stateListView.View()
+			}
+		case viewStateShow:
+			if m.stateShowView != nil {
+				return m.stateShowView.View()
+			}
 		}
 	}
 
@@ -679,9 +801,14 @@ func (m *Model) View() string {
 
 	view := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
+	// Overlay help modal if showing
+	if m.modalState == ModalHelp && m.helpModal != nil {
+		view = m.helpModal.Overlay(view)
+	}
+
 	// Overlay toast if present
-	if m.toastMessage != "" {
-		view = m.renderToastOverlay(view, m.toastMessage, m.toastIsError)
+	if m.toast != nil && m.toast.IsVisible() {
+		view = m.toast.Overlay(view)
 	}
 
 	return view
@@ -689,14 +816,60 @@ func (m *Model) View() string {
 
 // renderStatusBar renders the bottom status bar
 func (m *Model) renderStatusBar() string {
-	helpText := m.statusHelpText()
-	statusText := helpText
+	var parts []string
+
+	// Add workspace/environment info if available
+	if m.executionMode && m.envCurrent != "" {
+		parts = append(parts, m.styles.Highlight.Render(m.envDisplayName()))
+	}
+
+	// Add resource summary
+	if m.plan != nil && len(m.plan.Resources) > 0 {
+		parts = append(parts, m.resourceSummaryText())
+	}
+
+	// Add help text
+	parts = append(parts, m.statusHelpText())
+
+	statusText := strings.Join(parts, " │ ")
 
 	// Limit status bar to 1 line to prevent scrolling
 	return m.styles.StatusBar.
 		Width(m.width).
 		MaxHeight(1).
 		Render(statusText)
+}
+
+// resourceSummaryText returns a summary of resource changes like "+5 ~3 -2 ±2"
+func (m *Model) resourceSummaryText() string {
+	if m.plan == nil {
+		return ""
+	}
+	create := m.countResourcesByAction(terraform.ActionCreate)
+	update := m.countResourcesByAction(terraform.ActionUpdate)
+	deleteCount := m.countResourcesByAction(terraform.ActionDelete)
+	replace := m.countResourcesByAction(terraform.ActionReplace)
+
+	total := create + update + deleteCount + replace
+	if total == 0 {
+		return "no changes"
+	}
+
+	var parts []string
+	if create > 0 {
+		parts = append(parts, m.styles.Create.Render(fmt.Sprintf("+%d", create)))
+	}
+	if update > 0 {
+		parts = append(parts, m.styles.Update.Render(fmt.Sprintf("~%d", update)))
+	}
+	if deleteCount > 0 {
+		parts = append(parts, m.styles.Delete.Render(fmt.Sprintf("-%d", deleteCount)))
+	}
+	if replace > 0 {
+		parts = append(parts, m.styles.Replace.Render(fmt.Sprintf("±%d", replace)))
+	}
+
+	return fmt.Sprintf("%d changes (%s)", total, strings.Join(parts, " "))
 }
 
 func (m *Model) statusHelpText() string {
@@ -769,59 +942,69 @@ func (m *Model) renderMainContent() string {
 		contentHeight = 1
 	}
 
-	// Helper to enforce width on panel output
-	enforceWidth := func(view string, width int) string {
+	// Helper to enforce dimensions on panel output
+	enforceDimensions := func(view string, width, height int) string {
+		if width <= 0 || height <= 0 {
+			return ""
+		}
 		lines := strings.Split(view, "\n")
+		// Enforce width on each line
 		for i, line := range lines {
 			lineWidth := lipgloss.Width(line)
 			if lineWidth < width {
-				// Pad to width
 				lines[i] = line + strings.Repeat(" ", width-lineWidth)
 			} else if lineWidth > width {
-				// Truncate to width (keeping ANSI codes in mind)
 				lines[i] = lipgloss.NewStyle().MaxWidth(width).Render(line)
 			}
+		}
+		// Enforce height: truncate or pad
+		if len(lines) > height {
+			lines = lines[:height]
+		}
+		for len(lines) < height {
+			lines = append(lines, strings.Repeat(" ", width))
 		}
 		return strings.Join(lines, "\n")
 	}
 
-	// Render left column panels
+	// Render left column panels with explicit dimensions
 	var leftPanels []string
 	if m.environmentPanel != nil {
-		leftPanels = append(leftPanels, enforceWidth(m.environmentPanel.View(), layout.LeftColumnWidth))
+		leftPanels = append(leftPanels, enforceDimensions(m.environmentPanel.View(), layout.LeftColumnWidth, layout.Workspace.Height))
 	}
-	if m.resourceList != nil {
-		leftPanels = append(leftPanels, enforceWidth(m.resourceList.View(), layout.LeftColumnWidth))
-	}
+	// Render resources panel with tabs (Resources / State)
+	leftPanels = append(leftPanels, enforceDimensions(m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height), layout.LeftColumnWidth, layout.Resources.Height))
 	if m.historyPanel != nil && m.executionMode {
-		leftPanels = append(leftPanels, enforceWidth(m.historyPanel.View(), layout.LeftColumnWidth))
+		leftPanels = append(leftPanels, enforceDimensions(m.historyPanel.View(), layout.LeftColumnWidth, layout.History.Height))
 	}
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftPanels...)
 
-	// Force left column to have consistent width and height
-	// Use MaxHeight to truncate content if it exceeds the available height
+	// Left column total height should equal sum of panel heights
 	leftColumn = lipgloss.NewStyle().
 		Width(layout.LeftColumnWidth).
+		MaxWidth(layout.LeftColumnWidth).
+		Height(contentHeight).
 		MaxHeight(contentHeight).
 		Render(leftColumn)
 
 	// Render right column (main area + command log)
 	var rightPanels []string
 	if m.mainArea != nil {
-		rightPanels = append(rightPanels, enforceWidth(m.mainArea.View(), layout.RightColumnWidth))
+		rightPanels = append(rightPanels, enforceDimensions(m.mainArea.View(), layout.RightColumnWidth, layout.Main.Height))
 	}
 	if m.panelManager.IsCommandLogVisible() && m.commandLogPanel != nil {
 		commandLogView := m.commandLogPanel.View()
 		if commandLogView != "" {
-			rightPanels = append(rightPanels, enforceWidth(commandLogView, layout.RightColumnWidth))
+			rightPanels = append(rightPanels, enforceDimensions(commandLogView, layout.RightColumnWidth, layout.CommandLog.Height))
 		}
 	}
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightPanels...)
 
-	// Force right column to have consistent width and height
-	// Use MaxHeight to truncate content if it exceeds the available height
+	// Right column total height should equal main + command log heights
 	rightColumn = lipgloss.NewStyle().
 		Width(layout.RightColumnWidth).
+		MaxWidth(layout.RightColumnWidth).
+		Height(contentHeight).
 		MaxHeight(contentHeight).
 		Render(rightColumn)
 
@@ -829,6 +1012,101 @@ func (m *Model) renderMainContent() string {
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 
 	return mainContent
+}
+
+// renderResourcesPanelWithTabs renders the resources panel with tabs (Resources / State)
+func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
+	if m.resourceList == nil {
+		return ""
+	}
+
+	// In non-execution mode, just show the resource list (no tabs)
+	if !m.executionMode {
+		return m.resourceList.View()
+	}
+
+	// Determine which content to show based on active tab
+	var content string
+	if m.resourcesActiveTab == 0 {
+		// Resources tab - use the resource list's view but we'll modify the title
+		// ResourceList already renders with border, so use full dimensions
+		m.resourceList.SetSize(width, height)
+		content = m.resourceList.View()
+		// The resource list already renders with border and title, so return it with modified title
+		return m.addTabsToPanel(content, width, []string{"Resources", "State"}, m.resourcesActiveTab)
+	}
+
+	// State tab
+	if m.stateListContent == nil {
+		m.stateListContent = components.NewStateListContent(m.styles)
+		m.stateListContent.OnSelect = func(address string) tea.Cmd {
+			return m.beginStateShow(address)
+		}
+	}
+	// Content area is panel size minus borders (2 for border)
+	m.stateListContent.SetSize(width-2, height-2)
+	stateView := m.stateListContent.View()
+
+	// Wrap in panel border
+	focused := m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources
+	borderStyle := m.styles.Border
+	if focused {
+		borderStyle = m.styles.FocusedBorder
+	}
+
+	panel := borderStyle.
+		BorderTop(true).
+		BorderBottom(true).
+		BorderLeft(true).
+		BorderRight(true).
+		Width(width - 2).
+		Height(height - 2).
+		Render(stateView)
+
+	return m.addTabsToPanel(panel, width, []string{"Resources", "State"}, m.resourcesActiveTab)
+}
+
+// addTabsToPanel adds tab indicators to the first line of a panel
+func (m *Model) addTabsToPanel(panel string, width int, tabs []string, activeTab int) string {
+	lines := strings.Split(panel, "\n")
+	if len(lines) == 0 {
+		return panel
+	}
+
+	// Build tab title
+	focused := m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources
+	titleStyle := m.styles.PanelTitle
+	if focused {
+		titleStyle = m.styles.FocusedPanelTitle
+	}
+
+	var tabParts []string
+	tabParts = append(tabParts, "[2]")
+	for i, tab := range tabs {
+		if i == activeTab {
+			tabParts = append(tabParts, "["+tab+"]")
+		} else {
+			tabParts = append(tabParts, m.styles.Dimmed.Render(tab))
+		}
+	}
+	tabTitle := strings.Join(tabParts, " ")
+	titleRendered := titleStyle.Render(" " + tabTitle + " ")
+
+	// Try to replace the title in the first line
+	firstLine := lines[0]
+	// Find position after first border character
+	if len(firstLine) > 2 {
+		// Replace title section
+		borderStyle := m.styles.Border
+		if focused {
+			borderStyle = m.styles.FocusedBorder
+		}
+		if newLine, ok := components.RenderPanelTitleLine(width, borderStyle, titleRendered); ok {
+			lines[0] = newLine
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m *Model) renderLegacyMainContent() string {
@@ -886,15 +1164,11 @@ func (m *Model) renderFullScreenCommandLog() string {
 	content := diagPanel.View()
 
 	// Build title
-	modeText := "Parsed"
-	if m.showRawLogs {
-		modeText = "Raw"
-	}
-	title := fmt.Sprintf(" Command Log (Full Screen) - %s ", modeText)
+	title := " Command Log (Full Screen) "
 	titleRendered := m.styles.FocusedPanelTitle.Render(title)
 
 	// Build footer with help text
-	footer := m.styles.Dimmed.Render("Press 'r' to toggle raw/parsed | 'esc' to exit | arrow keys to scroll")
+	footer := m.styles.Dimmed.Render("Press 'esc' to exit | arrow keys to scroll")
 
 	// Wrap in border
 	panel := m.styles.FocusedBorder.
@@ -916,7 +1190,11 @@ func (m *Model) renderFullScreenCommandLog() string {
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
 }
 
-func (m *Model) renderHelp() string {
+func (m *Model) updateHelpModalContent() {
+	if m.helpModal == nil {
+		return
+	}
+
 	type helpRow struct {
 		keys string
 		desc string
@@ -978,6 +1256,9 @@ func (m *Model) renderHelp() string {
 			title: "Execution",
 			rows: []helpRow{
 				{keys: "p", desc: "run terraform plan"},
+				{keys: "f", desc: "refresh state"},
+				{keys: "v", desc: "validate configuration"},
+				{keys: "F", desc: "format code (fmt)"},
 				{keys: "a", desc: "confirm apply"},
 				{keys: "h", desc: "toggle history panel"},
 				{keys: "tab", desc: "focus history panel"},
@@ -985,7 +1266,7 @@ func (m *Model) renderHelp() string {
 				{keys: "s", desc: "toggle status column"},
 				{keys: "C", desc: "toggle compact progress view"},
 				{keys: "D", desc: "focus logs panel"},
-				{keys: "R", desc: "toggle raw logs"},
+				{keys: "[/]", desc: "switch tabs in panel"},
 			},
 		})
 	}
@@ -1003,7 +1284,6 @@ func (m *Model) renderHelp() string {
 	}
 
 	var lines []string
-	lines = append(lines, m.styles.Title.Render("lazytf keybinds"))
 	for _, section := range sections {
 		lines = append(lines, m.styles.Highlight.Render(section.title))
 		for _, row := range section.rows {
@@ -1014,13 +1294,11 @@ func (m *Model) renderHelp() string {
 		}
 		lines = append(lines, "")
 	}
+	lines = append(lines, m.styles.Dimmed.Render("esc: close"))
 
-	content := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-	box := m.styles.Border.
-		Width(minInt(64, m.width-4)).
-		Render(content)
-
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	m.helpModal.SetTitle("Keybinds")
+	m.helpModal.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
+	m.helpModal.Show()
 }
 
 func (m *Model) renderSettings() string {
@@ -1170,6 +1448,62 @@ func envSelectionValue(env environment.Environment) string {
 	return env.Name
 }
 
+func (m *Model) loadFilterPreferences() {
+	if !m.executionMode {
+		return
+	}
+	workDir := m.envWorkDir
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	absWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return
+	}
+	workspace := m.envCurrent
+	if workspace == "" {
+		workspace = "default"
+	}
+	pref, err := environment.LoadFilterPreference(absWorkDir, workspace)
+	if err != nil || pref == nil {
+		return
+	}
+	m.filterCreate = pref.FilterCreate
+	m.filterUpdate = pref.FilterUpdate
+	m.filterDelete = pref.FilterDelete
+	m.filterReplace = pref.FilterReplace
+	// Apply to resource list
+	m.resourceList.SetFilter(terraform.ActionCreate, m.filterCreate)
+	m.resourceList.SetFilter(terraform.ActionUpdate, m.filterUpdate)
+	m.resourceList.SetFilter(terraform.ActionDelete, m.filterDelete)
+	m.resourceList.SetFilter(terraform.ActionReplace, m.filterReplace)
+}
+
+func (m *Model) saveFilterPreferences() {
+	if !m.executionMode {
+		return
+	}
+	workDir := m.envWorkDir
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	absWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return
+	}
+	workspace := m.envCurrent
+	if workspace == "" {
+		workspace = "default"
+	}
+	pref := environment.FilterPreference{
+		FilterCreate:  m.filterCreate,
+		FilterUpdate:  m.filterUpdate,
+		FilterDelete:  m.filterDelete,
+		FilterReplace: m.filterReplace,
+	}
+	_ = environment.SaveFilterPreference(absWorkDir, workspace, pref)
+}
+
 func (m *Model) envDisplayName() string {
 	if m.envStrategy == environment.StrategyFolder {
 		baseDir := m.envWorkDir
@@ -1189,6 +1523,14 @@ func (m *Model) envDisplayName() string {
 func (m *Model) updateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return
+	}
+
+	// Update overlay component sizes
+	if m.helpModal != nil {
+		m.helpModal.SetSize(m.width, m.height)
+	}
+	if m.toast != nil {
+		m.toast.SetSize(m.width, m.height)
 	}
 
 	// Use panel manager if available
@@ -1314,25 +1656,63 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "esc":
 			m.execView = viewMain
 			return true, nil
-		case "r", "R":
-			// Toggle between raw and parsed logs
-			m.showRawLogs = !m.showRawLogs
-			if m.commandLogPanel != nil {
-				if diagPanel := m.commandLogPanel.GetDiagnosticsPanel(); diagPanel != nil {
-					diagPanel.SetShowRaw(m.showRawLogs)
+		}
+	case viewStateList:
+		switch key {
+		case "q":
+			m.quitting = true
+			return true, tea.Quit
+		case "esc":
+			m.execView = viewMain
+			return true, nil
+		case "up", "k":
+			if m.stateListView != nil {
+				m.stateListView.MoveUp()
+			}
+			return true, nil
+		case "down", "j":
+			if m.stateListView != nil {
+				m.stateListView.MoveDown()
+			}
+			return true, nil
+		case "enter":
+			if m.stateListView != nil {
+				if res := m.stateListView.GetSelected(); res != nil {
+					return true, m.beginStateShow(res.Address)
 				}
 			}
 			return true, nil
 		}
+	case viewStateShow:
+		switch key {
+		case "q":
+			m.quitting = true
+			return true, tea.Quit
+		case "esc":
+			m.execView = viewStateList
+			return true, nil
+		}
+		// Forward scroll keys to the view
+		if m.stateShowView != nil {
+			m.stateShowView, _ = m.stateShowView.Update(tea.KeyMsg(msg))
+		}
+		return true, nil
 	default:
 		switch key {
 		case "p":
 			return true, m.beginPlan()
+		case "f":
+			return true, m.beginRefresh()
+		case "v":
+			return true, m.beginValidate()
+		case "F":
+			return true, m.beginFormat()
 		case "a":
 			if m.plan == nil {
-				m.toastMessage = "No plan loaded; run terraform plan first"
-				m.toastIsError = true
-				cmd := m.clearToastCmd(3 * time.Second)
+				var cmd tea.Cmd
+				if m.toast != nil {
+					cmd = m.toast.ShowError("No plan loaded; run terraform plan first")
+				}
 				return true, cmd
 			}
 			if m.planView != nil {
@@ -1362,12 +1742,6 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				return true, m.panelManager.SetFocus(PanelCommandLog)
 			}
 			return true, nil
-		case "R":
-			m.showRawLogs = !m.showRawLogs
-			if m.diagnosticsPanel != nil {
-				m.diagnosticsPanel.SetShowRaw(m.showRawLogs)
-			}
-			return true, nil
 		case "tab":
 			if m.showHistory && len(m.historyEntries) > 0 {
 				m.historyFocused = !m.historyFocused
@@ -1375,12 +1749,13 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				return true, nil
 			}
 		case "ctrl+c":
-			if m.planRunning || m.applyRunning {
+			if m.planRunning || m.applyRunning || m.refreshRunning {
 				m.cancelExecution()
 				return true, nil
 			}
 		}
-		if m.showHistory && m.historyFocused {
+		// Handle history keys when history panel is focused (history is always visible in execution mode)
+		if m.historyFocused {
 			handled, cmd := m.handleHistoryKeys(key)
 			if handled {
 				return true, cmd
@@ -1542,6 +1917,481 @@ func (m *Model) beginApply() tea.Cmd {
 	}
 }
 
+func (m *Model) beginRefresh() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	m.err = nil
+	refreshEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+	m.refreshRunning = true
+	m.refreshStartedAt = time.Now()
+
+	// Keep in main view, switch MainArea to logs mode during refresh
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeLogs)
+	}
+
+	// Show command log panel during operations
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if m.applyView != nil {
+		m.applyView.Reset()
+		m.applyView.SetTitle("Running terraform refresh...")
+		m.applyView.SetStatusText("Running...", "Refresh complete", "Refresh failed - press esc to return")
+		m.applyView.SetStatus(views.ApplyRunning)
+	}
+	m.updateExecutionViewForStreaming()
+
+	return func() tea.Msg {
+		result, output, err := m.executor.Refresh(ctx, terraform.RefreshOptions{
+			Env: refreshEnv,
+		})
+		return RefreshStartMsg{Result: result, Output: output, Error: err}
+	}
+}
+
+func (m *Model) handleRefreshStart(msg RefreshStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.refreshRunning = false
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform refresh: %v", msg.Error))
+		}
+		m.addErrorDiagnostic("Refresh failed to start", msg.Error, "")
+		return m, nil
+	}
+
+	m.outputChan = msg.Output
+	cmds := []tea.Cmd{
+		m.waitRefreshCompleteCmd(msg.Result),
+		m.streamRefreshOutputCmd(),
+	}
+	if m.applyView != nil {
+		cmds = append(cmds, m.applyView.Tick())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cmd) {
+	m.refreshRunning = false
+	m.cancelFunc = nil
+	m.outputChan = nil
+
+	// Switch MainArea back to diff mode when refresh completes
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	output := ""
+	if msg.Result != nil {
+		output = msg.Result.Output
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform apply -refresh-only", output)
+	}
+
+	if msg.Error != nil || !msg.Success {
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			if msg.Error != nil {
+				m.applyView.AppendLine(fmt.Sprintf("Refresh failed: %v", msg.Error))
+			}
+		}
+		// Route logs to command log panel
+		if msg.Result != nil {
+			if m.commandLogPanel != nil {
+				m.commandLogPanel.SetLogText(msg.Result.Output)
+				m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			} else if m.diagnosticsPanel != nil {
+				m.diagnosticsPanel.SetLogText(msg.Result.Output)
+				m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			}
+		}
+		if msg.Error != nil {
+			output := ""
+			if msg.Result != nil {
+				output = msg.Result.Output
+			}
+			m.addErrorDiagnostic("Refresh failed", msg.Error, output)
+		}
+		m.updateExecutionViewForStreaming()
+		cmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
+		return m, cmd
+	}
+
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplySuccess)
+	}
+	// Route logs to command log panel
+	parsed := ""
+	if msg.Result != nil {
+		parsed = utils.FormatLogOutput(msg.Result.Output)
+	}
+	if strings.TrimSpace(parsed) == "" {
+		parsed = "Refresh complete"
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetParsedText(parsed)
+	} else if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetParsedText(parsed)
+	}
+	m.updateExecutionViewForStreaming()
+	var toastCmd tea.Cmd
+	if m.toast != nil {
+		toastCmd = m.toast.ShowSuccess("State refreshed successfully")
+	}
+	return m, tea.Batch(
+		toastCmd,
+		m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", nil),
+	)
+}
+
+func (m *Model) streamRefreshOutputCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.outputChan == nil {
+			return nil
+		}
+		line, ok := <-m.outputChan
+		if !ok {
+			return nil
+		}
+		return RefreshOutputMsg{Line: line}
+	}
+}
+
+func (m *Model) waitRefreshCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
+	return func() tea.Msg {
+		if result == nil {
+			return RefreshCompleteMsg{Success: false, Error: errors.New("refresh execution result missing")}
+		}
+		<-result.Done()
+		if result.Error != nil {
+			return RefreshCompleteMsg{Success: false, Error: result.Error, Result: result}
+		}
+		return RefreshCompleteMsg{Success: true, Result: result}
+	}
+}
+
+func (m *Model) beginValidate() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Running terraform validate...")
+	}
+	validateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.Validate(ctx, terraform.ValidateOptions{
+			Env: validateEnv,
+		})
+		if err != nil {
+			return ValidateCompleteMsg{Error: err}
+		}
+		// Parse JSON output
+		var validateResult terraform.ValidateResult
+		if result != nil && result.Stdout != "" {
+			if parseErr := json.Unmarshal([]byte(result.Stdout), &validateResult); parseErr != nil {
+				return ValidateCompleteMsg{Error: parseErr, RawOutput: result.Stdout, ExecResult: result}
+			}
+		}
+		return ValidateCompleteMsg{Result: &validateResult, RawOutput: result.Stdout, ExecResult: result}
+	}
+}
+
+func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.addErrorDiagnostic("Validate failed", msg.Error, msg.RawOutput)
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Validate failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	if msg.Result == nil {
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowInfo("Validate completed (no result)")
+		}
+		return m, cmd
+	}
+
+	// Display diagnostics in command log panel
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	if len(msg.Result.Diagnostics) > 0 {
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetDiagnostics(msg.Result.Diagnostics)
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetDiagnostics(msg.Result.Diagnostics)
+		}
+	}
+
+	var cmd tea.Cmd
+	if msg.Result.Valid {
+		if m.toast != nil {
+			cmd = m.toast.ShowSuccess("Configuration is valid")
+		}
+	} else {
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Validation failed: %d errors, %d warnings", msg.Result.ErrorCount, msg.Result.WarningCount))
+		}
+	}
+	return m, cmd
+}
+
+func (m *Model) beginFormat() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Running terraform fmt...")
+	}
+	formatEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.Format(ctx, terraform.FormatOptions{
+			Recursive: true,
+			Env:       formatEnv,
+		})
+		if err != nil {
+			return FormatCompleteMsg{Error: err}
+		}
+		// Parse output - each line is a changed file
+		var changedFiles []string
+		if result != nil && result.Stdout != "" {
+			for _, line := range strings.Split(result.Stdout, "\n") {
+				if trimmed := strings.TrimSpace(line); trimmed != "" {
+					changedFiles = append(changedFiles, trimmed)
+				}
+			}
+		}
+		return FormatCompleteMsg{ChangedFiles: changedFiles, ExecResult: result}
+	}
+}
+
+func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.addErrorDiagnostic("Format failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("Format failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	var cmd tea.Cmd
+	if len(msg.ChangedFiles) == 0 {
+		if m.toast != nil {
+			cmd = m.toast.ShowInfo("No files changed")
+		}
+	} else {
+		if m.toast != nil {
+			cmd = m.toast.ShowSuccess(fmt.Sprintf("Formatted %d file(s)", len(msg.ChangedFiles)))
+		}
+
+		// Display changed files in command log panel
+		if m.panelManager != nil {
+			m.panelManager.SetCommandLogVisible(true)
+			m.updateLayout()
+		}
+
+		output := "Formatted files:\n" + strings.Join(msg.ChangedFiles, "\n")
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetParsedText(output)
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetParsedText(output)
+		}
+	}
+	return m, cmd
+}
+
+func (m *Model) beginStateList() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Loading state list...")
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.StateList(ctx, terraform.StateListOptions{
+			Env: stateEnv,
+		})
+		if err != nil {
+			return StateListCompleteMsg{Error: err}
+		}
+		if result.Error != nil {
+			return StateListCompleteMsg{Error: result.Error}
+		}
+		// Parse output - each line is a resource address
+		var resources []terraform.StateResource
+		if result.Stdout != "" {
+			for _, line := range strings.Split(result.Stdout, "\n") {
+				if trimmed := strings.TrimSpace(line); trimmed != "" {
+					resources = append(resources, terraform.StateResource{
+						Address: trimmed,
+					})
+				}
+			}
+		}
+		return StateListCompleteMsg{Resources: resources}
+	}
+}
+
+func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, tea.Cmd) {
+	// Hide loading toast
+	if m.toast != nil {
+		m.toast.Hide()
+	}
+
+	if msg.Error != nil {
+		if m.stateListContent != nil {
+			m.stateListContent.SetError(msg.Error.Error())
+		}
+		m.addErrorDiagnostic("State list failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("State list failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	m.stateResources = msg.Resources
+
+	// Update state list content (for tab view)
+	if m.stateListContent != nil {
+		m.stateListContent.SetResources(msg.Resources)
+	}
+
+	// Initialize state list view if needed (for full screen view)
+	if m.stateListView == nil {
+		m.stateListView = views.NewStateListView(m.styles)
+	}
+	m.stateListView.SetSize(m.width, m.height)
+	m.stateListView.SetResources(msg.Resources)
+
+	// If we're on the State tab, stay there; otherwise only switch if explicitly requested
+	// (The 'S' keybinding has been removed, so this only happens when switching tabs)
+
+	return m, nil
+}
+
+func (m *Model) beginStateShow(address string) tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Loading state...")
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := m.executor.StateShow(ctx, address, terraform.StateShowOptions{
+			Env: stateEnv,
+		})
+		if err != nil {
+			return StateShowCompleteMsg{Address: address, Error: err}
+		}
+		if result.Error != nil {
+			return StateShowCompleteMsg{Address: address, Error: result.Error}
+		}
+		return StateShowCompleteMsg{Address: address, Output: result.Stdout}
+	}
+}
+
+func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, tea.Cmd) {
+	// Log to session history
+	output := msg.Output
+	if msg.Error != nil {
+		output = msg.Error.Error()
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog(fmt.Sprintf("terraform state show %s", msg.Address), output)
+	}
+
+	if m.toast != nil {
+		m.toast.Hide()
+	}
+	if msg.Error != nil {
+		m.addErrorDiagnostic("State show failed", msg.Error, "")
+		var cmd tea.Cmd
+		if m.toast != nil {
+			cmd = m.toast.ShowError(fmt.Sprintf("State show failed: %v", msg.Error))
+		}
+		return m, cmd
+	}
+
+	// Initialize state show view if needed
+	if m.stateShowView == nil {
+		m.stateShowView = views.NewStateShowView(m.styles)
+	}
+	m.stateShowView.SetSize(m.width, m.height)
+	m.stateShowView.SetAddress(msg.Address)
+	m.stateShowView.SetContent(msg.Output)
+
+	// Switch to state show view
+	m.execView = viewStateShow
+
+	return m, nil
+}
+
 func (m *Model) prepareTerraformEnv() ([]string, error) {
 	workDir := m.envWorkDir
 	if m.executor != nil {
@@ -1594,6 +2444,11 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	// Switch MainArea back to diff mode when plan completes
 	if m.mainArea != nil {
 		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform plan", msg.Output)
 	}
 
 	if msg.Error != nil {
@@ -1674,6 +2529,15 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Switch MainArea back to diff mode when apply completes
 	if m.mainArea != nil {
 		m.mainArea.SetMode(ModeDiff)
+	}
+
+	// Log to session history
+	output := ""
+	if msg.Result != nil {
+		output = msg.Result.Output
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("terraform apply", output)
 	}
 
 	if msg.Error != nil || !msg.Success {

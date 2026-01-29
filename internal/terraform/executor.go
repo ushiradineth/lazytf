@@ -120,6 +120,39 @@ type ApplyOptions struct {
 	AutoApprove bool
 }
 
+// RefreshOptions controls refresh execution.
+type RefreshOptions struct {
+	Flags   []string
+	Timeout time.Duration
+	Env     []string
+}
+
+// ValidateOptions controls validate execution.
+type ValidateOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
+// FormatOptions controls fmt execution.
+type FormatOptions struct {
+	Recursive bool
+	Check     bool
+	Timeout   time.Duration
+	Env       []string
+}
+
+// StateListOptions controls state list execution.
+type StateListOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
+// StateShowOptions controls state show execution.
+type StateShowOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
 // ShowOptions controls terraform show execution.
 type ShowOptions struct {
 	Timeout time.Duration
@@ -191,6 +224,67 @@ func (e *Executor) Apply(ctx context.Context, opts ApplyOptions) (*ExecutionResu
 		args = append(args, "-auto-approve")
 	}
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+}
+
+// Refresh runs terraform apply -refresh-only and streams output.
+func (e *Executor) Refresh(ctx context.Context, opts RefreshOptions) (*ExecutionResult, <-chan string, error) {
+	args := []string{"apply", "-refresh-only", "-auto-approve"}
+	args = append(args, e.defaultFlags...)
+	args = append(args, opts.Flags...)
+	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+}
+
+// Validate runs terraform validate -json and returns the result.
+func (e *Executor) Validate(ctx context.Context, opts ValidateOptions) (*ExecutionResult, error) {
+	args := []string{"validate", "-json"}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// Format runs terraform fmt and returns the list of changed files.
+func (e *Executor) Format(ctx context.Context, opts FormatOptions) (*ExecutionResult, error) {
+	args := []string{"fmt"}
+	if opts.Recursive {
+		args = append(args, "-recursive")
+	}
+	if opts.Check {
+		args = append(args, "-check")
+	}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// StateList runs terraform state list and returns the resource addresses.
+func (e *Executor) StateList(ctx context.Context, opts StateListOptions) (*ExecutionResult, error) {
+	args := []string{"state", "list"}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// StateShow runs terraform state show for a specific resource address.
+func (e *Executor) StateShow(ctx context.Context, address string, opts StateShowOptions) (*ExecutionResult, error) {
+	if strings.TrimSpace(address) == "" {
+		return nil, errors.New("resource address is required")
+	}
+	args := []string{"state", "show", address}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
 }
 
 // Show runs terraform show on a plan file.
