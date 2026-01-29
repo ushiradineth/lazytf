@@ -7,7 +7,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
-// testItem implements ListPanelItem for testing
+// testItem implements ListPanelItem for testing.
 type testItem struct {
 	text string
 }

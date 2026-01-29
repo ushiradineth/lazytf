@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
 func TestTerraformWorkflowIntegration(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 
@@ -65,7 +66,7 @@ func TestTerraformWorkflowIntegration(t *testing.T) {
 }
 
 func TestTerraformWorkflowNoChanges(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	workdir := t.TempDir()
@@ -89,7 +90,7 @@ func TestTerraformWorkflowNoChanges(t *testing.T) {
 }
 
 func TestTerraformWorkflowFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	workdir := t.TempDir()
@@ -116,7 +117,7 @@ func TestTerraformWorkflowFailure(t *testing.T) {
 }
 
 func TestTerraformWorkflowCancel(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	workdir := t.TempDir()
@@ -143,7 +144,7 @@ func TestTerraformWorkflowCancel(t *testing.T) {
 }
 
 func TestTerraformWorkflowLargeOutput(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	workdir := t.TempDir()
@@ -176,7 +177,7 @@ func copyDummyConfig(dir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "main.tf"), data, 0o644)
+	return os.WriteFile(filepath.Join(dir, "main.tf"), data, 0o600)
 }
 
 func writeFakeTerraform(t *testing.T, dir string) string {
@@ -226,7 +227,10 @@ fi
 echo "unknown command" 1>&2
 exit 1
 `
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write fake terraform: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatalf("write fake terraform: %v", err)
 	}
 	return path

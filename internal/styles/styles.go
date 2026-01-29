@@ -20,90 +20,114 @@ type Theme struct {
 	HighlightColor  lipgloss.AdaptiveColor
 }
 
-// Predefined themes
-var (
-	// DefaultTheme is a clean, minimal theme
-	DefaultTheme = Theme{
-		Name:            "default",
-		CreateColor:     lipgloss.AdaptiveColor{Light: "#00AF00", Dark: "#00D700"},
-		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FF8700", Dark: "#FFAF00"},
-		DeleteColor:     lipgloss.AdaptiveColor{Light: "#D70000", Dark: "#FF5F5F"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#B200B2", Dark: "#D75FD7"},
-		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#767676", Dark: "#9E9E9E"},
-		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#1C1C1C"},
-		ForegroundColor: lipgloss.AdaptiveColor{Light: "#262626", Dark: "#E4E4E4"},
-		BorderColor:     lipgloss.AdaptiveColor{Light: "#BCBCBC", Dark: "#4E4E4E"},
-		SelectedColor:   lipgloss.AdaptiveColor{Light: "#5F87D7", Dark: "#87AFFF"},
-		DimmedColor:     lipgloss.AdaptiveColor{Light: "#9E9E9E", Dark: "#767676"},
-		HighlightColor:  lipgloss.AdaptiveColor{Light: "#D7FF00", Dark: "#FFFF87"},
-	}
+func adaptive(light, dark string) lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: light, Dark: dark}
+}
 
-	// TerraformCloudTheme mimics the Terraform Cloud UI
-	TerraformCloudTheme = Theme{
-		Name:            "terraform-cloud",
-		CreateColor:     lipgloss.AdaptiveColor{Light: "#00CA72", Dark: "#00CA72"},
-		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FFA500", Dark: "#FFA500"},
-		DeleteColor:     lipgloss.AdaptiveColor{Light: "#E03A3E", Dark: "#E03A3E"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#C026D3", Dark: "#C026D3"},
-		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#8A8A8A", Dark: "#8A8A8A"},
-		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FAFAFA", Dark: "#1A1B26"},
-		ForegroundColor: lipgloss.AdaptiveColor{Light: "#1A1B26", Dark: "#F8F8F2"},
-		BorderColor:     lipgloss.AdaptiveColor{Light: "#D1D5DA", Dark: "#30313C"},
-		SelectedColor:   lipgloss.AdaptiveColor{Light: "#5F5FFF", Dark: "#7070FF"},
-		DimmedColor:     lipgloss.AdaptiveColor{Light: "#9E9E9E", Dark: "#6E6E6E"},
-		HighlightColor:  lipgloss.AdaptiveColor{Light: "#FFFACD", Dark: "#4A4A2A"},
+func newTheme(
+	name string,
+	create, update, deleteColor, replace, noChange, background, foreground, border, selected, dimmed, highlight lipgloss.AdaptiveColor,
+) Theme {
+	return Theme{
+		Name:            name,
+		CreateColor:     create,
+		UpdateColor:     update,
+		DeleteColor:     deleteColor,
+		ReplaceColor:    replace,
+		NoChangeColor:   noChange,
+		BackgroundColor: background,
+		ForegroundColor: foreground,
+		BorderColor:     border,
+		SelectedColor:   selected,
+		DimmedColor:     dimmed,
+		HighlightColor:  highlight,
 	}
+}
+
+// Predefined themes.
+var (
+	// DefaultTheme is a clean, minimal theme.
+	DefaultTheme = newTheme(
+		"default",
+		adaptive("#00AF00", "#00D700"),
+		adaptive("#FF8700", "#FFAF00"),
+		adaptive("#D70000", "#FF5F5F"),
+		adaptive("#B200B2", "#D75FD7"),
+		adaptive("#767676", "#9E9E9E"),
+		adaptive("#FFFFFF", "#1C1C1C"),
+		adaptive("#262626", "#E4E4E4"),
+		adaptive("#BCBCBC", "#4E4E4E"),
+		adaptive("#5F87D7", "#87AFFF"),
+		adaptive("#9E9E9E", "#767676"),
+		adaptive("#D7FF00", "#FFFF87"),
+	)
+
+	// TerraformCloudTheme mimics the Terraform Cloud UI.
+	TerraformCloudTheme = newTheme(
+		"terraform-cloud",
+		adaptive("#00CA72", "#00CA72"),
+		adaptive("#FFA500", "#FFA500"),
+		adaptive("#E03A3E", "#E03A3E"),
+		adaptive("#C026D3", "#C026D3"),
+		adaptive("#8A8A8A", "#8A8A8A"),
+		adaptive("#FAFAFA", "#1A1B26"),
+		adaptive("#1A1B26", "#F8F8F2"),
+		adaptive("#D1D5DA", "#30313C"),
+		adaptive("#5F5FFF", "#7070FF"),
+		adaptive("#9E9E9E", "#6E6E6E"),
+		adaptive("#FFFACD", "#4A4A2A"),
+	)
 
 	// MonokaiTheme is inspired by the Monokai palette.
-	MonokaiTheme = Theme{
-		Name:            "monokai",
-		CreateColor:     lipgloss.AdaptiveColor{Light: "#A6E22E", Dark: "#A6E22E"},
-		UpdateColor:     lipgloss.AdaptiveColor{Light: "#FD971F", Dark: "#FD971F"},
-		DeleteColor:     lipgloss.AdaptiveColor{Light: "#F92672", Dark: "#F92672"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#AE81FF", Dark: "#AE81FF"},
-		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#75715E", Dark: "#75715E"},
-		BackgroundColor: lipgloss.AdaptiveColor{Light: "#F2F2F2", Dark: "#272822"},
-		ForegroundColor: lipgloss.AdaptiveColor{Light: "#272822", Dark: "#F8F8F2"},
-		BorderColor:     lipgloss.AdaptiveColor{Light: "#BDBDBD", Dark: "#3E3D32"},
-		SelectedColor:   lipgloss.AdaptiveColor{Light: "#66D9EF", Dark: "#66D9EF"},
-		DimmedColor:     lipgloss.AdaptiveColor{Light: "#9E9E9E", Dark: "#75715E"},
-		HighlightColor:  lipgloss.AdaptiveColor{Light: "#E6DB74", Dark: "#E6DB74"},
-	}
+	MonokaiTheme = newTheme(
+		"monokai",
+		adaptive("#A6E22E", "#A6E22E"),
+		adaptive("#FD971F", "#FD971F"),
+		adaptive("#F92672", "#F92672"),
+		adaptive("#AE81FF", "#AE81FF"),
+		adaptive("#75715E", "#75715E"),
+		adaptive("#F2F2F2", "#272822"),
+		adaptive("#272822", "#F8F8F2"),
+		adaptive("#BDBDBD", "#3E3D32"),
+		adaptive("#66D9EF", "#66D9EF"),
+		adaptive("#9E9E9E", "#75715E"),
+		adaptive("#E6DB74", "#E6DB74"),
+	)
 
 	// NordTheme is based on the Nord color palette.
-	NordTheme = Theme{
-		Name:            "nord",
-		CreateColor:     lipgloss.AdaptiveColor{Light: "#5E81AC", Dark: "#81A1C1"},
-		UpdateColor:     lipgloss.AdaptiveColor{Light: "#D08770", Dark: "#D08770"},
-		DeleteColor:     lipgloss.AdaptiveColor{Light: "#BF616A", Dark: "#BF616A"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#B48EAD", Dark: "#B48EAD"},
-		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#7A7A7A", Dark: "#6E7A88"},
-		BackgroundColor: lipgloss.AdaptiveColor{Light: "#ECEFF4", Dark: "#2E3440"},
-		ForegroundColor: lipgloss.AdaptiveColor{Light: "#2E3440", Dark: "#ECEFF4"},
-		BorderColor:     lipgloss.AdaptiveColor{Light: "#D8DEE9", Dark: "#4C566A"},
-		SelectedColor:   lipgloss.AdaptiveColor{Light: "#88C0D0", Dark: "#88C0D0"},
-		DimmedColor:     lipgloss.AdaptiveColor{Light: "#8C92A0", Dark: "#7A8699"},
-		HighlightColor:  lipgloss.AdaptiveColor{Light: "#EBCB8B", Dark: "#EBCB8B"},
-	}
+	NordTheme = newTheme(
+		"nord",
+		adaptive("#5E81AC", "#81A1C1"),
+		adaptive("#D08770", "#D08770"),
+		adaptive("#BF616A", "#BF616A"),
+		adaptive("#B48EAD", "#B48EAD"),
+		adaptive("#7A7A7A", "#6E7A88"),
+		adaptive("#ECEFF4", "#2E3440"),
+		adaptive("#2E3440", "#ECEFF4"),
+		adaptive("#D8DEE9", "#4C566A"),
+		adaptive("#88C0D0", "#88C0D0"),
+		adaptive("#8C92A0", "#7A8699"),
+		adaptive("#EBCB8B", "#EBCB8B"),
+	)
 
 	// GitHubDarkTheme mimics GitHub's dark UI.
-	GitHubDarkTheme = Theme{
-		Name:            "github-dark",
-		CreateColor:     lipgloss.AdaptiveColor{Light: "#2DA44E", Dark: "#2DA44E"},
-		UpdateColor:     lipgloss.AdaptiveColor{Light: "#D29922", Dark: "#D29922"},
-		DeleteColor:     lipgloss.AdaptiveColor{Light: "#F85149", Dark: "#F85149"},
-		ReplaceColor:    lipgloss.AdaptiveColor{Light: "#A371F7", Dark: "#A371F7"},
-		NoChangeColor:   lipgloss.AdaptiveColor{Light: "#6E7781", Dark: "#6E7781"},
-		BackgroundColor: lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0D1117"},
-		ForegroundColor: lipgloss.AdaptiveColor{Light: "#24292F", Dark: "#C9D1D9"},
-		BorderColor:     lipgloss.AdaptiveColor{Light: "#D0D7DE", Dark: "#30363D"},
-		SelectedColor:   lipgloss.AdaptiveColor{Light: "#0969DA", Dark: "#1F6FEB"},
-		DimmedColor:     lipgloss.AdaptiveColor{Light: "#57606A", Dark: "#8B949E"},
-		HighlightColor:  lipgloss.AdaptiveColor{Light: "#D2A8FF", Dark: "#D2A8FF"},
-	}
+	GitHubDarkTheme = newTheme(
+		"github-dark",
+		adaptive("#2DA44E", "#2DA44E"),
+		adaptive("#D29922", "#D29922"),
+		adaptive("#F85149", "#F85149"),
+		adaptive("#A371F7", "#A371F7"),
+		adaptive("#6E7781", "#6E7781"),
+		adaptive("#FFFFFF", "#0D1117"),
+		adaptive("#24292F", "#C9D1D9"),
+		adaptive("#D0D7DE", "#30363D"),
+		adaptive("#0969DA", "#1F6FEB"),
+		adaptive("#57606A", "#8B949E"),
+		adaptive("#D2A8FF", "#D2A8FF"),
+	)
 )
 
-// Styles contains all the lipgloss styles used in the TUI
+// Styles contains all the lipgloss styles used in the TUI.
 type Styles struct {
 	Theme                  Theme
 	Create                 lipgloss.Style
@@ -142,13 +166,30 @@ type Styles struct {
 	Help              lipgloss.Style
 }
 
-// NewStyles creates a new set of styles based on a theme
+// NewStyles creates a new set of styles based on a theme.
 func NewStyles(theme Theme) *Styles {
 	s := &Styles{
 		Theme: theme,
 	}
 
-	// Action styles
+	applyActionStyles(s, theme)
+	applyResourceStyles(s, theme)
+	applyFilterStyles(s, theme)
+	applyStatusStyles(s, theme)
+	applySearchStyles(s, theme)
+	applyBorderStyles(s, theme)
+	applyDiffStyles(s, theme)
+	applyHighlightStyles(s, theme)
+	applyHelpStyles(s, theme)
+	applyTitleStyles(s, theme)
+	applyListStyles(s)
+	applyDimmedStyles(s, theme)
+	applyPanelStyles(s, theme)
+
+	return s
+}
+
+func applyActionStyles(s *Styles, theme Theme) {
 	s.Create = lipgloss.NewStyle().
 		Foreground(theme.CreateColor).
 		Bold(true)
@@ -167,8 +208,9 @@ func NewStyles(theme Theme) *Styles {
 
 	s.NoChange = lipgloss.NewStyle().
 		Foreground(theme.NoChangeColor)
+}
 
-	// Resource styles
+func applyResourceStyles(s *Styles, theme Theme) {
 	s.ResourceAddress = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor)
 
@@ -186,8 +228,9 @@ func NewStyles(theme Theme) *Styles {
 		Foreground(theme.SelectedColor).
 		Background(lipgloss.AdaptiveColor{Light: "#F0F0F0", Dark: "#2E2E2E"}).
 		Bold(true)
+}
 
-	// Filter bar styles
+func applyFilterStyles(s *Styles, theme Theme) {
 	s.FilterBarActive = lipgloss.NewStyle().
 		Foreground(theme.HighlightColor).
 		Background(theme.SelectedColor).
@@ -198,25 +241,29 @@ func NewStyles(theme Theme) *Styles {
 		Foreground(theme.DimmedColor).
 		Background(lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#3A3A3A"}).
 		Padding(0, 1)
+}
 
-	// Status bar
+func applyStatusStyles(s *Styles, theme Theme) {
 	s.StatusBar = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
 		Background(lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#2A2A2A"}).
 		Padding(0, 1)
+}
 
-	// Search bar
+func applySearchStyles(s *Styles, theme Theme) {
 	s.SearchBar = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
 		Background(lipgloss.AdaptiveColor{Light: "#F2F2F2", Dark: "#262626"}).
 		Padding(0, 1)
+}
 
-	// Border
+func applyBorderStyles(s *Styles, theme Theme) {
 	s.Border = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(theme.BorderColor)
+}
 
-	// Diff styles
+func applyDiffStyles(s *Styles, theme Theme) {
 	s.DiffAdd = lipgloss.NewStyle().
 		Foreground(theme.CreateColor)
 
@@ -228,28 +275,32 @@ func NewStyles(theme Theme) *Styles {
 
 	s.Comment = lipgloss.NewStyle().
 		Foreground(theme.DeleteColor)
+}
 
-	// Highlight
+func applyHighlightStyles(s *Styles, theme Theme) {
 	s.Highlight = lipgloss.NewStyle().
 		Foreground(theme.HighlightColor).
 		Bold(true)
+}
 
-	// Help styles
+func applyHelpStyles(s *Styles, theme Theme) {
 	s.HelpKey = lipgloss.NewStyle().
 		Foreground(theme.SelectedColor).
 		Bold(true)
 
 	s.HelpValue = lipgloss.NewStyle().
 		Foreground(theme.DimmedColor)
+}
 
-	// Title
+func applyTitleStyles(s *Styles, theme Theme) {
 	s.Title = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
 		Background(theme.BorderColor).
 		Padding(0, 1).
 		Bold(true)
+}
 
-	// List line items
+func applyListStyles(s *Styles) {
 	s.LineItemText = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"})
 
@@ -258,12 +309,14 @@ func NewStyles(theme Theme) *Styles {
 		Bold(true)
 
 	s.SelectedLineBackground = lipgloss.AdaptiveColor{Light: "#B3D9FF", Dark: "#2F5D8A"}
+}
 
-	// Dimmed text
+func applyDimmedStyles(s *Styles, theme Theme) {
 	s.Dimmed = lipgloss.NewStyle().
 		Foreground(theme.DimmedColor)
+}
 
-	// Panel styles
+func applyPanelStyles(s *Styles, theme Theme) {
 	s.FocusedBorder = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(theme.SelectedColor)
@@ -284,11 +337,9 @@ func NewStyles(theme Theme) *Styles {
 
 	s.Help = lipgloss.NewStyle().
 		Foreground(theme.DimmedColor)
-
-	return s
 }
 
-// DefaultStyles returns styles with the default theme
+// DefaultStyles returns styles with the default theme.
 func DefaultStyles() *Styles {
 	return NewStyles(DefaultTheme)
 }

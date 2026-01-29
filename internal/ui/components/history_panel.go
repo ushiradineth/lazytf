@@ -18,37 +18,66 @@ type HistoryItem struct {
 
 // Render renders the history item.
 func (h HistoryItem) Render(s *styles.Styles, width int, selected bool) string {
-	// Get timestamp
-	ts := h.entry.FinishedAt
-	if ts.IsZero() {
-		ts = h.entry.StartedAt
-	}
-	when := formatTime(ts)
-
-	// Get plain status text for width calculation
-	var statusPlain string
-	switch h.entry.Status {
-	case history.StatusSuccess:
-		statusPlain = "ok"
-	case history.StatusFailed:
-		statusPlain = "fail"
-	case history.StatusCanceled:
-		statusPlain = "cancel"
-	default:
-		statusPlain = string(h.entry.Status)
-	}
-
-	// Get duration
+	when := formatHistoryTime(h.entry)
+	statusPlain := historyStatusPlain(h.entry.Status)
 	dur := formatDuration(h.entry.Duration)
+	desc := historyDescription(h.entry)
 
-	// Get description - prefer Summary (shows what happened), fall back to Environment/WorkDir
-	desc := strings.TrimSpace(h.entry.Summary)
+	desc = trimString(desc, historyDescWidth(width, statusPlain, dur))
+
+	if selected {
+		line := historyLine(when, statusPlain, dur, desc)
+		bg := s.SelectedLineBackground
+		styled := s.LineItemText.Background(bg).Bold(true).Render(line)
+		return PadLineWithBg(styled, width, bg)
+	}
+
+	statusText := historyStatusText(s, h.entry.Status, statusPlain)
+	line := historyLine(when, statusText, dur, desc)
+	return PadLine(line, width)
+}
+
+func formatHistoryTime(entry history.Entry) string {
+	ts := entry.FinishedAt
+	if ts.IsZero() {
+		ts = entry.StartedAt
+	}
+	return formatTime(ts)
+}
+
+func historyStatusPlain(status history.Status) string {
+	switch status {
+	case history.StatusSuccess:
+		return "ok"
+	case history.StatusFailed:
+		return "fail"
+	case history.StatusCanceled:
+		return "cancel"
+	default:
+		return string(status)
+	}
+}
+
+func historyStatusText(s *styles.Styles, status history.Status, plain string) string {
+	switch status {
+	case history.StatusSuccess:
+		return s.Create.Render(plain)
+	case history.StatusFailed:
+		return s.Delete.Render(plain)
+	case history.StatusCanceled:
+		return s.Update.Render(plain)
+	default:
+		return plain
+	}
+}
+
+func historyDescription(entry history.Entry) string {
+	desc := strings.TrimSpace(entry.Summary)
 	if desc == "" {
-		desc = strings.TrimSpace(h.entry.Environment)
+		desc = strings.TrimSpace(entry.Environment)
 	}
 	if desc == "" {
-		// Get last component of WorkDir for brevity
-		wd := strings.TrimSpace(h.entry.WorkDir)
+		wd := strings.TrimSpace(entry.WorkDir)
 		if idx := strings.LastIndex(wd, "/"); idx >= 0 && idx < len(wd)-1 {
 			wd = wd[idx+1:]
 		}
@@ -57,51 +86,22 @@ func (h HistoryItem) Render(s *styles.Styles, width int, selected bool) string {
 	if desc == "" {
 		desc = "apply"
 	}
+	return desc
+}
 
-	// Build line: "HH:MM ok 5s + 1 to create" or "HH:MM fail prod"
-	// Calculate available space for description
-	// Fixed parts: "HH:MM " (6) + status (max 6 visual chars) + space (1) = 13 chars
+func historyDescWidth(width int, statusPlain, dur string) int {
 	fixedLen := 6 + len(statusPlain) + 1
 	if dur != "" {
-		fixedLen += len(dur) + 1 // duration + space
+		fixedLen += len(dur) + 1
 	}
-	descWidth := max(3, width-fixedLen)
-	desc = trimString(desc, descWidth)
+	return max(3, width-fixedLen)
+}
 
-	// Apply styling and ensure full-width
-	if selected {
-		// For selected: build plain text line, then apply full background
-		var line string
-		if dur != "" {
-			line = fmt.Sprintf("%s %s %s %s", when, statusPlain, dur, desc)
-		} else {
-			line = fmt.Sprintf("%s %s %s", when, statusPlain, desc)
-		}
-		bg := s.SelectedLineBackground
-		styled := s.LineItemText.Background(bg).Bold(true).Render(line)
-		return PadLineWithBg(styled, width, bg)
-	}
-
-	// Non-selected: apply status color styling
-	var statusText string
-	switch h.entry.Status {
-	case history.StatusSuccess:
-		statusText = s.Create.Render(statusPlain)
-	case history.StatusFailed:
-		statusText = s.Delete.Render(statusPlain)
-	case history.StatusCanceled:
-		statusText = s.Update.Render(statusPlain)
-	default:
-		statusText = statusPlain
-	}
-
-	var line string
+func historyLine(when, statusText, dur, desc string) string {
 	if dur != "" {
-		line = fmt.Sprintf("%s %s %s %s", when, statusText, dur, desc)
-	} else {
-		line = fmt.Sprintf("%s %s %s", when, statusText, desc)
+		return fmt.Sprintf("%s %s %s %s", when, statusText, dur, desc)
 	}
-	return PadLine(line, width)
+	return fmt.Sprintf("%s %s %s", when, statusText, desc)
 }
 
 // HistoryPanel renders recent apply history entries using ListPanel.
@@ -143,12 +143,12 @@ func (h *HistoryPanel) SetSelection(index int, focused bool) {
 	h.listPanel.SetFocused(focused)
 }
 
-// SetFocused sets the focus state (implements Panel interface)
+// SetFocused sets the focus state (implements Panel interface).
 func (h *HistoryPanel) SetFocused(focused bool) {
 	h.listPanel.SetFocused(focused)
 }
 
-// IsFocused returns whether the panel is focused (implements Panel interface)
+// IsFocused returns whether the panel is focused (implements Panel interface).
 func (h *HistoryPanel) IsFocused() bool {
 	return h.listPanel.IsFocused()
 }
@@ -177,12 +177,12 @@ func (h *HistoryPanel) MoveDown() bool {
 	return h.listPanel.MoveDown()
 }
 
-// Update handles Bubble Tea messages (implements Panel interface)
+// Update handles Bubble Tea messages (implements Panel interface).
 func (h *HistoryPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 	return h, nil
 }
 
-// HandleKey handles key events (implements Panel interface)
+// HandleKey handles key events (implements Panel interface).
 func (h *HistoryPanel) HandleKey(_ tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	// History panel doesn't handle keys directly in panel mode
 	// Navigation is handled by the app

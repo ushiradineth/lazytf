@@ -77,7 +77,7 @@ func main() {
 	data = append(data, '\n')
 
 	target := filepath.Join("internal", "config", "config.schema.json")
-	if err := os.WriteFile(target, data, 0o644); err != nil {
+	if err := os.WriteFile(target, data, 0o600); err != nil {
 		panic(err)
 	}
 	fmt.Printf("wrote %s\n", target)

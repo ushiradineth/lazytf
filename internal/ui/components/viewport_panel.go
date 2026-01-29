@@ -14,7 +14,7 @@ import (
 // - Rounded border with title and tabs
 // - Scrollbar on the right side
 // - Free-form scrollable content
-// - Keyboard navigation (up/down/pgup/pgdown)
+// - Keyboard navigation (up/down/pgup/pgdown).
 type ViewportPanel struct {
 	styles   *styles.Styles
 	frame    *PanelFrame

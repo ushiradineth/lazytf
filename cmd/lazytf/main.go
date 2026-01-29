@@ -129,118 +129,188 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		overrideFlags = append(overrideFlags, override.Flags...)
 	}
-	explicitReadOnly := false
-	if cmd != nil {
-		if flag := cmd.Flags().Lookup("read-only"); flag != nil && cmd.Flags().Changed("read-only") {
-			explicitReadOnly = true
-		}
-	}
-	if (len(args) > 0 || planFile != "") && !explicitReadOnly {
-		readOnlyMode = true
-	}
+	readOnlyMode = resolveReadOnlyMode(cmd, args)
 
 	if !readOnlyMode {
-		flags := append([]string{}, cfg.Terraform.DefaultFlags...)
-		flags = append(flags, splitFlags(tfFlags)...)
-		if len(overrideFlags) > 0 {
-			flags = append(flags, overrideFlags...)
-		}
-		if presetName != "" {
-			preset, ok := cfg.PresetByName(presetName)
-			if !ok {
-				return fmt.Errorf("preset not found: %s", presetName)
-			}
-			if preset.WorkDir != "" {
-				workDir = preset.WorkDir
-			}
-			if len(preset.Flags) > 0 {
-				flags = append(flags, preset.Flags...)
-			}
-			if preset.Theme != "" && themeName == "" {
-				cfg.Theme.Name = preset.Theme
-			}
-			if envName == "" && preset.Environment != "" {
-				envName = preset.Environment
-			}
-		}
-		appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
+		return runExecutionMode(&cfg, overrideFlags)
+	}
+
+	return runReadOnlyMode(&cfg, args)
+}
+
+func runExecutionMode(cfg *config.Config, overrideFlags []string) error {
+	flags, err := prepareExecutionFlags(cfg, overrideFlags)
+	if err != nil {
+		return err
+	}
+	appStyles, err := resolveAppStyles(cfg)
+	if err != nil {
+		return err
+	}
+	if err := configureWorkDirAndWorkspace(); err != nil {
+		return err
+	}
+	exec, err := buildExecutor(cfg, flags)
+	if err != nil {
+		return err
+	}
+	selectedEnv := resolveSelectedEnv()
+	historyStore, historyLogger, err := openHistory(cfg)
+	if err != nil {
+		return err
+	}
+
+	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
+		Executor:       exec,
+		AutoPlan:       autoPlan,
+		Flags:          flags,
+		WorkDir:        workDir,
+		EnvName:        selectedEnv,
+		HistoryStore:   historyStore,
+		HistoryLogger:  historyLogger,
+		HistoryEnabled: cfg.History.Enabled,
+		Config:         cfg,
+	}, appStyles)
+	return programRunner(model)
+}
+
+func resolveReadOnlyMode(cmd *cobra.Command, args []string) bool {
+	if readOnlyMode {
+		return true
+	}
+	explicitReadOnly := flagExplicit(cmd, "read-only")
+	return (len(args) > 0 || planFile != "") && !explicitReadOnly
+}
+
+func flagExplicit(cmd *cobra.Command, name string) bool {
+	if cmd == nil {
+		return false
+	}
+	flag := cmd.Flags().Lookup(name)
+	return flag != nil && cmd.Flags().Changed(name)
+}
+
+func prepareExecutionFlags(cfg *config.Config, overrideFlags []string) ([]string, error) {
+	flags := append([]string{}, cfg.Terraform.DefaultFlags...)
+	flags = append(flags, splitFlags(tfFlags)...)
+	if len(overrideFlags) > 0 {
+		flags = append(flags, overrideFlags...)
+	}
+	flags, err := applyPreset(cfg, flags)
+	if err != nil {
+		return nil, err
+	}
+	return stripFlag(flags, "-json"), nil
+}
+
+func resolveAppStyles(cfg *config.Config) (*styles.Styles, error) {
+	appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
+	if err != nil {
+		return nil, err
+	}
+	return styles.NewStyles(appTheme), nil
+}
+
+func configureWorkDirAndWorkspace() error {
+	if workspaceName != "" && folderPath != "" {
+		return errors.New("cannot use --workspace and --folder together")
+	}
+	if folderPath != "" {
+		resolved, err := resolveFolderSelection(workDir, folderPath)
 		if err != nil {
 			return err
 		}
-		appStyles := styles.NewStyles(appTheme)
-		flags = stripFlag(flags, "-json")
-		if workspaceName != "" && folderPath != "" {
-			return errors.New("cannot use --workspace and --folder together")
-		}
-		if folderPath != "" {
-			resolved, err := resolveFolderSelection(workDir, folderPath)
-			if err != nil {
-				return err
-			}
-			workDir = resolved
-		}
-		if workspaceName != "" {
-			manager, err := newWorkspaceManager(workDir)
-			if err != nil {
-				return fmt.Errorf("failed to initialize workspace manager: %w", err)
-			}
-			if err := manager.Switch(context.Background(), workspaceName); err != nil {
-				return fmt.Errorf("failed to select workspace %s: %w", workspaceName, err)
-			}
-		}
-		var execOpts []terraform.ExecutorOption
-		execOpts = append(execOpts, terraform.WithDefaultFlags(flags))
-		if strings.TrimSpace(cfg.Terraform.Binary) != "" {
-			execOpts = append(execOpts, terraform.WithTerraformPath(cfg.Terraform.Binary))
-		}
-		if cfg.Terraform.Timeout > 0 {
-			execOpts = append(execOpts, terraform.WithTimeout(cfg.Terraform.Timeout))
-		}
-		exec, err := executorFactory(workDir, execOpts...)
-		if err != nil {
-			return fmt.Errorf("failed to initialize terraform: %w", err)
-		}
+		workDir = resolved
+	}
+	if workspaceName == "" {
+		return nil
+	}
+	manager, err := newWorkspaceManager(workDir)
+	if err != nil {
+		return fmt.Errorf("failed to initialize workspace manager: %w", err)
+	}
+	if err := manager.Switch(context.Background(), workspaceName); err != nil {
+		return fmt.Errorf("failed to select workspace %s: %w", workspaceName, err)
+	}
+	return nil
+}
 
-		selectedEnv := envName
-		if workspaceName != "" {
-			selectedEnv = workspaceName
-		}
-		if folderPath != "" {
-			selectedEnv = filepath.Base(workDir)
-		}
+func buildExecutor(cfg *config.Config, flags []string) (*terraform.Executor, error) {
+	var execOpts []terraform.ExecutorOption
+	execOpts = append(execOpts, terraform.WithDefaultFlags(flags))
+	if strings.TrimSpace(cfg.Terraform.Binary) != "" {
+		execOpts = append(execOpts, terraform.WithTerraformPath(cfg.Terraform.Binary))
+	}
+	if cfg.Terraform.Timeout > 0 {
+		execOpts = append(execOpts, terraform.WithTimeout(cfg.Terraform.Timeout))
+	}
+	exec, err := executorFactory(workDir, execOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize terraform: %w", err)
+	}
+	return exec, nil
+}
 
-		var historyStore *history.Store
-		var historyLogger *history.Logger
-		if cfg.History.Enabled {
-			opts := []history.StoreOption{
-				history.WithCompressionThreshold(cfg.History.CompressionThreshold),
-			}
-			if strings.TrimSpace(cfg.History.Path) != "" {
-				historyStore, err = history.Open(cfg.History.Path, opts...)
-			} else {
-				historyStore, err = history.OpenDefault(opts...)
-			}
-			if err != nil {
-				return fmt.Errorf("history store: %w", err)
-			}
-			historyLogger = history.NewLogger(historyStore, history.Level(cfg.History.Level))
-		}
+func resolveSelectedEnv() string {
+	if workspaceName != "" {
+		return workspaceName
+	}
+	if folderPath != "" {
+		return filepath.Base(workDir)
+	}
+	return envName
+}
 
-		model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
-			Executor:       exec,
-			AutoPlan:       autoPlan,
-			Flags:          flags,
-			WorkDir:        workDir,
-			EnvName:        selectedEnv,
-			HistoryStore:   historyStore,
-			HistoryLogger:  historyLogger,
-			HistoryEnabled: cfg.History.Enabled,
-			Config:         &cfg,
-		}, appStyles)
-		return programRunner(model)
+func openHistory(cfg *config.Config) (*history.Store, *history.Logger, error) {
+	if !cfg.History.Enabled {
+		return nil, nil, nil
+	}
+	opts := []history.StoreOption{
+		history.WithCompressionThreshold(cfg.History.CompressionThreshold),
+	}
+	var (
+		historyStore  *history.Store
+		historyLogger *history.Logger
+		err           error
+	)
+	if strings.TrimSpace(cfg.History.Path) != "" {
+		historyStore, err = history.Open(cfg.History.Path, opts...)
+	} else {
+		historyStore, err = history.OpenDefault(opts...)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("history store: %w", err)
+	}
+	historyLogger = history.NewLogger(historyStore, history.Level(cfg.History.Level))
+	return historyStore, historyLogger, nil
+}
+
+func applyPreset(cfg *config.Config, flags []string) ([]string, error) {
+	if presetName == "" {
+		return flags, nil
 	}
 
-	// Determine plan file path
+	preset, ok := cfg.PresetByName(presetName)
+	if !ok {
+		return nil, fmt.Errorf("preset not found: %s", presetName)
+	}
+	if preset.WorkDir != "" {
+		workDir = preset.WorkDir
+	}
+	if len(preset.Flags) > 0 {
+		flags = append(flags, preset.Flags...)
+	}
+	if preset.Theme != "" && themeName == "" {
+		cfg.Theme.Name = preset.Theme
+	}
+	if envName == "" && preset.Environment != "" {
+		envName = preset.Environment
+	}
+	return flags, nil
+}
+
+func runReadOnlyMode(cfg *config.Config, args []string) error {
+	// Determine plan file path.
 	var planPath string
 	switch {
 	case len(args) > 0:
@@ -251,14 +321,14 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.New("no plan file specified. Usage: lazytf <plan-file> or lazytf --file <plan-file>")
 	}
 
-	// Parse the plan output
+	// Parse the plan output.
 	parser := parser.NewTextParser()
 	plan, err := parser.ParseFile(planPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse plan file: %w", err)
 	}
 
-	// Create and run the TUI
+	// Create and run the TUI.
 	appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
 	if err != nil {
 		return err

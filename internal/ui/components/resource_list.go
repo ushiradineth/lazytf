@@ -46,7 +46,7 @@ type ResourceList struct {
 	summaryReplace int
 }
 
-// NewResourceList creates a new resource list component
+// NewResourceList creates a new resource list component.
 func NewResourceList(s *styles.Styles) *ResourceList {
 	vp := viewport.New(0, 0)
 
@@ -68,7 +68,7 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 	}
 }
 
-// SetSize sets the dimensions of the resource list
+// SetSize sets the dimensions of the resource list.
 func (r *ResourceList) SetSize(width, height int) {
 	r.width = width
 	r.height = height
@@ -79,7 +79,7 @@ func (r *ResourceList) SetSize(width, height int) {
 	r.updateViewport()
 }
 
-// SetResources updates the list of resources to display
+// SetResources updates the list of resources to display.
 func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 	r.resources = resources
 	r.selectedIndex = 0
@@ -109,7 +109,7 @@ func (r *ResourceList) ShowStatus() bool {
 	return r.showStatus
 }
 
-// SetFilter sets which action types to display
+// SetFilter sets which action types to display.
 func (r *ResourceList) SetFilter(actionType terraform.ActionType, enabled bool) {
 	r.filterActions[actionType] = enabled
 	r.updateViewport()
@@ -121,17 +121,17 @@ func (r *ResourceList) SetSearchQuery(query string) {
 	r.updateViewport()
 }
 
-// SetFocused sets the focus state (implements Panel interface)
+// SetFocused sets the focus state (implements Panel interface).
 func (r *ResourceList) SetFocused(focused bool) {
 	r.focused = focused
 }
 
-// IsFocused returns whether the panel is focused (implements Panel interface)
+// IsFocused returns whether the panel is focused (implements Panel interface).
 func (r *ResourceList) IsFocused() bool {
 	return r.focused
 }
 
-// HandleKey handles key events (implements Panel interface)
+// HandleKey handles key events (implements Panel interface).
 func (r *ResourceList) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	switch {
 	case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
@@ -147,7 +147,7 @@ func (r *ResourceList) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	return false, nil
 }
 
-// SetSummary sets the plan summary counts
+// SetSummary sets the plan summary counts.
 func (r *ResourceList) SetSummary(create, update, deleteCount, replace int) {
 	r.summaryCreate = create
 	r.summaryUpdate = update
@@ -156,7 +156,7 @@ func (r *ResourceList) SetSummary(create, update, deleteCount, replace int) {
 	r.updateViewport()
 }
 
-// MoveUp moves the selection up
+// MoveUp moves the selection up.
 func (r *ResourceList) MoveUp() {
 	if r.selectedIndex > 0 {
 		r.selectedIndex--
@@ -165,7 +165,7 @@ func (r *ResourceList) MoveUp() {
 	}
 }
 
-// MoveDown moves the selection down
+// MoveDown moves the selection down.
 func (r *ResourceList) MoveDown() {
 	if r.selectedIndex < len(r.visibleItems)-1 {
 		r.selectedIndex++
@@ -174,12 +174,12 @@ func (r *ResourceList) MoveDown() {
 	}
 }
 
-// Init initializes the component
+// Init initializes the component.
 func (r *ResourceList) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles messages (implements Panel interface)
+// Update handles messages (implements Panel interface).
 func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 	var cmd tea.Cmd
 	handled := false
@@ -205,7 +205,7 @@ func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 	return r, cmd
 }
 
-// View renders the resource list
+// View renders the resource list.
 func (r *ResourceList) View() string {
 	// Build content with summary header
 	var contentParts []string
@@ -279,7 +279,7 @@ func (r *ResourceList) padLineToWidth(line string, width int) string {
 	return PadLine(line, width)
 }
 
-// renderSummaryHeader renders the plan summary counts: +5 ~3 -2 ±1
+// renderSummaryHeader renders the plan summary counts: +5 ~3 -2 ±1.
 func (r *ResourceList) renderSummaryHeader() string {
 	parts := []string{}
 	if r.summaryCreate > 0 {
@@ -319,7 +319,7 @@ func (r *ResourceList) filterIndicator(action terraform.ActionType, label string
 	return r.styles.Dimmed.Render(text)
 }
 
-// getFilteredResources returns resources that pass the current filter
+// getFilteredResources returns resources that pass the current filter.
 func (r *ResourceList) getFilteredResources() []terraform.ResourceChange {
 	filtered := []terraform.ResourceChange{}
 	query := r.searchQuery
@@ -349,7 +349,7 @@ func (r *ResourceList) getFilteredResources() []terraform.ResourceChange {
 	return filtered
 }
 
-// updateViewport regenerates the viewport content based on current state
+// updateViewport regenerates the viewport content based on current state.
 func (r *ResourceList) updateViewport() {
 	filtered := r.getFilteredResources()
 	if len(filtered) == 0 {
@@ -685,7 +685,7 @@ func bestQueryScore(query string, resource terraform.ResourceChange) int {
 	return best
 }
 
-// renderDiff renders a single diff line
+// renderDiff renders a single diff line.
 func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 	symbol := d.Action.GetActionSymbol()
 	path := formatPathForDisplay(d.Path)
@@ -721,7 +721,7 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 	return style.Render(line)
 }
 
-// getActionStyle returns the appropriate style for an action type
+// getActionStyle returns the appropriate style for an action type.
 func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Style {
 	switch action {
 	case terraform.ActionCreate:
@@ -784,7 +784,7 @@ func formatShortDuration(d time.Duration) string {
 	return fmt.Sprintf("%dh", int(d.Hours()))
 }
 
-// GetSelectedResource returns the currently selected resource
+// GetSelectedResource returns the currently selected resource.
 func (r *ResourceList) GetSelectedResource() *terraform.ResourceChange {
 	if r.selectedIndex >= 0 && r.selectedIndex < len(r.visibleItems) {
 		item := r.visibleItems[r.selectedIndex]

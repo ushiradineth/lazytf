@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -285,7 +286,7 @@ func TestHistoryDetailOpenFlow(t *testing.T) {
 		}
 	})
 	m.historyStore = store
-	m.envCurrent = "dev"
+	m.envCurrent = consts.EnvDev
 
 	entry := history.Entry{
 		StartedAt:   time.Now(),
@@ -293,13 +294,13 @@ func TestHistoryDetailOpenFlow(t *testing.T) {
 		Duration:    time.Second,
 		Status:      history.StatusSuccess,
 		Summary:     "ok",
-		Environment: "dev",
+		Environment: consts.EnvDev,
 		Output:      "output text",
 	}
 	if err := store.RecordApply(entry); err != nil {
 		t.Fatalf("record history: %v", err)
 	}
-	entries, err := store.ListRecentForEnvironment("dev", 5)
+	entries, err := store.ListRecentForEnvironment(consts.EnvDev, 5)
 	if err != nil {
 		t.Fatalf("list history: %v", err)
 	}
@@ -442,7 +443,7 @@ func TestRecordHistoryAfterApply(t *testing.T) {
 	m.historyStore = store
 	m.applyStartedAt = time.Now().Add(-time.Second)
 	m.lastPlanOutput = "plan output"
-	m.envCurrent = "dev"
+	m.envCurrent = consts.EnvDev
 
 	cmd := m.recordHistoryCmd(history.StatusSuccess, "summary", m.lastPlanOutput, &terraform.ExecutionResult{}, nil)
 	if cmd == nil {
@@ -450,7 +451,7 @@ func TestRecordHistoryAfterApply(t *testing.T) {
 	}
 	cmd()
 
-	entries, err := store.ListRecentForEnvironment("dev", 5)
+	entries, err := store.ListRecentForEnvironment(consts.EnvDev, 5)
 	if err != nil {
 		t.Fatalf("list history: %v", err)
 	}
@@ -474,7 +475,7 @@ func TestEnvStatusLabel(t *testing.T) {
 		t.Fatalf("expected unknown label, got %q", got)
 	}
 
-	m.envCurrent = "dev"
+	m.envCurrent = consts.EnvDev
 	m.envStrategy = environment.StrategyWorkspace
 	if got := m.envStatusLabel(); got != "dev (workspace)" {
 		t.Fatalf("expected strategy label, got %q", got)
@@ -576,10 +577,10 @@ func TestContainsFlag(t *testing.T) {
 }
 
 func TestPlanOutputPath(t *testing.T) {
-	if got := planOutputPath([]string{"-out", "plan.tfplan"}); got != "plan.tfplan" {
+	if got := planOutputPath([]string{"-out", consts.PlanTFPlan}); got != consts.PlanTFPlan {
 		t.Fatalf("expected plan output path, got %q", got)
 	}
-	if got := planOutputPath([]string{"-out=plan.tfplan"}); got != "plan.tfplan" {
+	if got := planOutputPath([]string{"-out=plan.tfplan"}); got != consts.PlanTFPlan {
 		t.Fatalf("expected plan output path, got %q", got)
 	}
 	if got := planOutputPath([]string{"-out="}); got != "" {
@@ -592,7 +593,7 @@ func TestSetEnvironmentOptions(t *testing.T) {
 	folderPath := filepath.Join(baseDir, "envs", "prod")
 	result := environment.DetectionResult{
 		BaseDir:     baseDir,
-		Workspaces:  []string{"dev"},
+		Workspaces:  []string{consts.EnvDev},
 		FolderPaths: []string{folderPath},
 	}
 	result.Environments = environment.BuildEnvironments(result, "")
@@ -603,7 +604,7 @@ func TestSetEnvironmentOptions(t *testing.T) {
 	if len(m.envOptions) != 2 {
 		t.Fatalf("expected 2 env options, got %d", len(m.envOptions))
 	}
-	if m.envOptions[0].Name != "dev" || m.envOptions[0].Strategy != environment.StrategyWorkspace {
+	if m.envOptions[0].Name != consts.EnvDev || m.envOptions[0].Strategy != environment.StrategyWorkspace {
 		t.Fatalf("unexpected workspace option: %+v", m.envOptions[0])
 	}
 	if m.envOptions[1].Path != folderPath || m.envOptions[1].Strategy != environment.StrategyFolder {
@@ -972,15 +973,15 @@ func TestApplyEnvironmentSelectionWorkspace(t *testing.T) {
 	}
 
 	m := NewModel(&terraform.Plan{Resources: []terraform.ResourceChange{{Address: "a", Action: terraform.ActionCreate}}})
-	m.planFilePath = "plan.tfplan"
+	m.planFilePath = consts.PlanTFPlan
 	m.planRunFlags = []string{"-out=plan.tfplan"}
 	m.planView = views.NewPlanView("", m.styles)
 	m.operationState = terraform.NewOperationState()
 
-	if err := m.applyEnvironmentSelection(environment.Environment{Name: "dev", Strategy: environment.StrategyWorkspace}); err != nil {
+	if err := m.applyEnvironmentSelection(environment.Environment{Name: consts.EnvDev, Strategy: environment.StrategyWorkspace}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if manager.switched != "dev" {
+	if manager.switched != consts.EnvDev {
 		t.Fatalf("expected workspace switch to dev")
 	}
 	if m.plan != nil || m.planFilePath != "" || m.planRunFlags != nil {
@@ -1064,13 +1065,13 @@ func TestDetectEnvironmentsCmdUsesWorkspaceManager(t *testing.T) {
 	detector := &fakeDetector{
 		result: environment.DetectionResult{
 			Strategy:   environment.StrategyWorkspace,
-			Workspaces: []string{"dev"},
+			Workspaces: []string{consts.EnvDev},
 		},
 	}
 	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
 		return detector, nil
 	}
-	manager := &fakeWorkspaceManager{current: "dev"}
+	manager := &fakeWorkspaceManager{current: consts.EnvDev}
 	newWorkspaceManager = func(_ string) (workspaceManager, error) {
 		return manager, nil
 	}
@@ -1083,7 +1084,7 @@ func TestDetectEnvironmentsCmdUsesWorkspaceManager(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected environment detected message")
 	}
-	if typed.Current != "dev" {
+	if typed.Current != consts.EnvDev {
 		t.Fatalf("expected current workspace, got %q", typed.Current)
 	}
 }
@@ -1135,7 +1136,7 @@ func TestRecordOperationCmd(t *testing.T) {
 
 	m := NewModel(&terraform.Plan{})
 	m.historyLogger = history.NewLogger(store, history.LevelStandard)
-	m.envCurrent = "dev"
+	m.envCurrent = consts.EnvDev
 	m.applyStartedAt = time.Now().Add(-time.Second)
 	result := &terraform.ExecutionResult{
 		ExitCode: 1,
@@ -1156,7 +1157,7 @@ func TestRecordOperationCmd(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected one entry, got %d", len(entries))
 	}
-	if entries[0].Environment != "dev" || entries[0].Status != history.StatusFailed {
+	if entries[0].Environment != consts.EnvDev || entries[0].Status != history.StatusFailed {
 		t.Fatalf("unexpected operation entry data")
 	}
 }
@@ -1532,11 +1533,11 @@ func TestUpdateEnvironmentDetectedSuccess(t *testing.T) {
 	result := environment.DetectionResult{
 		BaseDir:    m.envWorkDir,
 		Strategy:   environment.StrategyWorkspace,
-		Workspaces: []string{"dev"},
+		Workspaces: []string{consts.EnvDev},
 	}
 	result.Environments = environment.BuildEnvironments(result, "")
-	m.Update(EnvironmentDetectedMsg{Result: result, Current: "dev"})
-	if m.envCurrent != "dev" {
+	m.Update(EnvironmentDetectedMsg{Result: result, Current: consts.EnvDev})
+	if m.envCurrent != consts.EnvDev {
 		t.Fatalf("expected current environment to be set")
 	}
 	if len(m.envOptions) == 0 {

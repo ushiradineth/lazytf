@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RenderPanelTitleLine renders a panel border line with an embedded title
+// RenderPanelTitleLine renders a panel border line with an embedded title.
 func RenderPanelTitleLine(width int, borderStyle lipgloss.Style, title string) (string, bool) {
 	if width <= 0 {
 		return "", false

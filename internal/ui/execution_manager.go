@@ -183,25 +183,15 @@ func (m *Model) beginRefresh() tea.Cmd {
 }
 
 func (m *Model) handleRefreshStart(msg RefreshStartMsg) (tea.Model, tea.Cmd) {
-	if msg.Error != nil {
-		m.refreshRunning = false
-		if m.applyView != nil {
-			m.applyView.SetStatus(views.ApplyFailed)
-			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform refresh: %v", msg.Error))
-		}
-		m.addErrorDiagnostic("Refresh failed to start", msg.Error, "")
-		return m, nil
-	}
-
-	m.outputChan = msg.Output
-	cmds := []tea.Cmd{
+	return m.handleOperationStart(
+		msg.Error,
+		&m.refreshRunning,
+		"Failed to start terraform refresh",
+		"Refresh failed to start",
+		msg.Output,
 		m.waitRefreshCompleteCmd(msg.Result),
 		m.streamRefreshOutputCmd(),
-	}
-	if m.applyView != nil {
-		cmds = append(cmds, m.applyView.Tick())
-	}
-	return m, tea.Batch(cmds...)
+	)
 }
 
 func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cmd) {
@@ -224,32 +214,7 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	}
 
 	if msg.Error != nil || !msg.Success {
-		if m.applyView != nil {
-			m.applyView.SetStatus(views.ApplyFailed)
-			if msg.Error != nil {
-				m.applyView.AppendLine(fmt.Sprintf("Refresh failed: %v", msg.Error))
-			}
-		}
-		// Route logs to command log panel
-		if msg.Result != nil {
-			if m.commandLogPanel != nil {
-				m.commandLogPanel.SetLogText(msg.Result.Output)
-				m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
-			} else if m.diagnosticsPanel != nil {
-				m.diagnosticsPanel.SetLogText(msg.Result.Output)
-				m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
-			}
-		}
-		if msg.Error != nil {
-			output := ""
-			if msg.Result != nil {
-				output = msg.Result.Output
-			}
-			m.addErrorDiagnostic("Refresh failed", msg.Error, output)
-		}
-		m.updateExecutionViewForStreaming()
-		cmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
-		return m, cmd
+		return m.handleRefreshFailure(msg)
 	}
 
 	if m.applyView != nil {
@@ -430,36 +395,17 @@ func (m *Model) beginFormat() tea.Cmd {
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.Error != nil {
 		m.addErrorDiagnostic("Format failed", msg.Error, "")
-		var cmd tea.Cmd
-		if m.toast != nil {
-			cmd = m.toast.ShowError(fmt.Sprintf("Format failed: %v", msg.Error))
-		}
+		cmd := m.toastError(fmt.Sprintf("Format failed: %v", msg.Error))
 		return m, cmd
 	}
 
-	var cmd tea.Cmd
 	if len(msg.ChangedFiles) == 0 {
-		if m.toast != nil {
-			cmd = m.toast.ShowInfo("No files changed")
-		}
-	} else {
-		if m.toast != nil {
-			cmd = m.toast.ShowSuccess(fmt.Sprintf("Formatted %d file(s)", len(msg.ChangedFiles)))
-		}
-
-		// Display changed files in command log panel
-		if m.panelManager != nil {
-			m.panelManager.SetCommandLogVisible(true)
-			m.updateLayout()
-		}
-
-		output := "Formatted files:\n" + strings.Join(msg.ChangedFiles, "\n")
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetParsedText(output)
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetParsedText(output)
-		}
+		cmd := m.toastInfo("No files changed")
+		return m, cmd
 	}
+
+	m.showFormattedFiles(msg.ChangedFiles)
+	cmd := m.toastSuccess(fmt.Sprintf("Formatted %d file(s)", len(msg.ChangedFiles)))
 	return m, cmd
 }
 
@@ -632,25 +578,15 @@ func (m *Model) cancelExecution() {
 }
 
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
-	if msg.Error != nil {
-		m.planRunning = false
-		if m.applyView != nil {
-			m.applyView.SetStatus(views.ApplyFailed)
-			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform plan: %v", msg.Error))
-		}
-		m.addErrorDiagnostic("Plan failed to start", msg.Error, "")
-		return m, nil
-	}
-
-	m.outputChan = msg.Output
-	cmds := []tea.Cmd{
+	return m.handleOperationStart(
+		msg.Error,
+		&m.planRunning,
+		"Failed to start terraform plan",
+		"Plan failed to start",
+		msg.Output,
 		m.waitPlanCompleteCmd(msg.Result),
 		m.streamPlanOutputCmd(),
-	}
-	if m.applyView != nil {
-		cmds = append(cmds, m.applyView.Tick())
-	}
-	return m, tea.Batch(cmds...)
+	)
 }
 
 func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
@@ -717,25 +653,15 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
-	if msg.Error != nil {
-		m.applyRunning = false
-		if m.applyView != nil {
-			m.applyView.SetStatus(views.ApplyFailed)
-			m.applyView.AppendLine(fmt.Sprintf("Failed to start terraform apply: %v", msg.Error))
-		}
-		m.addErrorDiagnostic("Apply failed to start", msg.Error, "")
-		return m, nil
-	}
-
-	m.outputChan = msg.Output
-	cmds := []tea.Cmd{
+	return m.handleOperationStart(
+		msg.Error,
+		&m.applyRunning,
+		"Failed to start terraform apply",
+		"Apply failed to start",
+		msg.Output,
 		m.waitApplyCompleteCmd(msg.Result),
 		m.streamApplyOutputCmd(),
-	}
-	if m.applyView != nil {
-		cmds = append(cmds, m.applyView.Tick())
-	}
-	return m, tea.Batch(cmds...)
+	)
 }
 
 func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
@@ -758,48 +684,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Error != nil || !msg.Success {
-		if m.applyView != nil {
-			m.applyView.SetStatus(views.ApplyFailed)
-			if msg.Error != nil {
-				m.applyView.AppendLine(fmt.Sprintf("Apply failed: %v", msg.Error))
-			}
-		}
-		// Route logs to command log panel
-		if msg.Result != nil {
-			if m.commandLogPanel != nil {
-				m.commandLogPanel.SetLogText(msg.Result.Output)
-				m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
-			} else if m.diagnosticsPanel != nil {
-				m.diagnosticsPanel.SetLogText(msg.Result.Output)
-				m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
-			}
-		}
-		if msg.Error != nil {
-			output := ""
-			if msg.Result != nil {
-				output = msg.Result.Output
-			}
-			m.addErrorDiagnostic("Apply failed", msg.Error, output)
-		} else if !msg.Success {
-			output := ""
-			if msg.Result != nil {
-				output = msg.Result.Output
-			}
-			m.addErrorDiagnostic("Apply failed", errors.New("apply failed"), output)
-		}
-		status := history.StatusFailed
-		if errors.Is(msg.Error, context.Canceled) {
-			status = history.StatusCanceled
-		}
-		opErr := msg.Error
-		if opErr == nil && !msg.Success {
-			opErr = errors.New("apply failed")
-		}
-		m.updateExecutionViewForStreaming()
-		return m, tea.Batch(
-			m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error),
-			m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr),
-		)
+		return m.handleApplyFailure(msg)
 	}
 
 	if m.applyView != nil {
@@ -835,6 +720,137 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil),
 		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil),
 	)
+}
+
+func (m *Model) handleOperationStart(
+	err error,
+	running *bool,
+	failureLine string,
+	diagnosticSummary string,
+	output <-chan string,
+	waitCmd, streamCmd tea.Cmd,
+) (tea.Model, tea.Cmd) {
+	if err != nil {
+		*running = false
+		if m.applyView != nil {
+			m.applyView.SetStatus(views.ApplyFailed)
+			m.applyView.AppendLine(fmt.Sprintf("%s: %v", failureLine, err))
+		}
+		m.addErrorDiagnostic(diagnosticSummary, err, "")
+		return m, nil
+	}
+
+	m.outputChan = output
+	cmds := []tea.Cmd{waitCmd, streamCmd}
+	if m.applyView != nil {
+		cmds = append(cmds, m.applyView.Tick())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd) {
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplyFailed)
+		if msg.Error != nil {
+			m.applyView.AppendLine(fmt.Sprintf("Refresh failed: %v", msg.Error))
+		}
+	}
+	// Route logs to command log panel.
+	if msg.Result != nil {
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetLogText(msg.Result.Output)
+			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Result.Output)
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+		}
+	}
+	if msg.Error != nil {
+		output := ""
+		if msg.Result != nil {
+			output = msg.Result.Output
+		}
+		m.addErrorDiagnostic("Refresh failed", msg.Error, output)
+	}
+	m.updateExecutionViewForStreaming()
+	cmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
+	return m, cmd
+}
+
+func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
+	if m.applyView != nil {
+		m.applyView.SetStatus(views.ApplyFailed)
+		if msg.Error != nil {
+			m.applyView.AppendLine(fmt.Sprintf("Apply failed: %v", msg.Error))
+		}
+	}
+	// Route logs to command log panel.
+	if msg.Result != nil {
+		if m.commandLogPanel != nil {
+			m.commandLogPanel.SetLogText(msg.Result.Output)
+			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+		} else if m.diagnosticsPanel != nil {
+			m.diagnosticsPanel.SetLogText(msg.Result.Output)
+			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+		}
+	}
+	output := ""
+	if msg.Result != nil {
+		output = msg.Result.Output
+	}
+	if msg.Error != nil {
+		m.addErrorDiagnostic("Apply failed", msg.Error, output)
+	} else if !msg.Success {
+		m.addErrorDiagnostic("Apply failed", errors.New("apply failed"), output)
+	}
+	status := history.StatusFailed
+	if errors.Is(msg.Error, context.Canceled) {
+		status = history.StatusCanceled
+	}
+	opErr := msg.Error
+	if opErr == nil && !msg.Success {
+		opErr = errors.New("apply failed")
+	}
+	m.updateExecutionViewForStreaming()
+	return m, tea.Batch(
+		m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error),
+		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr),
+	)
+}
+
+func (m *Model) showFormattedFiles(changedFiles []string) {
+	if m.panelManager != nil {
+		m.panelManager.SetCommandLogVisible(true)
+		m.updateLayout()
+	}
+
+	output := "Formatted files:\n" + strings.Join(changedFiles, "\n")
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetParsedText(output)
+	} else if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetParsedText(output)
+	}
+}
+
+func (m *Model) toastError(message string) tea.Cmd {
+	if m.toast == nil {
+		return nil
+	}
+	return m.toast.ShowError(message)
+}
+
+func (m *Model) toastInfo(message string) tea.Cmd {
+	if m.toast == nil {
+		return nil
+	}
+	return m.toast.ShowInfo(message)
+}
+
+func (m *Model) toastSuccess(message string) tea.Cmd {
+	if m.toast == nil {
+		return nil
+	}
+	return m.toast.ShowSuccess(message)
 }
 
 func (m *Model) updateExecutionViewForStreaming() {

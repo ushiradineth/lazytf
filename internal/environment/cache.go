@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 const (
@@ -48,7 +50,7 @@ func filterPreferenceFilePath(baseDir, workspace string) string {
 	safeName = strings.ReplaceAll(safeName, "\\", "_")
 	safeName = strings.ReplaceAll(safeName, ":", "_")
 	if safeName == "" {
-		safeName = "default"
+		safeName = consts.DefaultName
 	}
 	return filepath.Join(cacheDir(baseDir), filtersDirName, safeName+".json")
 }

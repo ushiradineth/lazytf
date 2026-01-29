@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -139,8 +140,8 @@ func TestResourceListShowStatusToggle(t *testing.T) {
 func TestResourceListRenderGroupAndVisibleItems(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetSize(40, 5)
-	group := r.renderGroup("module.alpha", 2, true, true, 2)
-	if !strings.Contains(group, "module.alpha") {
+	group := r.renderGroup(consts.ModuleAlpha, 2, true, true, 2)
+	if !strings.Contains(group, consts.ModuleAlpha) {
 		t.Fatalf("expected group label")
 	}
 
@@ -204,7 +205,7 @@ func TestRenderResourceTrimsModulePrefix(t *testing.T) {
 	}
 
 	out := r.renderResource(&resource, false, 2)
-	if !strings.Contains(out, "aws_instance.web") || strings.Contains(out, "module.alpha") {
+	if !strings.Contains(out, "aws_instance.web") || strings.Contains(out, consts.ModuleAlpha) {
 		t.Fatalf("expected trimmed module prefix, got %q", out)
 	}
 }
@@ -525,7 +526,7 @@ func TestDeepGroupingCreatesNestedItems(t *testing.T) {
 	foundGroup := false
 	foundSubGroup := false
 	for _, item := range r.visibleItems {
-		if item.kind == itemGroup && item.label == "module.alpha" {
+		if item.kind == itemGroup && item.label == consts.ModuleAlpha {
 			foundGroup = true
 		}
 		if item.kind == itemGroup && item.label == "module.net" {
@@ -552,7 +553,7 @@ func TestGroupLabelLocalNamePerDepth(t *testing.T) {
 			labels = append(labels, item.label)
 		}
 	}
-	if !containsString(labels, "module.alpha") || !containsString(labels, "module.net") || !containsString(labels, "module.edge") {
+	if !containsString(labels, consts.ModuleAlpha) || !containsString(labels, "module.net") || !containsString(labels, "module.edge") {
 		t.Fatalf("unexpected group labels: %#v", labels)
 	}
 }
@@ -584,14 +585,14 @@ func TestToggleGroupCollapseHidesDescendants(t *testing.T) {
 	})
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	if groupIdx < 0 {
 		t.Fatalf("expected module.alpha group")
 	}
 	r.selectedIndex = groupIdx
 	r.ToggleGroup()
 	for _, item := range r.visibleItems {
-		if item.kind == itemGroup && item.label != "module.alpha" {
+		if item.kind == itemGroup && item.label != consts.ModuleAlpha {
 			t.Fatalf("expected descendants hidden, got %#v", r.visibleItems)
 		}
 		if item.kind == itemResource {
@@ -608,7 +609,7 @@ func TestToggleGroupExpandRestoresSortedChildren(t *testing.T) {
 	})
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	r.selectedIndex = groupIdx
 	r.ToggleGroup()
 	r.ToggleGroup()
@@ -694,7 +695,7 @@ func TestSelectionOnGroupHeaderHasNoResource(t *testing.T) {
 	})
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	r.selectedIndex = groupIdx
 	if got := r.GetSelectedResource(); got != nil {
 		t.Fatalf("expected nil resource for group selection, got %#v", got)
@@ -709,7 +710,7 @@ func TestSelectionMovesOverCollapsedGroup(t *testing.T) {
 	})
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	r.selectedIndex = groupIdx
 	r.ToggleGroup()
 	r.MoveDown()
@@ -726,7 +727,7 @@ func TestCollapseSelectedGroupClearsDiffSelection(t *testing.T) {
 	})
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	r.selectedIndex = groupIdx
 	r.ToggleGroup()
 	if r.GetSelectedResource() != nil {
@@ -760,7 +761,7 @@ func TestSingleResourceLeafShowsGroupHeaderDuringSearch(t *testing.T) {
 	// During search, even single resources should show group headers for context
 	foundGroup := false
 	for _, item := range r.visibleItems {
-		if item.kind == itemGroup && item.label == "module.alpha" {
+		if item.kind == itemGroup && item.label == consts.ModuleAlpha {
 			foundGroup = true
 			break
 		}
@@ -786,7 +787,7 @@ func TestNestedSingleResourceShowsAllGroupsDuringSearch(t *testing.T) {
 	for _, item := range r.visibleItems {
 		if item.kind == itemGroup {
 			switch item.label {
-			case "module.alpha":
+			case consts.ModuleAlpha:
 				foundAlpha = true
 			case "module.net":
 				foundNet = true
@@ -857,7 +858,7 @@ func TestSearchWithGroupingCountsAndVisibility(t *testing.T) {
 	r.SetSearchQuery("web")
 	r.SetSize(80, 10)
 
-	groupIdx := indexOfGroup(r.visibleItems, "module.alpha")
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
 	if groupIdx < 0 || r.visibleItems[groupIdx].count != 2 {
 		t.Fatalf("expected filtered count for module.alpha, got %#v", r.visibleItems)
 	}
@@ -872,7 +873,7 @@ func TestFilterWithGroupingCountsAndVisibility(t *testing.T) {
 	r.SetFilter(terraform.ActionDelete, false)
 	r.SetSize(80, 10)
 
-	if indexOfGroup(r.visibleItems, "module.alpha") >= 0 {
+	if indexOfGroup(r.visibleItems, consts.ModuleAlpha) >= 0 {
 		t.Fatalf("expected single resource without group header, got %#v", r.visibleItems)
 	}
 	if got := selectFirstResource(r); got == nil || got.Address != "module.alpha.aws_instance.web" {
@@ -914,7 +915,7 @@ func TestResourceListInitReturnsNil(t *testing.T) {
 func TestFirstResourceIndex(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.visibleItems = []listItem{
-		{kind: itemGroup, label: "module.alpha"},
+		{kind: itemGroup, label: consts.ModuleAlpha},
 		{kind: itemResource, resource: &terraform.ResourceChange{Address: "aws_instance.web"}},
 	}
 	if idx := r.firstResourceIndex(); idx != 1 {

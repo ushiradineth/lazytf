@@ -305,36 +305,7 @@ func (s *Store) QueryOperations(filter OperationFilter) ([]OperationEntry, error
 		filter.Limit = 50
 	}
 
-	query := `SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, environment, output_text, output_gzip
-		FROM operations`
-	var args []any
-	var clauses []string
-
-	if !filter.After.IsZero() {
-		clauses = append(clauses, "started_at >= ?")
-		args = append(args, filter.After.UTC().Format(time.RFC3339Nano))
-	}
-	if !filter.Before.IsZero() {
-		clauses = append(clauses, "started_at <= ?")
-		args = append(args, filter.Before.UTC().Format(time.RFC3339Nano))
-	}
-	if strings.TrimSpace(filter.Action) != "" {
-		clauses = append(clauses, "action = ?")
-		args = append(args, filter.Action)
-	}
-	if strings.TrimSpace(filter.Environment) != "" {
-		clauses = append(clauses, "environment = ?")
-		args = append(args, filter.Environment)
-	}
-	if strings.TrimSpace(filter.User) != "" {
-		clauses = append(clauses, "user_name = ?")
-		args = append(args, filter.User)
-	}
-	if len(clauses) > 0 {
-		query += " WHERE " + strings.Join(clauses, " AND ")
-	}
-	query += " ORDER BY started_at DESC LIMIT ?"
-	args = append(args, filter.Limit)
+	query, args := buildOperationQuery(filter)
 
 	ctx := context.Background()
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -343,49 +314,93 @@ func (s *Store) QueryOperations(filter OperationFilter) ([]OperationEntry, error
 	}
 	defer rows.Close()
 
+	return scanOperationEntries(rows)
+}
+
+func buildOperationQuery(filter OperationFilter) (string, []any) {
+	query := `SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, environment, output_text, output_gzip
+		FROM operations`
+	var args []any
+	var clauses []string
+
+	appendClause := func(condition bool, clause string, value any) {
+		if !condition {
+			return
+		}
+		clauses = append(clauses, clause)
+		args = append(args, value)
+	}
+
+	appendClause(!filter.After.IsZero(), "started_at >= ?", filter.After.UTC().Format(time.RFC3339Nano))
+	appendClause(!filter.Before.IsZero(), "started_at <= ?", filter.Before.UTC().Format(time.RFC3339Nano))
+	appendClause(strings.TrimSpace(filter.Action) != "", "action = ?", filter.Action)
+	appendClause(strings.TrimSpace(filter.Environment) != "", "environment = ?", filter.Environment)
+	appendClause(strings.TrimSpace(filter.User) != "", "user_name = ?", filter.User)
+
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY started_at DESC LIMIT ?"
+	args = append(args, filter.Limit)
+
+	return query, args
+}
+
+func scanOperationEntries(rows *sql.Rows) ([]OperationEntry, error) {
 	var entries []OperationEntry
 	for rows.Next() {
-		var entry OperationEntry
-		var started string
-		var finished string
-		var durationMs int64
-		var status string
-		var outputText sql.NullString
-		var outputGzip []byte
-		if err := rows.Scan(
-			&entry.ID,
-			&started,
-			&finished,
-			&durationMs,
-			&entry.Action,
-			&entry.Command,
-			&entry.ExitCode,
-			&status,
-			&entry.Summary,
-			&entry.User,
-			&entry.Environment,
-			&outputText,
-			&outputGzip,
-		); err != nil {
-			return nil, err
-		}
-		startedAt, parseErr := time.Parse(time.RFC3339Nano, started)
-		if parseErr == nil {
-			entry.StartedAt = startedAt.Local()
-		}
-		finishedAt, parseErr := time.Parse(time.RFC3339Nano, finished)
-		if parseErr == nil {
-			entry.FinishedAt = finishedAt.Local()
-		}
-		entry.Duration = time.Duration(durationMs) * time.Millisecond
-		entry.Status = Status(status)
-		entry.Output, err = loadOutput(outputText, outputGzip)
+		entry, err := scanOperationEntry(rows)
 		if err != nil {
 			return nil, err
 		}
 		entries = append(entries, entry)
 	}
 	return entries, rows.Err()
+}
+
+func scanOperationEntry(rows *sql.Rows) (OperationEntry, error) {
+	var entry OperationEntry
+	var started string
+	var finished string
+	var durationMs int64
+	var status string
+	var outputText sql.NullString
+	var outputGzip []byte
+	if err := rows.Scan(
+		&entry.ID,
+		&started,
+		&finished,
+		&durationMs,
+		&entry.Action,
+		&entry.Command,
+		&entry.ExitCode,
+		&status,
+		&entry.Summary,
+		&entry.User,
+		&entry.Environment,
+		&outputText,
+		&outputGzip,
+	); err != nil {
+		return entry, err
+	}
+	entry.StartedAt = parseLocalTime(started)
+	entry.FinishedAt = parseLocalTime(finished)
+	entry.Duration = time.Duration(durationMs) * time.Millisecond
+	entry.Status = Status(status)
+	output, err := loadOutput(outputText, outputGzip)
+	if err != nil {
+		return entry, err
+	}
+	entry.Output = output
+	return entry, nil
+}
+
+func parseLocalTime(value string) time.Time {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed.Local()
 }
 
 // GetByID returns a history entry by ID.

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"time"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
-// ActionType represents the type of action Terraform will take on a resource
+// ActionType represents the type of action Terraform will take on a resource.
 type ActionType string
 
 const (
@@ -18,7 +20,7 @@ const (
 	ActionRead    ActionType = "read"
 )
 
-// Plan represents a parsed Terraform plan
+// Plan represents a parsed Terraform plan.
 type Plan struct {
 	FormatVersion string           `json:"format_version"`
 	Resources     []ResourceChange `json:"resource_changes"`
@@ -32,7 +34,7 @@ type ModuleAddress []string
 
 // UnmarshalJSON accepts module_address as a string or []string.
 func (m *ModuleAddress) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || string(data) == "null" {
+	if len(data) == 0 || string(data) == consts.NullLiteral {
 		*m = nil
 		return nil
 	}
@@ -55,7 +57,7 @@ func (m *ModuleAddress) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ResourceChange represents a single resource change in the plan
+// ResourceChange represents a single resource change in the plan.
 type ResourceChange struct {
 	Address      string        `json:"address"`
 	ModulePath   ModuleAddress `json:"module_address,omitempty"`
@@ -68,7 +70,7 @@ type ResourceChange struct {
 	Change       *Change       `json:"change"`
 }
 
-// Change represents the before/after state of a resource
+// Change represents the before/after state of a resource.
 type Change struct {
 	Actions           []string            `json:"actions"`
 	Before            map[string]any      `json:"before"`
@@ -104,19 +106,19 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 	c.AfterSensitive = aux.AfterSensitive
 	c.ReplacePaths = aux.ReplacePaths
 
-	if len(aux.Before) > 0 && string(aux.Before) != "null" {
+	if len(aux.Before) > 0 && string(aux.Before) != consts.NullLiteral {
 		if err := json.Unmarshal(aux.Before, &c.Before); err != nil {
 			return err
 		}
 		c.BeforeOrder = buildOrderMap(aux.Before)
 	}
-	if len(aux.After) > 0 && string(aux.After) != "null" {
+	if len(aux.After) > 0 && string(aux.After) != consts.NullLiteral {
 		if err := json.Unmarshal(aux.After, &c.After); err != nil {
 			return err
 		}
 		c.AfterOrder = buildOrderMap(aux.After)
 	}
-	if len(aux.AfterUnknown) > 0 && string(aux.AfterUnknown) != "null" {
+	if len(aux.AfterUnknown) > 0 && string(aux.AfterUnknown) != consts.NullLiteral {
 		if err := json.Unmarshal(aux.AfterUnknown, &c.AfterUnknown); err != nil {
 			return err
 		}
@@ -204,7 +206,7 @@ func escapeJSONPointer(segment string) string {
 	return string(escaped)
 }
 
-// OutputChange represents a change to a Terraform output
+// OutputChange represents a change to a Terraform output.
 type OutputChange struct {
 	Name      string              `json:"name"`
 	Action    ActionType          `json:"-"`
@@ -212,20 +214,20 @@ type OutputChange struct {
 	Sensitive bool                `json:"sensitive"`
 }
 
-// OutputChangeDetail contains the before/after values of an output
+// OutputChangeDetail contains the before/after values of an output.
 type OutputChangeDetail struct {
 	Actions []string `json:"actions"`
 	Before  any      `json:"before"`
 	After   any      `json:"after"`
 }
 
-// PlanMetadata contains metadata about the plan execution
+// PlanMetadata contains metadata about the plan execution.
 type PlanMetadata struct {
 	TerraformVersion string    `json:"terraform_version"`
 	Timestamp        time.Time `json:"timestamp"`
 }
 
-// GetActionType determines the action type from a list of actions
+// GetActionType determines the action type from a list of actions.
 func GetActionType(actions []string) ActionType {
 	if len(actions) == 0 {
 		return ActionNoOp
@@ -267,7 +269,7 @@ func GetActionType(actions []string) ActionType {
 	return ActionNoOp
 }
 
-// contains checks if a string slice contains a value
+// contains checks if a string slice contains a value.
 func contains(slice []string, val string) bool {
 	for _, item := range slice {
 		if item == val {
@@ -277,7 +279,7 @@ func contains(slice []string, val string) bool {
 	return false
 }
 
-// GetActionIcon returns the display icon for an action type
+// GetActionIcon returns the display icon for an action type.
 func (a ActionType) GetActionIcon() string {
 	switch a {
 	case ActionCreate:
@@ -297,7 +299,7 @@ func (a ActionType) GetActionIcon() string {
 	}
 }
 
-// GetActionVerb returns a human-readable verb for the action
+// GetActionVerb returns a human-readable verb for the action.
 func (a ActionType) GetActionVerb() string {
 	switch a {
 	case ActionCreate:

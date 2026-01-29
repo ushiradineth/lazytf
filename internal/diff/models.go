@@ -1,6 +1,6 @@
 package diff
 
-// DiffAction represents the type of change in a diff
+// DiffAction represents the type of change in a diff.
 type DiffAction string
 
 const (
@@ -9,7 +9,7 @@ const (
 	DiffChange DiffAction = "change"
 )
 
-// MinimalDiff represents a single attribute change in a resource
+// MinimalDiff represents a single attribute change in a resource.
 type MinimalDiff struct {
 	Path     []string   // Path to the attribute (e.g., ["tags", "Environment"])
 	OldValue any        // nil if adding
@@ -20,7 +20,7 @@ type MinimalDiff struct {
 // UnknownValue represents a Terraform "known after apply" value.
 type UnknownValue struct{}
 
-// GetActionSymbol returns the symbol to display for this diff action
+// GetActionSymbol returns the symbol to display for this diff action.
 func (d DiffAction) GetActionSymbol() string {
 	switch d {
 	case DiffAdd:
@@ -34,5 +34,5 @@ func (d DiffAction) GetActionSymbol() string {
 	}
 }
 
-// AttributeChange is an alias for MinimalDiff for clarity in different contexts
+// AttributeChange is an alias for MinimalDiff for clarity in different contexts.
 type AttributeChange = MinimalDiff

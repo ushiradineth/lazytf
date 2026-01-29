@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// PanelID identifies each panel in the UI
+// PanelID identifies each panel in the UI.
 type PanelID int
 
 const (
@@ -15,7 +15,7 @@ const (
 	PanelCommandLog PanelID = 4 // Command log (diagnostics)
 )
 
-// Panel is the interface that all UI panels must implement
+// Panel is the interface that all UI panels must implement.
 type Panel interface {
 	// Update handles Bubble Tea messages and returns updated panel and command
 	Update(msg tea.Msg) (any, tea.Cmd)
@@ -36,7 +36,7 @@ type Panel interface {
 	HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 }
 
-// PanelSpec defines the layout specification for a panel
+// PanelSpec defines the layout specification for a panel.
 type PanelSpec struct {
 	X      int
 	Y      int
@@ -44,7 +44,7 @@ type PanelSpec struct {
 	Height int
 }
 
-// LayoutSpec defines the complete layout for all panels
+// LayoutSpec defines the complete layout for all panels.
 type LayoutSpec struct {
 	FilterBarHeight  int
 	StatusBarHeight  int
@@ -60,7 +60,7 @@ type LayoutSpec struct {
 	CommandLogVisible bool
 }
 
-// Constants for layout calculations
+// Constants for layout calculations.
 const (
 	FilterBarHeight    = 0
 	StatusBarHeight    = 1

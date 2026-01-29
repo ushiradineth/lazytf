@@ -27,48 +27,84 @@ func (m *Model) envStatusLabel() string {
 }
 
 func (m *Model) detectEnvironmentsCmd() tea.Cmd {
-	workDir := m.envWorkDir
-	if strings.TrimSpace(workDir) == "" {
-		workDir = "."
-	}
+	workDir := defaultWorkDir(m.envWorkDir)
 	return func() tea.Msg {
 		absWorkDir, err := filepath.Abs(workDir)
 		if err != nil {
 			return EnvironmentDetectedMsg{Error: err}
 		}
-		pref, err := environment.LoadPreference(absWorkDir)
-		if err != nil && !errors.Is(err, environment.ErrNoPreference) {
-			return EnvironmentDetectedMsg{Error: err}
-		}
-		detector, err := newEnvironmentDetector(workDir)
+		pref, err := loadEnvironmentPreference(absWorkDir)
 		if err != nil {
 			return EnvironmentDetectedMsg{Error: err}
 		}
-		result, err := detector.Detect(context.Background())
+		result, err := detectEnvironments(workDir)
 		if err != nil {
 			return EnvironmentDetectedMsg{Error: err}
 		}
-		current := m.envCurrent
-		if current == "" {
-			for _, folder := range result.FolderPaths {
-				if folder == absWorkDir {
-					current = folder
-					break
-				}
-			}
-		}
-		if current == "" && len(result.Workspaces) > 0 {
-			if manager, err := newWorkspaceManager(workDir); err == nil {
-				if name, err := manager.Current(context.Background()); err == nil {
-					current = name
-				}
-			}
-		}
-		if current == "" && (result.Strategy == environment.StrategyFolder || result.Strategy == environment.StrategyMixed) {
-			current = absWorkDir
-		}
+		current := resolveDetectedEnvironment(m, workDir, absWorkDir, result)
 		return EnvironmentDetectedMsg{Result: result, Current: current, Preference: pref}
 	}
+}
+
+func defaultWorkDir(workDir string) string {
+	if strings.TrimSpace(workDir) == "" {
+		return "."
+	}
+	return workDir
+}
+
+func loadEnvironmentPreference(workDir string) (*environment.Preference, error) {
+	pref, err := environment.LoadPreference(workDir)
+	if err != nil && !errors.Is(err, environment.ErrNoPreference) {
+		return nil, err
+	}
+	return pref, nil
+}
+
+func detectEnvironments(workDir string) (environment.DetectionResult, error) {
+	detector, err := newEnvironmentDetector(workDir)
+	if err != nil {
+		return environment.DetectionResult{}, err
+	}
+	return detector.Detect(context.Background())
+}
+
+func resolveDetectedEnvironment(
+	m *Model,
+	workDir string,
+	absWorkDir string,
+	result environment.DetectionResult,
+) string {
+	current := m.envCurrent
+	if current == "" {
+		current = matchCurrentFolder(result.FolderPaths, absWorkDir)
+	}
+	if current == "" && len(result.Workspaces) > 0 {
+		if name, err := currentWorkspaceName(workDir); err == nil {
+			current = name
+		}
+	}
+	if current == "" && (result.Strategy == environment.StrategyFolder || result.Strategy == environment.StrategyMixed) {
+		current = absWorkDir
+	}
+	return current
+}
+
+func matchCurrentFolder(folderPaths []string, absWorkDir string) string {
+	for _, folder := range folderPaths {
+		if folder == absWorkDir {
+			return folder
+		}
+	}
+	return ""
+}
+
+func currentWorkspaceName(workDir string) (string, error) {
+	manager, err := newWorkspaceManager(workDir)
+	if err != nil {
+		return "", err
+	}
+	return manager.Current(context.Background())
 }
 
 func (m *Model) setEnvironmentOptions(result environment.DetectionResult, strategy environment.StrategyType, current string) {

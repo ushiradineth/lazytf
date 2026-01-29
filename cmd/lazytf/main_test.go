@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
@@ -103,7 +104,10 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	tfDir := t.TempDir()
 	tfPath := filepath.Join(tfDir, "terraform")
 	script := "#!/bin/sh\nexit 0\n"
-	if err := os.WriteFile(tfPath, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(tfPath, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}
 	t.Setenv("PATH", tfDir)
@@ -172,7 +176,10 @@ func TestRun_ExecuteModeWorkdirResolution(t *testing.T) {
 	tfDir := t.TempDir()
 	tfPath := filepath.Join(tfDir, "terraform")
 	script := "#!/bin/sh\nexit 0\n"
-	if err := os.WriteFile(tfPath, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(tfPath, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}
 
@@ -282,7 +289,7 @@ func TestResolveFolderSelectionRelative(t *testing.T) {
 	}
 
 	baseDir := t.TempDir()
-	folder := "envs/dev"
+	folder := consts.EnvDevPath
 	resolved, err := resolveFolderSelection(baseDir, folder)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -309,7 +316,7 @@ func TestRun_WorkspaceAndFolderConflict(t *testing.T) {
 
 	readOnlyMode = false
 	workspaceName = "dev"
-	folderPath = "envs/dev"
+	folderPath = consts.EnvDevPath
 
 	err := run(&cobra.Command{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "cannot use --workspace and --folder together") {
@@ -365,7 +372,7 @@ func TestRun_FolderSelectionError(t *testing.T) {
 	useTempConfig(t)
 
 	readOnlyMode = false
-	folderPath = "envs/dev"
+	folderPath = consts.EnvDevPath
 	workDir = t.TempDir()
 	programRunner = func(_ tea.Model) error {
 		t.Fatalf("program runner should not be called on folder error")

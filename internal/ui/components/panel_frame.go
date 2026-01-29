@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
@@ -130,7 +131,7 @@ func (f *PanelFrame) buildPanel(contentLines []string, borderStyle, titleStyle l
 		horizontal = "─"
 	}
 	if vertical == "" {
-		vertical = "│"
+		vertical = consts.VerticalBar
 	}
 
 	// Build title line

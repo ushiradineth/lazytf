@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
@@ -125,7 +126,7 @@ func (m *Model) handleHistoryKeys(key string) (bool, tea.Cmd) {
 		if m.historySelected > 0 {
 			m.historySelected--
 		}
-	case "down", "j":
+	case consts.KeyDown, "j":
 		if m.historySelected < len(m.historyEntries)-1 {
 			m.historySelected++
 		}

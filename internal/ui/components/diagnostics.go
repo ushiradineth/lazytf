@@ -119,66 +119,77 @@ func (d *DiagnosticsPanel) updateViewport() {
 		return
 	}
 
-	var sections []string
-
-	// Always show session logs first (all historic commands)
-	if len(d.sessionLogs) > 0 {
-		for _, entry := range d.sessionLogs {
-			header := d.styles.Highlight.Render(fmt.Sprintf("[%s] %s", entry.Timestamp, entry.Command))
-			sections = append(sections, header)
-			if strings.TrimSpace(entry.Output) != "" {
-				output := entry.Output
-				if d.width > 0 {
-					output = wrapText(output, d.width)
-				}
-				sections = append(sections, output)
-			}
-			sections = append(sections, "") // Empty line separator
-		}
-	}
-
-	// Show diagnostics if any
-	if len(d.diagnostics) > 0 {
-		var errors []terraform.Diagnostic
-		var warnings []terraform.Diagnostic
-		for _, diag := range d.diagnostics {
-			switch strings.ToLower(diag.Severity) {
-			case "error":
-				errors = append(errors, diag)
-			default:
-				warnings = append(warnings, diag)
-			}
-		}
-
-		sections = append(sections, d.styles.Title.Render("Diagnostics"))
-		if len(errors) > 0 {
-			sections = append(sections, d.styles.Delete.Render("Errors"))
-			for _, diag := range errors {
-				sections = append(sections, formatDiagnostic(diag))
-			}
-		}
-		if len(warnings) > 0 {
-			sections = append(sections, d.styles.Update.Render("Warnings"))
-			for _, diag := range warnings {
-				sections = append(sections, formatDiagnostic(diag))
-			}
-		}
-	}
-
-	// If no session logs and no diagnostics, show current log text
-	if len(sections) == 0 {
-		content := d.logText
-		if strings.TrimSpace(content) == "" {
-			d.viewport.SetContent(d.styles.Dimmed.Render("No logs available."))
-			return
-		}
-		if d.width > 0 {
-			content = wrapText(content, d.width)
-		}
-		sections = append(sections, content)
-	}
+	sections := buildSessionSections(d.styles, d.sessionLogs, d.width)
+	sections = append(sections, buildDiagnosticSections(d.styles, d.diagnostics)...)
+	sections = append(sections, buildFallbackSection(d.styles, d.logText, d.width)...)
 
 	d.viewport.SetContent(strings.TrimRight(strings.Join(sections, "\n"), "\n"))
+}
+
+func buildSessionSections(styles *styles.Styles, logs []SessionLogEntry, width int) []string {
+	if len(logs) == 0 {
+		return nil
+	}
+	sections := make([]string, 0, len(logs)*2)
+	for _, entry := range logs {
+		header := styles.Highlight.Render(fmt.Sprintf("[%s] %s", entry.Timestamp, entry.Command))
+		sections = append(sections, header)
+		if strings.TrimSpace(entry.Output) != "" {
+			output := entry.Output
+			if width > 0 {
+				output = wrapText(output, width)
+			}
+			sections = append(sections, output)
+		}
+		sections = append(sections, "")
+	}
+	return sections
+}
+
+func buildDiagnosticSections(styles *styles.Styles, diagnostics []terraform.Diagnostic) []string {
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	errors, warnings := splitDiagnostics(diagnostics)
+	sections := []string{styles.Title.Render("Diagnostics")}
+	if len(errors) > 0 {
+		sections = append(sections, styles.Delete.Render("Errors"))
+		for _, diag := range errors {
+			sections = append(sections, formatDiagnostic(diag))
+		}
+	}
+	if len(warnings) > 0 {
+		sections = append(sections, styles.Update.Render("Warnings"))
+		for _, diag := range warnings {
+			sections = append(sections, formatDiagnostic(diag))
+		}
+	}
+	return sections
+}
+
+func splitDiagnostics(diagnostics []terraform.Diagnostic) ([]terraform.Diagnostic, []terraform.Diagnostic) {
+	var errors []terraform.Diagnostic
+	var warnings []terraform.Diagnostic
+	for _, diag := range diagnostics {
+		switch strings.ToLower(diag.Severity) {
+		case "error":
+			errors = append(errors, diag)
+		default:
+			warnings = append(warnings, diag)
+		}
+	}
+	return errors, warnings
+}
+
+func buildFallbackSection(styles *styles.Styles, logText string, width int) []string {
+	if strings.TrimSpace(logText) == "" {
+		return []string{styles.Dimmed.Render("No logs available.")}
+	}
+	content := logText
+	if width > 0 {
+		content = wrapText(content, width)
+	}
+	return []string{content}
 }
 
 func wrapText(text string, width int) string {

@@ -10,91 +10,134 @@ import (
 // CalculateDiffs computes the minimal set of changed attributes between before and after states.
 // This powers the diff viewer and resource summaries.
 func CalculateDiffs(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []MinimalDiff {
-	diffs := []MinimalDiff{}
-
-	// Collect all unique keys from both maps
 	allKeys := orderedKeys(before, after, afterUnknown, beforeOrder, afterOrder, afterUnknownOrder, pathPointer)
-
+	diffs := make([]MinimalDiff, 0, len(allKeys))
 	for _, key := range allKeys {
-		beforeVal, beforeExists := before[key]
-		afterVal, afterExists := after[key]
-		unknownVal, unknownExists := afterUnknown[key]
-
-		if unknownExists && isUnknown(unknownVal) && deepEqual(beforeVal, afterVal) {
-			continue
-		}
-
-		if unknownExists && isUnknown(unknownVal) && (!afterExists || afterVal == nil) {
-			afterVal = UnknownValue{}
-			afterExists = true
-		}
-
-		switch {
-		case !beforeExists:
-			// New attribute added
-			diffs = append(diffs, MinimalDiff{
-				Path:     []string{key},
-				OldValue: nil,
-				NewValue: afterVal,
-				Action:   DiffAdd,
-			})
-		case !afterExists:
-			// Attribute removed
-			diffs = append(diffs, MinimalDiff{
-				Path:     []string{key},
-				OldValue: beforeVal,
-				NewValue: nil,
-				Action:   DiffRemove,
-			})
-		case isUnknownValue(afterVal):
-			// Value is known after apply
-			diffs = append(diffs, MinimalDiff{
-				Path:     []string{key},
-				OldValue: beforeVal,
-				NewValue: afterVal,
-				Action:   DiffChange,
-			})
-		case !deepEqual(beforeVal, afterVal):
-			// Attribute changed - check if we need to recurse
-			switch {
-			case isMap(beforeVal) && isMap(afterVal):
-				// Recurse into nested objects
-				unknownMap := toMap(unknownVal)
-				nextPath := joinJSONPointer(pathPointer, key)
-				nestedDiffs := CalculateDiffs(
-					toMap(beforeVal),
-					toMap(afterVal),
-					unknownMap,
-					beforeOrder,
-					afterOrder,
-					afterUnknownOrder,
-					nextPath,
-				)
-				for _, nd := range nestedDiffs {
-					nd.Path = append([]string{key}, nd.Path...)
-					diffs = append(diffs, nd)
-				}
-			case isList(beforeVal) && isList(afterVal):
-				// Handle lists/arrays
-				listDiffs := calculateListDiff(key, beforeVal, afterVal)
-				diffs = append(diffs, listDiffs...)
-			default:
-				// Simple value change
-				diffs = append(diffs, MinimalDiff{
-					Path:     []string{key},
-					OldValue: beforeVal,
-					NewValue: afterVal,
-					Action:   DiffChange,
-				})
-			}
-		}
-		// If values are equal, no diff is added
+		diffs = append(diffs, calculateKeyDiff(
+			key,
+			before,
+			after,
+			afterUnknown,
+			beforeOrder,
+			afterOrder,
+			afterUnknownOrder,
+			pathPointer,
+		)...)
 	}
-
 	return diffs
 }
 
-// unionKeys returns all unique keys from two maps, sorted alphabetically
+func calculateKeyDiff(
+	key string,
+	before, after, afterUnknown map[string]any,
+	beforeOrder, afterOrder, afterUnknownOrder map[string][]string,
+	pathPointer string,
+) []MinimalDiff {
+	beforeVal, beforeExists := before[key]
+	afterVal, afterExists := after[key]
+	unknownVal, unknownExists := afterUnknown[key]
+
+	if shouldSkipUnknown(unknownExists, unknownVal, beforeVal, afterVal) {
+		return nil
+	}
+
+	afterVal, afterExists = normalizeUnknownValue(unknownExists, unknownVal, afterVal, afterExists)
+
+	if !beforeExists {
+		return []MinimalDiff{{
+			Path:     []string{key},
+			OldValue: nil,
+			NewValue: afterVal,
+			Action:   DiffAdd,
+		}}
+	}
+	if !afterExists {
+		return []MinimalDiff{{
+			Path:     []string{key},
+			OldValue: beforeVal,
+			NewValue: nil,
+			Action:   DiffRemove,
+		}}
+	}
+	if isUnknownValue(afterVal) {
+		return []MinimalDiff{{
+			Path:     []string{key},
+			OldValue: beforeVal,
+			NewValue: afterVal,
+			Action:   DiffChange,
+		}}
+	}
+	if deepEqual(beforeVal, afterVal) {
+		return nil
+	}
+	return diffChangedValue(
+		key,
+		beforeVal,
+		afterVal,
+		unknownVal,
+		beforeOrder,
+		afterOrder,
+		afterUnknownOrder,
+		pathPointer,
+	)
+}
+
+func shouldSkipUnknown(unknownExists bool, unknownVal, beforeVal, afterVal any) bool {
+	return unknownExists && isUnknown(unknownVal) && deepEqual(beforeVal, afterVal)
+}
+
+func normalizeUnknownValue(unknownExists bool, unknownVal, afterVal any, afterExists bool) (any, bool) {
+	if unknownExists && isUnknown(unknownVal) && (!afterExists || afterVal == nil) {
+		return UnknownValue{}, true
+	}
+	return afterVal, afterExists
+}
+
+func diffChangedValue(
+	key string,
+	beforeVal, afterVal, unknownVal any,
+	beforeOrder, afterOrder, afterUnknownOrder map[string][]string,
+	pathPointer string,
+) []MinimalDiff {
+	switch {
+	case isMap(beforeVal) && isMap(afterVal):
+		return diffNestedMap(key, beforeVal, afterVal, unknownVal, beforeOrder, afterOrder, afterUnknownOrder, pathPointer)
+	case isList(beforeVal) && isList(afterVal):
+		return calculateListDiff(key, beforeVal, afterVal)
+	default:
+		return []MinimalDiff{{
+			Path:     []string{key},
+			OldValue: beforeVal,
+			NewValue: afterVal,
+			Action:   DiffChange,
+		}}
+	}
+}
+
+func diffNestedMap(
+	key string,
+	beforeVal, afterVal, unknownVal any,
+	beforeOrder, afterOrder, afterUnknownOrder map[string][]string,
+	pathPointer string,
+) []MinimalDiff {
+	unknownMap := toMap(unknownVal)
+	nextPath := joinJSONPointer(pathPointer, key)
+	nestedDiffs := CalculateDiffs(
+		toMap(beforeVal),
+		toMap(afterVal),
+		unknownMap,
+		beforeOrder,
+		afterOrder,
+		afterUnknownOrder,
+		nextPath,
+	)
+	for i := range nestedDiffs {
+		nestedDiffs[i].Path = append([]string{key}, nestedDiffs[i].Path...)
+	}
+	return nestedDiffs
+}
+
+// unionKeys returns all unique keys from two maps, sorted alphabetically.
 func orderedKeys(before, after, afterUnknown map[string]any, beforeOrder, afterOrder, afterUnknownOrder map[string][]string, pathPointer string) []string {
 	keySet := make(map[string]bool)
 	ordered := make([]string, 0)
@@ -139,7 +182,7 @@ func orderedKeys(before, after, afterUnknown map[string]any, beforeOrder, afterO
 	return append(ordered, remaining...)
 }
 
-// deepEqual checks if two values are deeply equal
+// deepEqual checks if two values are deeply equal.
 func deepEqual(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
@@ -172,7 +215,7 @@ func isUnknownValue(val any) bool {
 	return ok
 }
 
-// isMap checks if a value is a map
+// isMap checks if a value is a map.
 func isMap(val any) bool {
 	if val == nil {
 		return false
@@ -181,7 +224,7 @@ func isMap(val any) bool {
 	return v.Kind() == reflect.Map
 }
 
-// isList checks if a value is a list/array
+// isList checks if a value is a list/array.
 func isList(val any) bool {
 	if val == nil {
 		return false
@@ -190,7 +233,7 @@ func isList(val any) bool {
 	return v.Kind() == reflect.Slice || v.Kind() == reflect.Array
 }
 
-// toMap converts an any to map[string]any
+// toMap converts an any to map[string]any.
 func toMap(val any) map[string]any {
 	if m, ok := val.(map[string]any); ok {
 		return m
@@ -198,7 +241,7 @@ func toMap(val any) map[string]any {
 	return nil
 }
 
-// calculateListDiff handles differences in lists/arrays
+// calculateListDiff handles differences in lists/arrays.
 func calculateListDiff(key string, before, after any) []MinimalDiff {
 	beforeList := interfaceToList(before)
 	afterList := interfaceToList(after)
@@ -238,7 +281,7 @@ func calculateListDiff(key string, before, after any) []MinimalDiff {
 	return nil
 }
 
-// interfaceToList converts an any to a slice
+// interfaceToList converts an any to a slice.
 func interfaceToList(val any) []any {
 	v := reflect.ValueOf(val)
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
@@ -271,12 +314,18 @@ func allStrings(list []any) bool {
 	return true
 }
 
-func stringListDiffs(key string, before, after []string) []MinimalDiff {
-	type op struct {
-		kind  string
-		value string
-	}
+type listOp struct {
+	kind  string
+	value string
+}
 
+func stringListDiffs(key string, before, after []string) []MinimalDiff {
+	dp := lcsMatrix(before, after)
+	ops := stringListOps(before, after, dp)
+	return diffsFromOps(key, ops)
+}
+
+func lcsMatrix(before, after []string) [][]int {
 	m := len(before)
 	n := len(after)
 	dp := make([][]int, m+1)
@@ -285,42 +334,51 @@ func stringListDiffs(key string, before, after []string) []MinimalDiff {
 	}
 	for i := m - 1; i >= 0; i-- {
 		for j := n - 1; j >= 0; j-- {
-			switch {
-			case before[i] == after[j]:
+			if before[i] == after[j] {
 				dp[i][j] = dp[i+1][j+1] + 1
-			case dp[i+1][j] >= dp[i][j+1]:
-				dp[i][j] = dp[i+1][j]
-			default:
-				dp[i][j] = dp[i][j+1]
+				continue
 			}
+			if dp[i+1][j] >= dp[i][j+1] {
+				dp[i][j] = dp[i+1][j]
+				continue
+			}
+			dp[i][j] = dp[i][j+1]
 		}
 	}
+	return dp
+}
 
-	ops := make([]op, 0, m+n)
+func stringListOps(before, after []string, dp [][]int) []listOp {
+	m := len(before)
+	n := len(after)
+	ops := make([]listOp, 0, m+n)
 	i, j := 0, 0
 	for i < m && j < n {
 		switch {
 		case before[i] == after[j]:
-			ops = append(ops, op{kind: "equal", value: before[i]})
+			ops = append(ops, listOp{kind: "equal", value: before[i]})
 			i++
 			j++
 		case dp[i+1][j] >= dp[i][j+1]:
-			ops = append(ops, op{kind: "remove", value: before[i]})
+			ops = append(ops, listOp{kind: "remove", value: before[i]})
 			i++
 		default:
-			ops = append(ops, op{kind: "add", value: after[j]})
+			ops = append(ops, listOp{kind: "add", value: after[j]})
 			j++
 		}
 	}
 	for i < m {
-		ops = append(ops, op{kind: "remove", value: before[i]})
+		ops = append(ops, listOp{kind: "remove", value: before[i]})
 		i++
 	}
 	for j < n {
-		ops = append(ops, op{kind: "add", value: after[j]})
+		ops = append(ops, listOp{kind: "add", value: after[j]})
 		j++
 	}
+	return ops
+}
 
+func diffsFromOps(key string, ops []listOp) []MinimalDiff {
 	var diffs []MinimalDiff
 	beforeIndex := 0
 	afterIndex := 0
@@ -347,7 +405,6 @@ func stringListDiffs(key string, before, after []string) []MinimalDiff {
 			afterIndex++
 		}
 	}
-
 	return diffs
 }
 
@@ -360,7 +417,7 @@ func joinJSONPointer(base, key string) string {
 	return base + "/" + segment
 }
 
-// FormatDiff returns a human-readable string representation of a diff
+// FormatDiff returns a human-readable string representation of a diff.
 func FormatDiff(diff MinimalDiff) string {
 	pathStr := formatPath(diff.Path)
 
@@ -376,7 +433,7 @@ func FormatDiff(diff MinimalDiff) string {
 	}
 }
 
-// formatPath converts a path slice to dot notation
+// formatPath converts a path slice to dot notation.
 func formatPath(path []string) string {
 	result := ""
 	for i, segment := range path {
@@ -389,7 +446,7 @@ func formatPath(path []string) string {
 	return result
 }
 
-// formatValue formats a value for display
+// formatValue formats a value for display.
 func formatValue(val any) string {
 	if val == nil {
 		return "(null)"

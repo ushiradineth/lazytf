@@ -14,19 +14,19 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
-// EnvironmentChangedMsg is sent when the user selects a new environment
+// EnvironmentChangedMsg is sent when the user selects a new environment.
 type EnvironmentChangedMsg struct {
 	Environment environment.Environment
 }
 
-// envListItem represents an environment in the list
+// envListItem represents an environment in the list.
 type envListItem struct {
 	env    environment.Environment
 	label  string
 	detail string
 }
 
-// EnvironmentPanel displays a list of workspaces/environments with filtering
+// EnvironmentPanel displays a list of workspaces/environments with filtering.
 type EnvironmentPanel struct {
 	styles *styles.Styles
 	frame  *PanelFrame
@@ -50,7 +50,7 @@ type EnvironmentPanel struct {
 	lastMove      int
 }
 
-// NewEnvironmentPanel creates a new environment panel
+// NewEnvironmentPanel creates a new environment panel.
 func NewEnvironmentPanel(s *styles.Styles) *EnvironmentPanel {
 	if s == nil {
 		s = styles.DefaultStyles()
@@ -61,7 +61,7 @@ func NewEnvironmentPanel(s *styles.Styles) *EnvironmentPanel {
 	}
 }
 
-// SetSize updates the panel dimensions
+// SetSize updates the panel dimensions.
 func (e *EnvironmentPanel) SetSize(width, height int) {
 	e.width = width
 	e.height = height
@@ -69,7 +69,7 @@ func (e *EnvironmentPanel) SetSize(width, height int) {
 	e.adjustScrollOffset()
 }
 
-// SetFocused sets the focus state
+// SetFocused sets the focus state.
 func (e *EnvironmentPanel) SetFocused(focused bool) {
 	e.focused = focused
 	if !focused {
@@ -77,7 +77,7 @@ func (e *EnvironmentPanel) SetFocused(focused bool) {
 	}
 }
 
-// IsFocused returns whether the panel is focused
+// IsFocused returns whether the panel is focused.
 func (e *EnvironmentPanel) IsFocused() bool {
 	return e.focused
 }
@@ -88,7 +88,7 @@ func (e *EnvironmentPanel) SelectorActive() bool {
 	return e.focused
 }
 
-// SetEnvironmentInfo updates the environment information
+// SetEnvironmentInfo updates the environment information.
 func (e *EnvironmentPanel) SetEnvironmentInfo(current, _ string, _ environment.StrategyType, environments []environment.Environment) {
 	e.current = current
 	e.environments = environments
@@ -110,67 +110,73 @@ func (e *EnvironmentPanel) ActivateSelector() {
 	// No-op for compatibility
 }
 
-// Update handles Bubble Tea messages
+// Update handles Bubble Tea messages.
 func (e *EnvironmentPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 	return e, nil
 }
 
-// HandleKey handles key events
+// HandleKey handles key events.
 func (e *EnvironmentPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	if !e.focused {
 		return false, nil
 	}
 
-	key := msg.String()
-
 	// Handle filter input when active
 	if e.filterActive {
-		switch msg.Type {
-		case tea.KeyEsc:
-			e.filterActive = false
-			e.filterText = ""
-			e.applyFilter()
-			return true, nil
-		case tea.KeyEnter:
-			// Select current item
-			if selected := e.selectedEnvironment(); selected != nil {
-				e.filterActive = false
-				e.filterText = ""
-				e.applyFilter()
-				return true, func() tea.Msg {
-					return EnvironmentChangedMsg{Environment: *selected}
-				}
-			}
-			return true, nil
-		case tea.KeyBackspace:
-			if e.filterText != "" {
-				e.filterText = e.filterText[:len(e.filterText)-1]
-				e.applyFilter()
-			}
-			return true, nil
-		case tea.KeyCtrlU:
-			e.filterText = ""
-			e.applyFilter()
-			return true, nil
-		case tea.KeyRunes:
-			e.filterText += string(msg.Runes)
-			e.applyFilter()
-			return true, nil
-		case tea.KeyUp:
-			e.moveUp()
-			return true, nil
-		case tea.KeyDown:
-			e.moveDown()
-			return true, nil
-		default:
-			// Ignore other key types during filter mode
+		if handled, cmd := e.handleFilterKey(msg); handled {
+			return true, cmd
 		}
 	}
 
 	// Navigation and actions
+	return e.handleNavigationKey(msg.String())
+}
+
+func (e *EnvironmentPanel) handleFilterKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		e.filterActive = false
+		e.filterText = ""
+		e.applyFilter()
+		return true, nil
+	case tea.KeyEnter:
+		if selected := e.selectedEnvironment(); selected != nil {
+			e.filterActive = false
+			e.filterText = ""
+			e.applyFilter()
+			return true, func() tea.Msg {
+				return EnvironmentChangedMsg{Environment: *selected}
+			}
+		}
+		return true, nil
+	case tea.KeyBackspace:
+		if e.filterText != "" {
+			e.filterText = e.filterText[:len(e.filterText)-1]
+			e.applyFilter()
+		}
+		return true, nil
+	case tea.KeyCtrlU:
+		e.filterText = ""
+		e.applyFilter()
+		return true, nil
+	case tea.KeyRunes:
+		e.filterText += string(msg.Runes)
+		e.applyFilter()
+		return true, nil
+	case tea.KeyUp:
+		e.moveUp()
+		return true, nil
+	case tea.KeyDown:
+		e.moveDown()
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (e *EnvironmentPanel) handleNavigationKey(key string) (bool, tea.Cmd) {
 	switch key {
 	case "/":
-		// Activate filter mode
 		e.filterActive = true
 		return true, nil
 	case "up", "k":
@@ -194,14 +200,13 @@ func (e *EnvironmentPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 		}
 		return false, nil
 	case "e":
-		// Legacy key - now just focuses the panel (no-op when already focused)
 		return true, nil
+	default:
+		return false, nil
 	}
-
-	return false, nil
 }
 
-// View renders the panel
+// View renders the panel.
 func (e *EnvironmentPanel) View() string {
 	if e.styles == nil || e.height <= 0 {
 		return ""
@@ -241,7 +246,7 @@ func (e *EnvironmentPanel) View() string {
 	return e.frame.RenderWithContent(lines)
 }
 
-// rebuildItems creates the item list from environments
+// rebuildItems creates the item list from environments.
 func (e *EnvironmentPanel) rebuildItems() {
 	e.items = make([]envListItem, 0, len(e.environments))
 
@@ -260,7 +265,7 @@ func (e *EnvironmentPanel) rebuildItems() {
 	e.applyFilter()
 }
 
-// applyFilter filters items based on filter text
+// applyFilter filters items based on filter text.
 func (e *EnvironmentPanel) applyFilter() {
 	query := strings.ToLower(strings.TrimSpace(e.filterText))
 
@@ -293,7 +298,7 @@ func (e *EnvironmentPanel) applyFilter() {
 	e.adjustScrollOffset()
 }
 
-// itemMatchesFilter checks if an item matches the filter query
+// itemMatchesFilter checks if an item matches the filter query.
 func (e *EnvironmentPanel) itemMatchesFilter(item envListItem, query string) bool {
 	if fuzzyMatchEnvPanel(query, strings.ToLower(item.label)) {
 		return true
@@ -304,7 +309,7 @@ func (e *EnvironmentPanel) itemMatchesFilter(item envListItem, query string) boo
 	return false
 }
 
-// fuzzyMatchEnvPanel performs fuzzy matching
+// fuzzyMatchEnvPanel performs fuzzy matching.
 func fuzzyMatchEnvPanel(query, candidate string) bool {
 	if query == "" {
 		return true
@@ -326,7 +331,7 @@ func fuzzyMatchEnvPanel(query, candidate string) bool {
 	return false
 }
 
-// envLabel returns the display label for an environment
+// envLabel returns the display label for an environment.
 func (e *EnvironmentPanel) envLabel(env environment.Environment) string {
 	// Try Name first
 	if env.Name != "" {
@@ -339,7 +344,7 @@ func (e *EnvironmentPanel) envLabel(env environment.Environment) string {
 	return "(unknown)"
 }
 
-// isCurrentEnv checks if an environment is the current one
+// isCurrentEnv checks if an environment is the current one.
 func (e *EnvironmentPanel) isCurrentEnv(env environment.Environment) bool {
 	if e.current == "" {
 		return env.IsCurrent
@@ -350,7 +355,7 @@ func (e *EnvironmentPanel) isCurrentEnv(env environment.Environment) bool {
 	return env.Path == e.current || env.Name == e.current
 }
 
-// formatMetadata creates a compact metadata string
+// formatMetadata creates a compact metadata string.
 func (e *EnvironmentPanel) formatMetadata(meta environment.EnvironmentMetadata) string {
 	parts := []string{}
 	if meta.ResourceCount > 0 {
@@ -365,7 +370,7 @@ func (e *EnvironmentPanel) formatMetadata(meta environment.EnvironmentMetadata) 
 	return strings.Join(parts, " · ")
 }
 
-// selectedEnvironment returns the currently selected environment
+// selectedEnvironment returns the currently selected environment.
 func (e *EnvironmentPanel) selectedEnvironment() *environment.Environment {
 	if e.selectedIndex >= 0 && e.selectedIndex < len(e.filteredItems) {
 		env := e.filteredItems[e.selectedIndex].env
@@ -374,7 +379,7 @@ func (e *EnvironmentPanel) selectedEnvironment() *environment.Environment {
 	return nil
 }
 
-// moveUp moves selection up
+// moveUp moves selection up.
 func (e *EnvironmentPanel) moveUp() {
 	if e.selectedIndex > 0 {
 		e.selectedIndex--
@@ -383,7 +388,7 @@ func (e *EnvironmentPanel) moveUp() {
 	}
 }
 
-// moveDown moves selection down
+// moveDown moves selection down.
 func (e *EnvironmentPanel) moveDown() {
 	if e.selectedIndex < len(e.filteredItems)-1 {
 		e.selectedIndex++
@@ -392,7 +397,7 @@ func (e *EnvironmentPanel) moveDown() {
 	}
 }
 
-// itemsHeight returns height available for item list (excluding filter line if active)
+// itemsHeight returns height available for item list (excluding filter line if active).
 func (e *EnvironmentPanel) itemsHeight() int {
 	h := e.height - 2 // borders
 	if e.filterActive {
@@ -404,7 +409,7 @@ func (e *EnvironmentPanel) itemsHeight() int {
 	return h
 }
 
-// contentWidth returns width available for content
+// contentWidth returns width available for content.
 func (e *EnvironmentPanel) contentWidth() int {
 	w := e.width - 2 // borders
 	if len(e.filteredItems) > e.itemsHeight() {
@@ -416,7 +421,7 @@ func (e *EnvironmentPanel) contentWidth() int {
 	return w
 }
 
-// adjustScrollOffset ensures selected item is visible
+// adjustScrollOffset ensures selected item is visible.
 func (e *EnvironmentPanel) adjustScrollOffset() {
 	itemsHeight := e.itemsHeight()
 	if itemsHeight <= 0 || len(e.filteredItems) == 0 {
@@ -424,39 +429,21 @@ func (e *EnvironmentPanel) adjustScrollOffset() {
 		return
 	}
 
-	maxOffset := max(0, len(e.filteredItems)-itemsHeight)
-
 	// Anchor positions for smooth scrolling
 	anchorTop := min(1, itemsHeight-1)
 	anchorBottom := max(itemsHeight-2, anchorTop)
-
-	switch {
-	case e.lastMove > 0:
-		threshold := e.scrollOffset + anchorBottom
-		if e.selectedIndex > threshold {
-			e.scrollOffset = e.selectedIndex - anchorBottom
-		}
-	case e.lastMove < 0:
-		threshold := e.scrollOffset + anchorTop
-		if e.selectedIndex < threshold {
-			e.scrollOffset = e.selectedIndex - anchorTop
-		}
-	default:
-		if e.selectedIndex < e.scrollOffset {
-			e.scrollOffset = e.selectedIndex
-		} else if e.selectedIndex >= e.scrollOffset+itemsHeight {
-			e.scrollOffset = e.selectedIndex - itemsHeight + 1
-		}
-	}
-
-	if e.scrollOffset < 0 {
-		e.scrollOffset = 0
-	} else if e.scrollOffset > maxOffset {
-		e.scrollOffset = maxOffset
-	}
+	e.scrollOffset = adjustScrollOffset(
+		e.scrollOffset,
+		e.selectedIndex,
+		len(e.filteredItems),
+		itemsHeight,
+		e.lastMove,
+		anchorTop,
+		anchorBottom,
+	)
 }
 
-// renderContent renders the panel content
+// renderContent renders the panel content.
 func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
 	lines := make([]string, 0, totalHeight)
 
@@ -511,7 +498,7 @@ func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
 	return lines
 }
 
-// renderUnfocusedContent renders a simplified view when panel is not focused
+// renderUnfocusedContent renders a simplified view when panel is not focused.
 func (e *EnvironmentPanel) renderUnfocusedContent(width, totalHeight int) []string {
 	lines := make([]string, 0, totalHeight)
 
@@ -544,7 +531,7 @@ func (e *EnvironmentPanel) renderUnfocusedContent(width, totalHeight int) []stri
 	return lines
 }
 
-// renderItem renders a single environment item
+// renderItem renders a single environment item.
 func (e *EnvironmentPanel) renderItem(item envListItem, width int, isSelected bool) string {
 	// Current marker
 	marker := " "
@@ -569,29 +556,7 @@ func (e *EnvironmentPanel) renderItem(item envListItem, width int, isSelected bo
 	availableWidth := max(1, width-markerWidth)
 
 	// Build the display: "name · path" or just "name"
-	var displayText string
-	if pathInfo != "" && availableWidth > 20 {
-		separator := " · "
-		sepWidth := runewidth.StringWidth(separator)
-		pathWidth := runewidth.StringWidth(pathInfo)
-
-		// Calculate max label width
-		maxLabelWidth := availableWidth - sepWidth - pathWidth
-		if maxLabelWidth < 8 {
-			// Not enough room for path, just show label
-			displayText = runewidth.Truncate(label, availableWidth, "…")
-		} else {
-			// Truncate label if needed, show with path
-			truncLabel := label
-			if runewidth.StringWidth(label) > maxLabelWidth {
-				truncLabel = runewidth.Truncate(label, maxLabelWidth, "…")
-			}
-			displayText = truncLabel + separator + pathInfo
-		}
-	} else {
-		// No room for path, just show label
-		displayText = runewidth.Truncate(label, availableWidth, "…")
-	}
+	displayText := buildItemDisplayText(label, pathInfo, availableWidth)
 
 	// Truncate the entire display if it still exceeds available width
 	if runewidth.StringWidth(displayText) > availableWidth {
@@ -614,17 +579,39 @@ func (e *EnvironmentPanel) renderItem(item envListItem, width int, isSelected bo
 	return padToWidth(line, width)
 }
 
-// padStyledWithBg pads a styled string to width with background color
+func buildItemDisplayText(label, pathInfo string, availableWidth int) string {
+	if pathInfo == "" || availableWidth <= 20 {
+		return runewidth.Truncate(label, availableWidth, "…")
+	}
+
+	separator := " · "
+	sepWidth := runewidth.StringWidth(separator)
+	pathWidth := runewidth.StringWidth(pathInfo)
+
+	// Calculate max label width.
+	maxLabelWidth := availableWidth - sepWidth - pathWidth
+	if maxLabelWidth < 8 {
+		return runewidth.Truncate(label, availableWidth, "…")
+	}
+
+	truncLabel := label
+	if runewidth.StringWidth(label) > maxLabelWidth {
+		truncLabel = runewidth.Truncate(label, maxLabelWidth, "…")
+	}
+	return truncLabel + separator + pathInfo
+}
+
+// padStyledWithBg pads a styled string to width with background color.
 func padStyledWithBg(styled string, width int, bg lipgloss.AdaptiveColor) string {
 	return PadLineWithBg(styled, width, bg)
 }
 
-// padToWidth pads a plain string to width with spaces
+// padToWidth pads a plain string to width with spaces.
 func padToWidth(line string, width int) string {
 	return PadLine(line, width)
 }
 
-// formatPath returns a short display version of the path
+// formatPath returns a short display version of the path.
 func (e *EnvironmentPanel) formatPath(path string) string {
 	// Show just the last 2 path components for brevity
 	parts := strings.Split(filepath.Clean(path), string(filepath.Separator))
@@ -634,12 +621,12 @@ func (e *EnvironmentPanel) formatPath(path string) string {
 	return path
 }
 
-// padLine pads a line to the given width
+// padLine pads a line to the given width.
 func (e *EnvironmentPanel) padLine(line string, width int) string {
 	return padToWidth(line, width)
 }
 
-// buildFooterText builds the footer text
+// buildFooterText builds the footer text.
 func (e *EnvironmentPanel) buildFooterText() string {
 	if len(e.filteredItems) == 0 {
 		return ""
@@ -647,7 +634,7 @@ func (e *EnvironmentPanel) buildFooterText() string {
 	return FormatItemCount(e.selectedIndex+1, len(e.filteredItems))
 }
 
-// formatEnvAge formats a time as a relative age string
+// formatEnvAge formats a time as a relative age string.
 func formatEnvAge(t time.Time) string {
 	delta := time.Since(t)
 	if delta < time.Minute {

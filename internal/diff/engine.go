@@ -14,7 +14,7 @@ type Engine struct {
 	cache map[string][]MinimalDiff // keyed by resource.Address for stability
 }
 
-// NewEngine creates a new diff engine
+// NewEngine creates a new diff engine.
 func NewEngine() *Engine {
 	return &Engine{
 		cache: make(map[string][]MinimalDiff),
@@ -22,7 +22,7 @@ func NewEngine() *Engine {
 }
 
 // CalculateResourceDiffs is a no-op kept for compatibility
-// Diffs are now calculated on-demand in GetResourceDiffs
+// Diffs are now calculated on-demand in GetResourceDiffs.
 func (e *Engine) CalculateResourceDiffs(_ *terraform.Plan) error {
 	// Nothing to do - diffs are calculated on demand
 	return nil
@@ -35,7 +35,7 @@ func (e *Engine) ResetCache() {
 	e.mu.Unlock()
 }
 
-// GetResourceDiffs retrieves the calculated diffs for a resource
+// GetResourceDiffs retrieves the calculated diffs for a resource.
 func (e *Engine) GetResourceDiffs(resource *terraform.ResourceChange) []MinimalDiff {
 	if resource == nil {
 		return nil
@@ -82,7 +82,7 @@ func (e *Engine) GetResourceDiffs(resource *terraform.ResourceChange) []MinimalD
 	return diffs
 }
 
-// CountChanges returns the number of changes in a resource
+// CountChanges returns the number of changes in a resource.
 func (e *Engine) CountChanges(resource *terraform.ResourceChange) int {
 	diffs := e.GetResourceDiffs(resource)
 	return len(diffs)

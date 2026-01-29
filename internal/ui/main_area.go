@@ -13,7 +13,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/ui/views"
 )
 
-// MainAreaMode represents the display mode of the main area
+// MainAreaMode represents the display mode of the main area.
 type MainAreaMode int
 
 const (
@@ -22,7 +22,7 @@ const (
 	ModeHistoryDetail                     // Show history detail
 )
 
-// MainArea is a wrapper component that switches between diff view and logs
+// MainArea is a wrapper component that switches between diff view and logs.
 type MainArea struct {
 	styles       *styles.Styles
 	frame        *components.PanelFrame
@@ -40,7 +40,7 @@ type MainArea struct {
 	selectedResource *terraform.ResourceChange
 }
 
-// NewMainArea creates a new main area component
+// NewMainArea creates a new main area component.
 func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.ApplyView, planView *views.PlanView) *MainArea {
 	return &MainArea{
 		styles:      s,
@@ -53,7 +53,7 @@ func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.App
 	}
 }
 
-// SetSize updates the main area dimensions
+// SetSize updates the main area dimensions.
 func (m *MainArea) SetSize(width, height int) {
 	m.width = width
 	m.height = height
@@ -84,38 +84,38 @@ func (m *MainArea) SetSize(width, height int) {
 	}
 }
 
-// SetFocused sets the focus state
+// SetFocused sets the focus state.
 func (m *MainArea) SetFocused(focused bool) {
 	m.focused = focused
 }
 
-// IsFocused returns whether the panel is focused
+// IsFocused returns whether the panel is focused.
 func (m *MainArea) IsFocused() bool {
 	return m.focused
 }
 
-// SetMode switches the display mode
+// SetMode switches the display mode.
 func (m *MainArea) SetMode(mode MainAreaMode) {
 	m.mode = mode
 }
 
-// GetMode returns the current display mode
+// GetMode returns the current display mode.
 func (m *MainArea) GetMode() MainAreaMode {
 	return m.mode
 }
 
-// EnterHistoryDetail switches to history detail mode, saving the current mode
+// EnterHistoryDetail switches to history detail mode, saving the current mode.
 func (m *MainArea) EnterHistoryDetail() {
 	m.previousMode = m.mode
 	m.mode = ModeHistoryDetail
 }
 
-// ExitHistoryDetail returns to the previous mode
+// ExitHistoryDetail returns to the previous mode.
 func (m *MainArea) ExitHistoryDetail() {
 	m.mode = m.previousMode
 }
 
-// SetHistoryContent sets the history detail content
+// SetHistoryContent sets the history detail content.
 func (m *MainArea) SetHistoryContent(title, content string) {
 	if m.historyView != nil {
 		m.historyView.SetTitle(title)
@@ -123,17 +123,17 @@ func (m *MainArea) SetHistoryContent(title, content string) {
 	}
 }
 
-// GetHistoryView returns the history view (for external updates)
+// GetHistoryView returns the history view (for external updates).
 func (m *MainArea) GetHistoryView() *views.HistoryView {
 	return m.historyView
 }
 
-// SetSelectedResource updates the selected resource for diff view
+// SetSelectedResource updates the selected resource for diff view.
 func (m *MainArea) SetSelectedResource(resource *terraform.ResourceChange) {
 	m.selectedResource = resource
 }
 
-// Update handles Bubble Tea messages (implements Panel interface)
+// Update handles Bubble Tea messages (implements Panel interface).
 func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -154,7 +154,7 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 	return m, cmd
 }
 
-// HandleKey handles key events
+// HandleKey handles key events.
 func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	if !m.focused {
 		return false, nil
@@ -188,7 +188,7 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	return false, nil
 }
 
-// View renders the main area
+// View renders the main area.
 func (m *MainArea) View() string {
 	if m.styles == nil {
 		return "[DEBUG: styles nil]"
@@ -295,17 +295,17 @@ func (m *MainArea) padLine(line string, width int) string {
 	return line + strings.Repeat(" ", width-len(runes))
 }
 
-// GetApplyView returns the apply view (for external updates)
+// GetApplyView returns the apply view (for external updates).
 func (m *MainArea) GetApplyView() *views.ApplyView {
 	return m.applyView
 }
 
-// GetPlanView returns the plan view (for external updates)
+// GetPlanView returns the plan view (for external updates).
 func (m *MainArea) GetPlanView() *views.PlanView {
 	return m.planView
 }
 
-// GetDiffViewer returns the diff viewer (for external updates)
+// GetDiffViewer returns the diff viewer (for external updates).
 func (m *MainArea) GetDiffViewer() *components.DiffViewer {
 	return m.diffViewer
 }

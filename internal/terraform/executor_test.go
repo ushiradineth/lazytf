@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 func TestMergeEnvOverrides(t *testing.T) {
@@ -46,7 +48,7 @@ func TestNewExecutorWorkdirValidation(t *testing.T) {
 	}
 
 	file := filepath.Join(dir, "file.txt")
-	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 	if _, err := NewExecutor(file); err == nil {
@@ -55,7 +57,7 @@ func TestNewExecutorWorkdirValidation(t *testing.T) {
 }
 
 func TestNewExecutorResolvesPathFromEnv(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -72,7 +74,7 @@ func TestNewExecutorResolvesPathFromEnv(t *testing.T) {
 }
 
 func TestNewExecutorInvalidTerraformPath(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -90,7 +92,7 @@ func TestNewExecutorInvalidTerraformPath(t *testing.T) {
 }
 
 func TestExecutorPlanApplyFlagsAndAutoApprove(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -124,7 +126,7 @@ func TestExecutorPlanApplyFlagsAndAutoApprove(t *testing.T) {
 }
 
 func TestExecutorVersion(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -143,7 +145,7 @@ func TestExecutorVersion(t *testing.T) {
 }
 
 func TestExecutorStreamingStdoutStderr(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -167,7 +169,7 @@ func TestExecutorStreamingStdoutStderr(t *testing.T) {
 }
 
 func TestExecutorExitCodeMapping(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -187,7 +189,7 @@ func TestExecutorExitCodeMapping(t *testing.T) {
 }
 
 func TestExecutorTimeoutAndCancel(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -220,7 +222,7 @@ func TestExecutorTimeoutAndCancel(t *testing.T) {
 }
 
 func TestExecutorEnvPrecedence(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -241,7 +243,7 @@ func TestExecutorEnvPrecedence(t *testing.T) {
 }
 
 func TestExecutorSymlinkedTerraformPath(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("symlink test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -271,7 +273,7 @@ func TestExitCodeMissingCommand(t *testing.T) {
 }
 
 func TestExecutorInterleavedOutputOrder(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -332,7 +334,7 @@ func TestExecutionResultDoneNil(t *testing.T) {
 }
 
 func TestExecutorInitAndShow(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -348,7 +350,7 @@ func TestExecutorInitAndShow(t *testing.T) {
 	<-result.Done()
 
 	planFile := filepath.Join(dir, "plan.tfplan")
-	if err := os.WriteFile(planFile, []byte("plan"), 0o644); err != nil {
+	if err := os.WriteFile(planFile, []byte("plan"), 0o600); err != nil {
 		t.Fatalf("write plan: %v", err)
 	}
 	showResult, err := exec.Show(context.Background(), planFile, ShowOptions{})
@@ -361,7 +363,7 @@ func TestExecutorInitAndShow(t *testing.T) {
 }
 
 func TestExecutorWorkDirAndClone(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -400,7 +402,7 @@ func TestWithTimeoutOption(t *testing.T) {
 }
 
 func TestResolveTerraformPath(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
@@ -463,7 +465,10 @@ fi
 echo "ARGS:$cmd $*"
 exit 0
 `
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 	return path
@@ -485,7 +490,10 @@ if [ "$cmd" = "plan" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 	return path

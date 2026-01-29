@@ -6,29 +6,29 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
-// PlanLoadedMsg is sent when a plan has been successfully loaded
+// PlanLoadedMsg is sent when a plan has been successfully loaded.
 type PlanLoadedMsg struct {
 	Plan  *terraform.Plan
 	Error error
 }
 
-// FilterChangedMsg is sent when the action filter changes
+// FilterChangedMsg is sent when the action filter changes.
 type FilterChangedMsg struct {
 	Action  terraform.ActionType
 	Enabled bool
 }
 
-// ToggleResourceMsg is sent to toggle a resource's expanded state
+// ToggleResourceMsg is sent to toggle a resource's expanded state.
 type ToggleResourceMsg struct {
 	Address string
 }
 
-// ErrorMsg represents an error that should be displayed to the user
+// ErrorMsg represents an error that should be displayed to the user.
 type ErrorMsg struct {
 	Err error
 }
 
-// QuitMsg is sent to quit the application
+// QuitMsg is sent to quit the application.
 type QuitMsg struct{}
 
 // PlanStartMsg is sent when a plan execution begins.
@@ -148,15 +148,15 @@ type EnvironmentDetectedMsg struct {
 	Error      error
 }
 
-// PanelFocusChangedMsg is sent when the focused panel changes
+// PanelFocusChangedMsg is sent when the focused panel changes.
 type PanelFocusChangedMsg struct {
 	PanelID PanelID
 }
 
-// ToggleCommandLogMsg toggles command log visibility
+// ToggleCommandLogMsg toggles command log visibility.
 type ToggleCommandLogMsg struct{}
 
-// SetCommandLogVisibleMsg sets command log visibility
+// SetCommandLogVisibleMsg sets command log visibility.
 type SetCommandLogVisibleMsg struct {
 	Visible bool
 }

@@ -373,45 +373,20 @@ type execOptions struct {
 }
 
 func (e *Executor) run(ctx context.Context, args []string, opts execOptions) (*ExecutionResult, <-chan string, error) {
-	if e == nil {
-		return nil, nil, errors.New("executor is nil")
-	}
-	if strings.TrimSpace(e.terraformPath) == "" {
-		return nil, nil, errors.New("terraform path is not set")
+	if err := e.validateRun(); err != nil {
+		return nil, nil, err
 	}
 
-	timeout := opts.timeout
-	if timeout <= 0 {
-		timeout = e.timeout
-	}
-	cmdCtx := ctx
-	var cancel context.CancelFunc
-	if timeout > 0 {
-		cmdCtx, cancel = context.WithTimeout(ctx, timeout)
-	} else {
-		cmdCtx, cancel = context.WithCancel(ctx)
-	}
+	cmdCtx, cancel := e.commandContext(ctx, opts)
+	cmd := e.buildCommand(cmdCtx, args, opts.env)
 
-	cmd := exec.CommandContext(cmdCtx, e.terraformPath, args...)
-	cmd.Dir = e.workDir
-	cmd.Env = mergeEnv(os.Environ(), e.env, opts.env)
-
-	stdoutPipe, err := cmd.StdoutPipe()
+	stdoutPipe, stderrPipe, err := setupCommandPipes(cmd)
 	if err != nil {
 		cancel()
-		return nil, nil, fmt.Errorf("stdout pipe: %w", err)
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		return nil, nil, fmt.Errorf("stderr pipe: %w", err)
+		return nil, nil, err
 	}
 
-	result := &ExecutionResult{
-		done: make(chan struct{}),
-	}
-	outputChan := make(chan string, 100)
-	start := time.Now()
+	result, outputChan, start := newExecutionResult()
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -425,42 +400,103 @@ func (e *Executor) run(ctx context.Context, args []string, opts execOptions) (*E
 	go streamLines(stdoutPipe, outputChan, &stdoutBuf, &wg)
 	go streamLines(stderrPipe, outputChan, &stderrBuf, &wg)
 
-	go func() {
-		defer cancel()
-		defer close(result.done)
-
-		waitErr := cmd.Wait()
-		wg.Wait()
-
-		duration := time.Since(start)
-		stdout := strings.TrimRight(stdoutBuf.String(), "\n")
-		stderr := strings.TrimRight(stderrBuf.String(), "\n")
-
-		result.Stdout = stdout
-		result.Stderr = stderr
-		result.Output = stdout
-		if stderr != "" {
-			if result.Output != "" {
-				result.Output += "\n"
-			}
-			result.Output += stderr
-		}
-		result.Duration = duration
-		result.ExitCode = exitCode(waitErr)
-		if waitErr != nil {
-			switch {
-			case errors.Is(cmdCtx.Err(), context.DeadlineExceeded):
-				result.Error = cmdCtx.Err()
-			case errors.Is(cmdCtx.Err(), context.Canceled):
-				result.Error = cmdCtx.Err()
-			default:
-				result.Error = waitErr
-			}
-		}
-		close(outputChan)
-	}()
+	go finalizeExecution(cmdCtx, cmd, cancel, &wg, &stdoutBuf, &stderrBuf, result, outputChan, start)
 
 	return result, outputChan, nil
+}
+
+func (e *Executor) validateRun() error {
+	if e == nil {
+		return errors.New("executor is nil")
+	}
+	if strings.TrimSpace(e.terraformPath) == "" {
+		return errors.New("terraform path is not set")
+	}
+	return nil
+}
+
+func (e *Executor) commandContext(ctx context.Context, opts execOptions) (context.Context, context.CancelFunc) {
+	timeout := opts.timeout
+	if timeout <= 0 {
+		timeout = e.timeout
+	}
+	if timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return context.WithCancel(ctx)
+}
+
+func (e *Executor) buildCommand(ctx context.Context, args []string, extraEnv []string) *exec.Cmd {
+	// #nosec G204 -- terraform execution is intentional and arguments come from configured inputs.
+	cmd := exec.CommandContext(ctx, e.terraformPath, args...)
+	cmd.Dir = e.workDir
+	cmd.Env = mergeEnv(os.Environ(), e.env, extraEnv)
+	return cmd
+}
+
+func setupCommandPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stderr pipe: %w", err)
+	}
+	return stdoutPipe, stderrPipe, nil
+}
+
+func newExecutionResult() (*ExecutionResult, chan string, time.Time) {
+	result := &ExecutionResult{
+		done: make(chan struct{}),
+	}
+	outputChan := make(chan string, 100)
+	return result, outputChan, time.Now()
+}
+
+func finalizeExecution(
+	cmdCtx context.Context,
+	cmd *exec.Cmd,
+	cancel context.CancelFunc,
+	wg *sync.WaitGroup,
+	stdoutBuf *strings.Builder,
+	stderrBuf *strings.Builder,
+	result *ExecutionResult,
+	outputChan chan string,
+	start time.Time,
+) {
+	defer cancel()
+	defer close(result.done)
+
+	waitErr := cmd.Wait()
+	wg.Wait()
+
+	duration := time.Since(start)
+	stdout := strings.TrimRight(stdoutBuf.String(), "\n")
+	stderr := strings.TrimRight(stderrBuf.String(), "\n")
+
+	result.Stdout = stdout
+	result.Stderr = stderr
+	result.Output = stdout
+	if stderr != "" {
+		if result.Output != "" {
+			result.Output += "\n"
+		}
+		result.Output += stderr
+	}
+	result.Duration = duration
+	result.ExitCode = exitCode(waitErr)
+	if waitErr != nil {
+		switch {
+		case errors.Is(cmdCtx.Err(), context.DeadlineExceeded):
+			result.Error = cmdCtx.Err()
+		case errors.Is(cmdCtx.Err(), context.Canceled):
+			result.Error = cmdCtx.Err()
+		default:
+			result.Error = waitErr
+		}
+	}
+	close(outputChan)
 }
 
 func streamLines(reader io.Reader, output chan<- string, buffer *strings.Builder, wg *sync.WaitGroup) {

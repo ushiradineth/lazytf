@@ -6,25 +6,38 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // Modal-related methods for Model
+
+type helpRow struct {
+	keys string
+	desc string
+}
+
+type helpSection struct {
+	title string
+	rows  []helpRow
+}
 
 func (m *Model) updateHelpModalContent() {
 	if m.helpModal == nil {
 		return
 	}
 
-	type helpRow struct {
-		keys string
-		desc string
-	}
-	type helpSection struct {
-		title string
-		rows  []helpRow
-	}
+	sections := helpSections(m.executionMode)
+	keyWidth := helpKeyWidth(sections, 8)
+	lines := helpLines(m.styles, sections, keyWidth)
+	lines = append(lines, m.styles.Dimmed.Render("esc: close"))
 
+	m.helpModal.SetTitle("Keybinds")
+	m.helpModal.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
+	m.helpModal.Show()
+}
+
+func helpSections(executionMode bool) []helpSection {
 	sections := []helpSection{
 		{
 			title: "Panel Navigation",
@@ -72,7 +85,8 @@ func (m *Model) updateHelpModalContent() {
 			},
 		},
 	}
-	if m.executionMode {
+
+	if executionMode {
 		sections = append(sections, helpSection{
 			title: "Execution",
 			rows: []helpRow{
@@ -92,6 +106,10 @@ func (m *Model) updateHelpModalContent() {
 		})
 	}
 
+	return sections
+}
+
+func helpKeyWidth(sections []helpSection, minWidth int) int {
 	keyWidth := 0
 	for _, section := range sections {
 		for _, row := range section.rows {
@@ -100,31 +118,29 @@ func (m *Model) updateHelpModalContent() {
 			}
 		}
 	}
-	if keyWidth < 8 {
-		keyWidth = 8
+	if keyWidth < minWidth {
+		return minWidth
 	}
+	return keyWidth
+}
 
-	// Estimate number of lines: 2 per row (key-desc + empty) + section titles
+func helpLines(style *styles.Styles, sections []helpSection, keyWidth int) []string {
 	totalRows := 0
 	for _, section := range sections {
-		totalRows += len(section.rows) + 2 // rows + title + separator
+		totalRows += len(section.rows) + 2
 	}
-	lines := make([]string, 0, totalRows+1) // +1 for closing help text
+	lines := make([]string, 0, totalRows+1)
 	for _, section := range sections {
-		lines = append(lines, m.styles.Highlight.Render(section.title))
+		lines = append(lines, style.Highlight.Render(section.title))
 		for _, row := range section.rows {
 			keyText := fmt.Sprintf("%-*s", keyWidth, row.keys)
-			left := m.styles.HelpKey.Render(keyText)
-			right := m.styles.HelpValue.Render(row.desc)
+			left := style.HelpKey.Render(keyText)
+			right := style.HelpValue.Render(row.desc)
 			lines = append(lines, left+"  "+right)
 		}
 		lines = append(lines, "")
 	}
-	lines = append(lines, m.styles.Dimmed.Render("esc: close"))
-
-	m.helpModal.SetTitle("Keybinds")
-	m.helpModal.SetContent(strings.TrimRight(strings.Join(lines, "\n"), "\n"))
-	m.helpModal.Show()
+	return lines
 }
 
 func (m *Model) renderSettings() string {

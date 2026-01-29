@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
@@ -129,10 +130,10 @@ func (s *StateListContent) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 	case "up", "k":
 		s.MoveUp()
 		return true, nil
-	case "down", "j":
+	case consts.KeyDown, "j":
 		s.MoveDown()
 		return true, nil
-	case "enter":
+	case consts.KeyEnter:
 		if res := s.GetSelected(); res != nil && s.OnSelect != nil {
 			return true, s.OnSelect(res.Address)
 		}

@@ -17,32 +17,43 @@ func FormatLogOutput(output string) string {
 		if trimmed == "" {
 			continue
 		}
-		var payload map[string]any
-		if json.Unmarshal([]byte(trimmed), &payload) == nil {
-			message := ""
-			if val, ok := payload["@message"].(string); ok {
-				message = val
-			} else if val, ok := payload["message"].(string); ok {
-				message = val
-			}
-			timestamp := ""
-			if val, ok := payload["@timestamp"].(string); ok {
-				timestamp = val
-			} else if val, ok := payload["timestamp"].(string); ok {
-				timestamp = val
-			}
-			if message != "" && timestamp != "" {
-				lines = append(lines, "["+FormatLogTimestamp(timestamp)+"] "+message)
-				continue
-			}
-			if message != "" {
-				lines = append(lines, message)
-				continue
-			}
+		if formatted, ok := formatJSONLogLine(trimmed); ok {
+			lines = append(lines, formatted)
+			continue
 		}
 		lines = append(lines, trimmed)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatJSONLogLine(line string) (string, bool) {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(line), &payload); err != nil {
+		return "", false
+	}
+
+	message := ""
+	if val, ok := payload["@message"].(string); ok {
+		message = val
+	} else if val, ok := payload["message"].(string); ok {
+		message = val
+	}
+
+	if message == "" {
+		return "", false
+	}
+
+	timestamp := ""
+	if val, ok := payload["@timestamp"].(string); ok {
+		timestamp = val
+	} else if val, ok := payload["timestamp"].(string); ok {
+		timestamp = val
+	}
+
+	if timestamp == "" {
+		return message, true
+	}
+	return "[" + FormatLogTimestamp(timestamp) + "] " + message, true
 }
 
 func FormatLogTimestamp(value string) string {

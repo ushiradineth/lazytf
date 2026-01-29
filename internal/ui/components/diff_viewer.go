@@ -319,14 +319,37 @@ func isMultilineChange(item diff.MinimalDiff) bool {
 }
 
 func buildContextDiff(before, after string, context int) []string {
-	beforeLines := strings.Split(strings.TrimSuffix(before, "\n"), "\n")
-	afterLines := strings.Split(strings.TrimSuffix(after, "\n"), "\n")
-	maxLen := len(beforeLines)
-	if len(afterLines) > maxLen {
-		maxLen = len(afterLines)
+	beforeLines := splitLines(before)
+	afterLines := splitLines(after)
+	maxLen := maxLineCount(beforeLines, afterLines)
+
+	diffIdx := diffLineIndexes(beforeLines, afterLines, maxLen)
+	if len(diffIdx) == 0 {
+		return []string{"  (no diff)"}
 	}
 
-	diffIdx := []int{}
+	spans := diffSpans(diffIdx, context, maxLen)
+	return renderDiffSpans(beforeLines, afterLines, spans)
+}
+
+type diffSpan struct {
+	start int
+	end   int
+}
+
+func splitLines(value string) []string {
+	return strings.Split(strings.TrimSuffix(value, "\n"), "\n")
+}
+
+func maxLineCount(beforeLines, afterLines []string) int {
+	if len(afterLines) > len(beforeLines) {
+		return len(afterLines)
+	}
+	return len(beforeLines)
+}
+
+func diffLineIndexes(beforeLines, afterLines []string, maxLen int) []int {
+	diffIdx := make([]int, 0, maxLen)
 	for i := 0; i < maxLen; i++ {
 		oldLine := lineAt(beforeLines, i)
 		newLine := lineAt(afterLines, i)
@@ -334,49 +357,53 @@ func buildContextDiff(before, after string, context int) []string {
 			diffIdx = append(diffIdx, i)
 		}
 	}
-	if len(diffIdx) == 0 {
-		return []string{"  (no diff)"}
-	}
+	return diffIdx
+}
 
-	type span struct{ start, end int }
-	spans := []span{}
-	for _, idx := range diffIdx {
-		start := idx - context
-		if start < 0 {
-			start = 0
-		}
-		end := idx + context
-		if end > maxLen-1 {
-			end = maxLen - 1
-		}
+func diffSpans(indexes []int, context, maxLen int) []diffSpan {
+	spans := []diffSpan{}
+	for _, idx := range indexes {
+		start := max(0, idx-context)
+		end := min(maxLen-1, idx+context)
 		if len(spans) == 0 || start > spans[len(spans)-1].end+1 {
-			spans = append(spans, span{start: start, end: end})
-		} else if end > spans[len(spans)-1].end {
+			spans = append(spans, diffSpan{start: start, end: end})
+			continue
+		}
+		if end > spans[len(spans)-1].end {
 			spans[len(spans)-1].end = end
 		}
 	}
+	return spans
+}
 
+func renderDiffSpans(beforeLines, afterLines []string, spans []diffSpan) []string {
 	var out []string
 	lastEnd := -1
 	for _, sp := range spans {
 		if lastEnd >= 0 && sp.start > lastEnd+1 {
 			out = append(out, "  ...")
 		}
-		for i := sp.start; i <= sp.end; i++ {
-			oldLine := lineAt(beforeLines, i)
-			newLine := lineAt(afterLines, i)
-			if oldLine == newLine {
-				out = append(out, "  "+oldLine)
-				continue
-			}
-			if oldLine != "" {
-				out = append(out, "- "+oldLine)
-			}
-			if newLine != "" {
-				out = append(out, "+ "+newLine)
-			}
-		}
+		out = append(out, renderSpanLines(beforeLines, afterLines, sp)...)
 		lastEnd = sp.end
+	}
+	return out
+}
+
+func renderSpanLines(beforeLines, afterLines []string, sp diffSpan) []string {
+	var out []string
+	for i := sp.start; i <= sp.end; i++ {
+		oldLine := lineAt(beforeLines, i)
+		newLine := lineAt(afterLines, i)
+		if oldLine == newLine {
+			out = append(out, "  "+oldLine)
+			continue
+		}
+		if oldLine != "" {
+			out = append(out, "- "+oldLine)
+		}
+		if newLine != "" {
+			out = append(out, "+ "+newLine)
+		}
 	}
 	return out
 }

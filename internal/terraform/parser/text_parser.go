@@ -117,23 +117,11 @@ func (b *planBuilder) consume(line string) {
 		b.sawNoChanges = true
 	}
 
-	if b.heredocActive {
-		if trimmed == b.heredocEnd {
-			value := strings.Join(b.heredocBuffer, "\n")
-			b.applyHeredocValue(b.heredocKey, b.heredocPrefix, value)
-			b.heredocActive = false
-			b.heredocEnd = ""
-			b.heredocKey = ""
-			b.heredocPrefix = ""
-			b.heredocBuffer = nil
-			return
-		}
-		b.heredocBuffer = append(b.heredocBuffer, rawLine)
+	if b.handleHeredocLine(trimmed, rawLine) {
 		return
 	}
 
-	if address, action, ok := parseHeaderLine(trimmed); ok {
-		b.startResource(address, action)
+	if b.handleHeaderLine(trimmed) {
 		return
 	}
 
@@ -145,6 +133,37 @@ func (b *planBuilder) consume(line string) {
 		b.parseResourceLine(trimmed)
 	}
 
+	b.handleActionLine(trimmed)
+}
+
+func (b *planBuilder) handleHeredocLine(trimmed, rawLine string) bool {
+	if !b.heredocActive {
+		return false
+	}
+	if trimmed == b.heredocEnd {
+		value := strings.Join(b.heredocBuffer, "\n")
+		b.applyHeredocValue(b.heredocKey, b.heredocPrefix, value)
+		b.heredocActive = false
+		b.heredocEnd = ""
+		b.heredocKey = ""
+		b.heredocPrefix = ""
+		b.heredocBuffer = nil
+		return true
+	}
+	b.heredocBuffer = append(b.heredocBuffer, rawLine)
+	return true
+}
+
+func (b *planBuilder) handleHeaderLine(trimmed string) bool {
+	address, action, ok := parseHeaderLine(trimmed)
+	if !ok {
+		return false
+	}
+	b.startResource(address, action)
+	return true
+}
+
+func (b *planBuilder) handleActionLine(trimmed string) {
 	prefix, rest := parseActionPrefix(trimmed)
 	if prefix == "" {
 		if isBlockClose(trimmed) {
@@ -181,35 +200,43 @@ func (b *planBuilder) consume(line string) {
 	path = append(path, key)
 
 	if strings.Contains(valuePart, "->") {
-		beforeStr, afterStr := splitArrow(valuePart)
-		beforeVal, _ := parseTerraformValue(beforeStr)
-		afterVal, unknown := parseTerraformValue(afterStr)
-		b.setBefore(path, beforeVal)
-		if unknown {
-			b.setAfterUnknown(path)
-		} else {
-			b.setAfter(path, afterVal)
-		}
+		b.applyArrowValue(path, valuePart)
 		return
 	}
 
 	val, unknown := parseTerraformValue(valuePart)
+	b.applyActionValue(prefix, path, val, unknown)
+}
+
+func (b *planBuilder) applyArrowValue(path []string, valuePart string) {
+	beforeStr, afterStr := splitArrow(valuePart)
+	beforeVal, _ := parseTerraformValue(beforeStr)
+	afterVal, unknown := parseTerraformValue(afterStr)
+	b.setBefore(path, beforeVal)
+	if unknown {
+		b.setAfterUnknown(path)
+		return
+	}
+	b.setAfter(path, afterVal)
+}
+
+func (b *planBuilder) applyActionValue(prefix string, path []string, val any, unknown bool) {
 	switch prefix {
 	case "+":
 		if unknown {
 			b.setAfterUnknown(path)
-		} else {
-			b.setAfter(path, val)
+			return
 		}
+		b.setAfter(path, val)
 	case "-":
 		b.setBefore(path, val)
 	case "~":
 		b.setBefore(path, val)
 		if unknown {
 			b.setAfterUnknown(path)
-		} else {
-			b.setAfter(path, val)
+			return
 		}
+		b.setAfter(path, val)
 	}
 }
 

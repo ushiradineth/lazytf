@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/config"
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
@@ -20,7 +21,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
-// Model is the main application model
+// Model is the main application model.
 type Model struct {
 	plan              *terraform.Plan
 	resourceList      *components.ResourceList
@@ -151,7 +152,7 @@ type ExecutionConfig struct {
 	Config         *config.Config
 }
 
-// NewModel creates a new application model
+// NewModel creates a new application model.
 func NewModel(plan *terraform.Plan) *Model {
 	return NewModelWithStyles(plan, styles.DefaultStyles())
 }
@@ -273,32 +274,11 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	if m.configView != nil {
 		m.configView.SetConfig(m.config)
 	}
-	if cfg.HistoryEnabled {
-		store := cfg.HistoryStore
-		if store == nil {
-			var err error
-			store, err = history.OpenDefault()
-			if err != nil {
-				m.err = err
-			}
-		}
-		m.historyStore = store
-		m.historyLogger = cfg.HistoryLogger
-		if m.historyLogger == nil && store != nil {
-			m.historyLogger = history.NewLogger(store, history.LevelStandard)
-		}
-		if store != nil {
-			if entries, err := m.loadHistoryEntries(); err == nil {
-				m.historyEntries = entries
-				m.historyPanel.SetEntries(entries)
-				m.syncHistorySelection()
-			}
-		}
-	}
+	m.initHistory(cfg)
 	return m
 }
 
-// Init initializes the model
+// Init initializes the model.
 func (m *Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	if m.executionMode {
@@ -314,405 +294,471 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// Update handles messages and updates the model
+// Update handles messages and updates the model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
+	if model, cmd, handled := m.handlePrimaryUpdate(msg); handled {
+		return model, cmd
+	}
+	if model, cmd, handled := m.handleSecondaryUpdate(msg); handled {
+		return model, cmd
+	}
+	return m.handlePostUpdate(msg)
+}
 
+func (m *Model) handlePrimaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		if !m.ready {
-			m.ready = true
-		}
-
-		m.updateLayout()
-		if m.applyView != nil {
-			m.applyView.SetSize(m.width, m.height)
-		}
-		if m.planView != nil {
-			m.planView.SetSize(m.width, m.height)
-		}
-		// Note: historyPanel size is now set via panelManager.UpdatePanelSizes() in updateLayout()
-		// Note: historyView is now embedded in mainArea, sized via mainArea.SetSize()
-		if m.configView != nil {
-			m.configView.SetSize(m.width, m.height)
-		}
-		// Note: diagnosticsPanel is now wrapped in commandLogPanel, sized via panel manager
-
+		model := m.handleWindowSize(msg)
+		return model, nil, true
 	case PlanStartMsg:
-		return m.handlePlanStart(msg)
-
+		model, cmd := m.handlePlanStart(msg)
+		return model, cmd, true
 	case PlanOutputMsg:
-		if m.applyView != nil {
-			m.applyView.AppendLine(msg.Line)
-		}
-		cmd := m.streamPlanOutputCmd()
-		return m, cmd
-
+		model, cmd := m.handlePlanOutput(msg)
+		return model, cmd, true
 	case PlanCompleteMsg:
-		return m.handlePlanComplete(msg)
-
+		model, cmd := m.handlePlanComplete(msg)
+		return model, cmd, true
 	case ApplyStartMsg:
-		return m.handleApplyStart(msg)
-
+		model, cmd := m.handleApplyStart(msg)
+		return model, cmd, true
 	case ApplyOutputMsg:
-		if m.applyView != nil {
-			m.applyView.AppendLine(msg.Line)
-		}
-		cmd := m.streamApplyOutputCmd()
-		return m, cmd
-
+		model, cmd := m.handleApplyOutput(msg)
+		return model, cmd, true
 	case ApplyCompleteMsg:
-		return m.handleApplyComplete(msg)
+		model, cmd := m.handleApplyComplete(msg)
+		return model, cmd, true
+	default:
+		return nil, nil, false
+	}
+}
 
+func (m *Model) handleSecondaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	switch msg := msg.(type) {
 	case RefreshStartMsg:
-		return m.handleRefreshStart(msg)
-
+		model, cmd := m.handleRefreshStart(msg)
+		return model, cmd, true
 	case RefreshOutputMsg:
-		if m.applyView != nil {
-			m.applyView.AppendLine(msg.Line)
-		}
-		cmd := m.streamRefreshOutputCmd()
-		return m, cmd
-
+		model, cmd := m.handleRefreshOutput(msg)
+		return model, cmd, true
 	case RefreshCompleteMsg:
-		return m.handleRefreshComplete(msg)
-
+		model, cmd := m.handleRefreshComplete(msg)
+		return model, cmd, true
 	case ValidateCompleteMsg:
-		return m.handleValidateComplete(msg)
-
+		model, cmd := m.handleValidateComplete(msg)
+		return model, cmd, true
 	case FormatCompleteMsg:
-		return m.handleFormatComplete(msg)
-
+		model, cmd := m.handleFormatComplete(msg)
+		return model, cmd, true
 	case StateListCompleteMsg:
-		return m.handleStateListComplete(msg)
-
+		model, cmd := m.handleStateListComplete(msg)
+		return model, cmd, true
 	case StateShowCompleteMsg:
-		return m.handleStateShowComplete(msg)
+		model, cmd := m.handleStateShowComplete(msg)
+		return model, cmd, true
+	default:
+		return m.handleTertiaryUpdate(msg)
+	}
+}
+
+func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	switch msg := msg.(type) {
 	case HistoryLoadedMsg:
-		if msg.Error != nil {
-			m.err = msg.Error
-		} else if m.historyPanel != nil {
-			m.historyEntries = msg.Entries
-			m.historyPanel.SetEntries(msg.Entries)
-			m.syncHistorySelection()
-		}
-		return m, nil
+		model := m.handleHistoryLoaded(msg)
+		return model, nil, true
 	case HistoryDetailMsg:
-		if msg.Error != nil {
-			var cmd tea.Cmd
-			if m.toast != nil {
-				cmd = m.toast.ShowError(fmt.Sprintf("History error: %v", msg.Error))
-			}
-			return m, cmd
-		}
-		m.historyDetail = &msg.Entry
-		// Update history content in main area
-		if m.mainArea != nil {
-			title := "Apply details"
-			if msg.Entry.WorkDir != "" {
-				title = "Apply details - " + msg.Entry.WorkDir
-			}
-			content := strings.TrimRight(msg.Entry.Output, "\n")
-			if content == "" {
-				content = "No stored output for this apply."
-			} else {
-				parsed := utils.FormatLogOutput(content)
-				if strings.TrimSpace(parsed) != "" {
-					content = parsed
-				}
-			}
-			m.mainArea.SetHistoryContent(title, content)
-		}
-		return m, nil
+		model, cmd := m.handleHistoryDetail(msg)
+		return model, cmd, true
 	case EnvironmentDetectedMsg:
-		if msg.Error != nil {
-			var cmd tea.Cmd
-			if m.toast != nil {
-				cmd = m.toast.ShowError(fmt.Sprintf("Environment detection failed: %v", msg.Error))
-			}
-			return m, cmd
-		}
-		m.envDetection = &msg.Result
-		strategy := msg.Result.Strategy
-		current := msg.Current
-		if msg.Preference != nil {
-			if msg.Preference.Strategy != "" && strategyAvailable(msg.Result, msg.Preference.Strategy) {
-				strategy = msg.Preference.Strategy
-			}
-			if msg.Preference.Environment != "" {
-				current = msg.Preference.Environment
-			}
-		}
-		m.envStrategy = strategy
-		m.envCurrent = current
-		m.setEnvironmentOptions(msg.Result, m.envStrategy, m.envCurrent)
-
-		// Update environment panel with detection results
-		if m.environmentPanel != nil {
-			m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
-			m.environmentPanel.SetWarnings(msg.Result.Warnings)
-		}
-
-		// Load filter preferences for this workspace
-		m.loadFilterPreferences()
-
-		if m.envCurrent != "" {
-			if option, ok := m.findEnvironmentOption(m.envCurrent); ok {
-				_ = m.applyEnvironmentSelection(option)
-			}
-		}
-		if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
-			if m.panelManager != nil && m.environmentPanel != nil {
-				cmds = append(cmds, m.panelManager.SetFocus(PanelWorkspace))
-				m.environmentPanel.ActivateSelector()
-				m.updateLayout()
-				return m, tea.Batch(cmds...)
-			}
-		}
-		return m, nil
+		model, cmd := m.handleEnvironmentDetected(msg)
+		return model, cmd, true
 	case ClearToastMsg, components.ClearToast:
-		if m.toast != nil {
-			m.toast.Hide()
-		}
-		return m, nil
-
+		model := m.handleClearToast()
+		return model, nil, true
 	case components.EnvironmentChangedMsg:
-		// Apply environment change from environment panel
-		if err := m.applyEnvironmentSelection(msg.Environment); err != nil {
-			var cmd tea.Cmd
-			if m.toast != nil {
-				cmd = m.toast.ShowError(fmt.Sprintf("Failed to switch environment: %v", err))
-			}
-			return m, cmd
-		}
-		m.envCurrent = envSelectionValue(msg.Environment)
-
-		// Update environment panel to reflect the change
-		if m.environmentPanel != nil {
-			m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
-		}
-
-		var cmd tea.Cmd
-		if m.toast != nil {
-			cmd = m.toast.ShowSuccess("Environment changed to " + m.envDisplayName())
-		}
-		return m, cmd
-
+		model, cmd := m.handleEnvironmentChanged(msg)
+		return model, cmd, true
 	case tea.KeyMsg:
-		if m.diagnosticsFocused && m.diagnosticsPanel != nil && m.execView == viewMain {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				m.quitting = true
-				return m, tea.Quit
-			case "esc", "D":
-				m.diagnosticsFocused = false
-				return m, nil
-			}
-			m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
-			return m, cmd
-		}
-		if m.modalState == ModalSettings {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				m.quitting = true
-				return m, tea.Quit
-			case "esc", ",":
-				m.modalState = ModalNone
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-
-		if m.modalState == ModalHelp {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				m.quitting = true
-				return m, tea.Quit
-			case "?", "esc":
-				m.modalState = ModalNone
-				return m, nil
-			case "j", "down":
-				if m.helpModal != nil {
-					m.helpModal.ScrollDown()
-				}
-				return m, nil
-			case "k", "up":
-				if m.helpModal != nil {
-					m.helpModal.ScrollUp()
-				}
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-
-		if m.panelManager != nil && m.environmentPanel != nil && m.environmentPanel.SelectorActive() {
-			if handled, panelCmd := m.environmentPanel.HandleKey(msg); handled {
-				return m, panelCmd
-			}
-			// Don't return early - allow navigation keys (2, 3, etc.) to be processed below
-		}
-
-		if m.inputCaptured() {
-			return m, cmd
-		}
-
-		// Handle panel navigation if panel manager is active
-		if m.panelManager != nil && m.execView == viewMain {
-			if handled, navCmd := m.panelManager.HandleNavigation(msg); handled {
-				cmds = append(cmds, navCmd)
-				// Update layout when focus changes (affects panel heights)
-				m.updateLayout()
-				// Sync historyFocused state with panel manager
-				m.historyFocused = m.panelManager.GetFocusedPanel() == PanelHistory
-				return m, tea.Batch(cmds...)
-			}
-
-			// Special handling for Enter key on command log panel
-			focusedPanel := m.panelManager.GetFocusedPanel()
-			if focusedPanel == PanelCommandLog && msg.String() == "enter" {
-				m.execView = viewCommandLog
-				return m, nil
-			}
-
-			// Route keys to focused panel
-			if panel, ok := m.panelManager.GetPanel(focusedPanel); ok {
-				if handled, panelCmd := panel.HandleKey(msg); handled {
-					cmds = append(cmds, panelCmd)
-					return m, tea.Batch(cmds...)
-				}
-			}
-		}
-
-		if m.executionMode {
-			if handled, cmd := m.handleExecutionKey(msg); handled {
-				return m, cmd
-			}
-		}
-
-		if m.execView != viewMain {
-			if m.execView == viewCommandLog && m.commandLogPanel != nil {
-				// Forward scroll keys to diagnostics panel
-				if diagPanel := m.commandLogPanel.GetDiagnosticsPanel(); diagPanel != nil {
-					_, cmd = diagPanel.Update(msg)
-					return m, cmd
-				}
-			}
-			return m, nil
-		}
-
-		switch msg.String() {
-		case "q", "ctrl+c":
-			m.quitting = true
-			return m, tea.Quit
-
-		case "esc":
-		case "?":
-			if m.modalState == ModalHelp {
-				m.modalState = ModalNone
-			} else {
-				m.modalState = ModalHelp
-				m.updateHelpModalContent()
-			}
-			return m, nil
-
-		case ",":
-			if m.modalState == ModalSettings {
-				m.modalState = ModalNone
-			} else {
-				m.modalState = ModalSettings
-			}
-			return m, nil
-
-		case "c":
-			m.filterCreate = !m.filterCreate
-			m.resourceList.SetFilter(terraform.ActionCreate, m.filterCreate)
-			m.saveFilterPreferences()
-
-		case "t":
-			m.resourceList.ToggleAllGroups()
-
-		case "u":
-			m.filterUpdate = !m.filterUpdate
-			m.resourceList.SetFilter(terraform.ActionUpdate, m.filterUpdate)
-			m.saveFilterPreferences()
-
-		case "d":
-			m.filterDelete = !m.filterDelete
-			m.resourceList.SetFilter(terraform.ActionDelete, m.filterDelete)
-			m.saveFilterPreferences()
-
-		case "r":
-			m.filterReplace = !m.filterReplace
-			m.resourceList.SetFilter(terraform.ActionReplace, m.filterReplace)
-			m.saveFilterPreferences()
-
-		case "[":
-			// Switch to previous tab in resources panel
-			if m.executionMode && m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
-				if m.resourcesActiveTab > 0 {
-					m.resourcesActiveTab--
-				} else {
-					m.resourcesActiveTab = 1 // Wrap to State tab
-				}
-				// If switching to State tab and no state loaded, load it
-				if m.resourcesActiveTab == 1 && m.stateListContent != nil && m.stateListContent.ResourceCount() == 0 {
-					m.stateListContent.SetLoading(true)
-					cmd := m.beginStateList()
-					return m, cmd
-				}
-				return m, nil
-			}
-
-		case "]":
-			// Switch to next tab in resources panel
-			if m.executionMode && m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
-				if m.resourcesActiveTab < 1 {
-					m.resourcesActiveTab++
-				} else {
-					m.resourcesActiveTab = 0 // Wrap to Resources tab
-				}
-				// If switching to State tab and no state loaded, load it
-				if m.resourcesActiveTab == 1 && m.stateListContent != nil && m.stateListContent.ResourceCount() == 0 {
-					m.stateListContent.SetLoading(true)
-					cmd := m.beginStateList()
-					return m, cmd
-				}
-				return m, nil
-			}
-		}
-
+		model, cmd := m.handleKeyMsg(msg)
+		return model, cmd, true
 	case ErrorMsg:
-		m.err = msg.Err
+		model := m.handleErrorMsg(msg)
+		return model, nil, true
+	default:
+		return nil, nil, false
+	}
+}
+
+func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) tea.Model {
+	m.width = msg.Width
+	m.height = msg.Height
+
+	if !m.ready {
+		m.ready = true
+	}
+
+	m.updateLayout()
+	if m.applyView != nil {
+		m.applyView.SetSize(m.width, m.height)
+	}
+	if m.planView != nil {
+		m.planView.SetSize(m.width, m.height)
+	}
+	if m.configView != nil {
+		m.configView.SetSize(m.width, m.height)
+	}
+	return m
+}
+
+func (m *Model) handlePlanOutput(msg PlanOutputMsg) (tea.Model, tea.Cmd) {
+	if m.applyView != nil {
+		m.applyView.AppendLine(msg.Line)
+	}
+	cmd := m.streamPlanOutputCmd()
+	return m, cmd
+}
+
+func (m *Model) handleApplyOutput(msg ApplyOutputMsg) (tea.Model, tea.Cmd) {
+	if m.applyView != nil {
+		m.applyView.AppendLine(msg.Line)
+	}
+	cmd := m.streamApplyOutputCmd()
+	return m, cmd
+}
+
+func (m *Model) handleRefreshOutput(msg RefreshOutputMsg) (tea.Model, tea.Cmd) {
+	if m.applyView != nil {
+		m.applyView.AppendLine(msg.Line)
+	}
+	cmd := m.streamRefreshOutputCmd()
+	return m, cmd
+}
+
+func (m *Model) handleHistoryLoaded(msg HistoryLoadedMsg) tea.Model {
+	if msg.Error != nil {
+		m.err = msg.Error
+		return m
+	}
+	if m.historyPanel != nil {
+		m.historyEntries = msg.Entries
+		m.historyPanel.SetEntries(msg.Entries)
+		m.syncHistorySelection()
+	}
+	return m
+}
+
+func (m *Model) handleHistoryDetail(msg HistoryDetailMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		cmd := m.toastError(fmt.Sprintf("History error: %v", msg.Error))
+		return m, cmd
+	}
+	m.historyDetail = &msg.Entry
+	m.updateHistoryDetailContent(msg.Entry)
+	return m, nil
+}
+
+func (m *Model) handleEnvironmentDetected(msg EnvironmentDetectedMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		cmd := m.toastError(fmt.Sprintf("Environment detection failed: %v", msg.Error))
+		return m, cmd
+	}
+	m.envDetection = &msg.Result
+	strategy, current := applyEnvironmentPreference(msg.Result, msg.Current, msg.Preference)
+	m.envStrategy = strategy
+	m.envCurrent = current
+	m.setEnvironmentOptions(msg.Result, m.envStrategy, m.envCurrent)
+	m.updateEnvironmentPanel(msg.Result.Warnings)
+	m.loadFilterPreferences()
+	m.applyCurrentEnvironment()
+
+	if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
+		return m.promptEnvironmentSelection()
+	}
+	return m, nil
+}
+
+func applyEnvironmentPreference(
+	result environment.DetectionResult,
+	current string,
+	pref *environment.Preference,
+) (environment.StrategyType, string) {
+	strategy := result.Strategy
+	if pref == nil {
+		return strategy, current
+	}
+	if pref.Strategy != "" && strategyAvailable(result, pref.Strategy) {
+		strategy = pref.Strategy
+	}
+	if pref.Environment != "" {
+		current = pref.Environment
+	}
+	return strategy, current
+}
+
+func (m *Model) updateEnvironmentPanel(warnings []string) {
+	if m.environmentPanel == nil {
+		return
+	}
+	m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
+	m.environmentPanel.SetWarnings(warnings)
+}
+
+func (m *Model) applyCurrentEnvironment() {
+	if m.envCurrent == "" {
+		return
+	}
+	if option, ok := m.findEnvironmentOption(m.envCurrent); ok {
+		_ = m.applyEnvironmentSelection(option)
+	}
+}
+
+func (m *Model) promptEnvironmentSelection() (tea.Model, tea.Cmd) {
+	if m.panelManager == nil || m.environmentPanel == nil {
 		return m, nil
 	}
+	cmd := m.panelManager.SetFocus(PanelWorkspace)
+	m.environmentPanel.ActivateSelector()
+	m.updateLayout()
+	return m, tea.Batch(cmd)
+}
 
-	// Handle keys for State tab when active
-	if m.executionMode && m.resourcesActiveTab == 1 && m.stateListContent != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources {
-				handled, stateCmd := m.stateListContent.HandleKey(keyMsg)
-				if handled {
-					cmds = append(cmds, stateCmd)
-					return m, tea.Batch(cmds...)
-				}
-			}
+func (m *Model) handleClearToast() tea.Model {
+	if m.toast != nil {
+		m.toast.Hide()
+	}
+	return m
+}
+
+func (m *Model) handleEnvironmentChanged(msg components.EnvironmentChangedMsg) (tea.Model, tea.Cmd) {
+	if err := m.applyEnvironmentSelection(msg.Environment); err != nil {
+		cmd := m.toastError(fmt.Sprintf("Failed to switch environment: %v", err))
+		return m, cmd
+	}
+	m.envCurrent = envSelectionValue(msg.Environment)
+	if m.environmentPanel != nil {
+		m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
+	}
+	cmd := m.toastSuccess("Environment changed to " + m.envDisplayName())
+	return m, cmd
+}
+
+func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if handled, cmd := m.handleDiagnosticsKey(msg); handled {
+		return m, cmd
+	}
+	if handled, cmd := m.handleModalSettingsKey(msg); handled {
+		return m, cmd
+	}
+	if handled, cmd := m.handleModalHelpKey(msg); handled {
+		return m, cmd
+	}
+	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
+		return m, cmd
+	}
+	if m.inputCaptured() {
+		return m, nil
+	}
+	if panelCmd, handled := m.handlePanelNavigation(msg); handled {
+		return m, panelCmd
+	}
+	if m.executionMode {
+		if handled, cmd := m.handleExecutionKey(msg); handled {
+			return m, cmd
 		}
 	}
+	if m.execView != viewMain {
+		return m.handleNonMainViewKey(msg)
+	}
+	return m.handleMainViewKey(msg)
+}
 
-	// Update resource list (for Resources tab)
+func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if !m.diagnosticsFocused || m.diagnosticsPanel == nil || m.execView != viewMain {
+		return false, nil
+	}
+	switch msg.String() {
+	case "q", consts.KeyCtrlC:
+		m.quitting = true
+		return true, tea.Quit
+	case consts.KeyEsc, "D":
+		m.diagnosticsFocused = false
+		return true, nil
+	default:
+		var cmd tea.Cmd
+		m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
+		return true, cmd
+	}
+}
+
+func (m *Model) handleModalSettingsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.modalState != ModalSettings {
+		return false, nil
+	}
+	switch msg.String() {
+	case "q", consts.KeyCtrlC:
+		m.quitting = true
+		return true, tea.Quit
+	case consts.KeyEsc, ",":
+		m.modalState = ModalNone
+		return true, nil
+	default:
+		return true, nil
+	}
+}
+
+func (m *Model) handleModalHelpKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.modalState != ModalHelp {
+		return false, nil
+	}
+	switch msg.String() {
+	case "q", consts.KeyCtrlC:
+		m.quitting = true
+		return true, tea.Quit
+	case "?", consts.KeyEsc:
+		m.modalState = ModalNone
+		return true, nil
+	case "j", consts.KeyDown:
+		if m.helpModal != nil {
+			m.helpModal.ScrollDown()
+		}
+		return true, nil
+	case "k", "up":
+		if m.helpModal != nil {
+			m.helpModal.ScrollUp()
+		}
+		return true, nil
+	default:
+		return true, nil
+	}
+}
+
+func (m *Model) handleEnvironmentPanelKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.panelManager == nil || m.environmentPanel == nil || !m.environmentPanel.SelectorActive() {
+		return false, nil
+	}
+	if handled, panelCmd := m.environmentPanel.HandleKey(msg); handled {
+		return true, panelCmd
+	}
+	return false, nil
+}
+
+func (m *Model) handleNonMainViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.execView == viewCommandLog && m.commandLogPanel != nil {
+		if diagPanel := m.commandLogPanel.GetDiagnosticsPanel(); diagPanel != nil {
+			_, cmd := diagPanel.Update(msg)
+			return m, cmd
+		}
+	}
+	return m, nil
+}
+
+func (m *Model) handleMainViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", consts.KeyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case consts.KeyEsc, "?":
+		m.toggleHelpModal()
+		return m, nil
+	case ",":
+		m.toggleSettingsModal()
+		return m, nil
+	case "c":
+		m.toggleActionFilter(terraform.ActionCreate, &m.filterCreate)
+	case "t":
+		m.resourceList.ToggleAllGroups()
+	case "u":
+		m.toggleActionFilter(terraform.ActionUpdate, &m.filterUpdate)
+	case "d":
+		m.toggleActionFilter(terraform.ActionDelete, &m.filterDelete)
+	case "r":
+		m.toggleActionFilter(terraform.ActionReplace, &m.filterReplace)
+	case "[":
+		if cmd := m.switchResourcesTab(-1); cmd != nil {
+			return m, cmd
+		}
+	case "]":
+		if cmd := m.switchResourcesTab(1); cmd != nil {
+			return m, cmd
+		}
+	}
+	return m, nil
+}
+
+func (m *Model) toggleHelpModal() {
+	if m.modalState == ModalHelp {
+		m.modalState = ModalNone
+		return
+	}
+	m.modalState = ModalHelp
+	m.updateHelpModalContent()
+}
+
+func (m *Model) toggleSettingsModal() {
+	if m.modalState == ModalSettings {
+		m.modalState = ModalNone
+		return
+	}
+	m.modalState = ModalSettings
+}
+
+func (m *Model) toggleActionFilter(action terraform.ActionType, value *bool) {
+	*value = !*value
+	m.resourceList.SetFilter(action, *value)
+	m.saveFilterPreferences()
+}
+
+func (m *Model) switchResourcesTab(direction int) tea.Cmd {
+	if !m.canSwitchResourcesTab() {
+		return nil
+	}
+	m.resourcesActiveTab = nextResourcesTab(m.resourcesActiveTab, direction)
+	return m.loadStateListIfNeeded()
+}
+
+func (m *Model) canSwitchResourcesTab() bool {
+	return m.executionMode && m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources
+}
+
+func nextResourcesTab(current, direction int) int {
+	if direction < 0 {
+		if current > 0 {
+			return current - 1
+		}
+		return 1
+	}
+	if current < 1 {
+		return current + 1
+	}
+	return 0
+}
+
+func (m *Model) loadStateListIfNeeded() tea.Cmd {
+	if m.resourcesActiveTab != 1 || m.stateListContent == nil || m.stateListContent.ResourceCount() != 0 {
+		return nil
+	}
+	m.stateListContent.SetLoading(true)
+	return m.beginStateList()
+}
+
+func (m *Model) handleErrorMsg(msg ErrorMsg) tea.Model {
+	m.err = msg.Err
+	return m
+}
+
+func (m *Model) handlePostUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if stateCmd, handled := m.handleStateTabKey(msg); handled {
+		cmds = append(cmds, stateCmd)
+		return m, tea.Batch(cmds...)
+	}
+
 	updated, cmd := m.resourceList.Update(msg)
 	if rl, ok := updated.(*components.ResourceList); ok {
 		m.resourceList = rl
 	}
 	cmds = append(cmds, cmd)
 
-	// Update environment panel for async selector messages
 	if m.environmentPanel != nil {
 		updatedPanel, panelCmd := m.environmentPanel.Update(msg)
 		if panel, ok := updatedPanel.(*components.EnvironmentPanel); ok {
@@ -724,69 +770,166 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// View renders the application
+func (m *Model) initHistory(cfg ExecutionConfig) {
+	if !cfg.HistoryEnabled {
+		return
+	}
+
+	store := cfg.HistoryStore
+	if store == nil {
+		var err error
+		store, err = history.OpenDefault()
+		if err != nil {
+			m.err = err
+		}
+	}
+	m.historyStore = store
+	m.historyLogger = cfg.HistoryLogger
+	if m.historyLogger == nil && store != nil {
+		m.historyLogger = history.NewLogger(store, history.LevelStandard)
+	}
+	if store == nil {
+		return
+	}
+	entries, err := m.loadHistoryEntries()
+	if err != nil {
+		return
+	}
+	m.historyEntries = entries
+	m.historyPanel.SetEntries(entries)
+	m.syncHistorySelection()
+}
+
+func (m *Model) updateHistoryDetailContent(entry history.Entry) {
+	if m.mainArea == nil {
+		return
+	}
+	title := "Apply details"
+	if entry.WorkDir != "" {
+		title = "Apply details - " + entry.WorkDir
+	}
+	content := strings.TrimRight(entry.Output, "\n")
+	if content == "" {
+		content = "No stored output for this apply."
+	} else {
+		parsed := utils.FormatLogOutput(content)
+		if strings.TrimSpace(parsed) != "" {
+			content = parsed
+		}
+	}
+	m.mainArea.SetHistoryContent(title, content)
+}
+
+func (m *Model) handlePanelNavigation(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if m.panelManager == nil || m.execView != viewMain {
+		return nil, false
+	}
+
+	if handled, navCmd := m.panelManager.HandleNavigation(msg); handled {
+		m.updateLayout()
+		m.historyFocused = m.panelManager.GetFocusedPanel() == PanelHistory
+		return tea.Batch(navCmd), true
+	}
+
+	focusedPanel := m.panelManager.GetFocusedPanel()
+	if focusedPanel == PanelCommandLog && msg.String() == consts.KeyEnter {
+		m.execView = viewCommandLog
+		return nil, true
+	}
+
+	if panel, ok := m.panelManager.GetPanel(focusedPanel); ok {
+		if handled, panelCmd := panel.HandleKey(msg); handled {
+			return panelCmd, true
+		}
+	}
+	return nil, false
+}
+
+func (m *Model) handleStateTabKey(msg tea.Msg) (tea.Cmd, bool) {
+	if !m.executionMode || m.resourcesActiveTab != 1 || m.stateListContent == nil {
+		return nil, false
+	}
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return nil, false
+	}
+	if m.panelManager == nil || m.panelManager.GetFocusedPanel() != PanelResources {
+		return nil, false
+	}
+	handled, stateCmd := m.stateListContent.HandleKey(keyMsg)
+	if !handled {
+		return nil, false
+	}
+	return stateCmd, true
+}
+
+// View renders the application.
 func (m *Model) View() string {
+	if immediate := m.viewImmediate(); immediate != "" {
+		return immediate
+	}
+
+	view := lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.renderMainContent(),
+		m.renderStatusBar(),
+	)
+	return m.applyViewOverlays(view)
+}
+
+func (m *Model) viewImmediate() string {
 	if m.quitting {
 		return "Goodbye!\n"
 	}
-
 	if !m.ready {
 		return "Loading..."
 	}
-
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
-
 	if m.modalState == ModalSettings {
 		return m.renderSettings()
 	}
-
-	if m.executionMode {
-		switch m.execView {
-		case viewPlanConfirm:
-			if m.planView != nil {
-				return m.planView.View()
-			}
-		case viewCommandLog:
-			return m.renderFullScreenCommandLog()
-			// Note: viewDiagnostics removed - diagnostics now show in command log panel
-		case viewStateList:
-			if m.stateListView != nil {
-				return m.stateListView.View()
-			}
-		case viewStateShow:
-			if m.stateShowView != nil {
-				return m.stateShowView.View()
-			}
-		case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics:
-			// Fall through to main view rendering below
-		}
+	if view := m.viewExecutionOverride(); view != "" {
+		return view
 	}
-
 	if m.plan == nil && !m.executionMode {
 		return "No plan loaded\n"
 	}
+	return ""
+}
 
-	var sections []string
+func (m *Model) viewExecutionOverride() string {
+	if !m.executionMode {
+		return ""
+	}
+	switch m.execView {
+	case viewPlanConfirm:
+		if m.planView != nil {
+			return m.planView.View()
+		}
+	case viewCommandLog:
+		return m.renderFullScreenCommandLog()
+	case viewStateList:
+		if m.stateListView != nil {
+			return m.stateListView.View()
+		}
+	case viewStateShow:
+		if m.stateShowView != nil {
+			return m.stateShowView.View()
+		}
+	case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics:
+		return ""
+	}
+	return ""
+}
 
-	// Main content (panels + command log)
-	sections = append(sections, m.renderMainContent())
-
-	// Status bar
-	sections = append(sections, m.renderStatusBar())
-
-	view := lipgloss.JoinVertical(lipgloss.Left, sections...)
-
-	// Overlay help modal if showing
+func (m *Model) applyViewOverlays(view string) string {
 	if m.modalState == ModalHelp && m.helpModal != nil {
 		view = m.helpModal.Overlay(view)
 	}
-
-	// Overlay toast if present
 	if m.toast != nil && m.toast.IsVisible() {
 		view = m.toast.Overlay(view)
 	}
-
 	return view
 }

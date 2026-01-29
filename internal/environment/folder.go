@@ -174,48 +174,62 @@ func scanEnvironmentFolders(ctx context.Context, root string, maxDepth int) ([]F
 	baseDepth := pathDepth(root)
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		if err != nil {
+		if err := checkWalkContext(ctx, err); err != nil {
 			return err
 		}
-
 		if d.IsDir() {
-			if shouldSkipDir(d.Name()) {
-				return fs.SkipDir
-			}
-			if maxDepth > 0 && pathDepth(path)-baseDepth > maxDepth {
-				return fs.SkipDir
-			}
-			return nil
+			return handleFolderDir(d, path, baseDepth, maxDepth)
 		}
-
-		if !strings.HasSuffix(d.Name(), ".tf") {
-			return nil
-		}
-
-		dir := filepath.Dir(path)
-		if containsIgnoredSegment(dir) {
-			return nil
-		}
-		if !containsEnvSegment(dir) {
-			return nil
-		}
-
-		if _, exists := folders[dir]; !exists {
-			folders[dir] = FolderInfo{Path: dir}
-		}
-		return nil
+		return handleFolderFile(d, path, folders)
 	})
 	if walkErr != nil {
 		return nil, walkErr
 	}
 
+	paths, err := buildFolderInfoList(folders)
+	if err != nil {
+		return nil, err
+	}
+	sortFolderInfos(paths)
+	return paths, nil
+}
+
+func checkWalkContext(ctx context.Context, walkErr error) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	return walkErr
+}
+
+func handleFolderDir(d fs.DirEntry, path string, baseDepth, maxDepth int) error {
+	if shouldSkipDir(d.Name()) {
+		return fs.SkipDir
+	}
+	if maxDepth > 0 && pathDepth(path)-baseDepth > maxDepth {
+		return fs.SkipDir
+	}
+	return nil
+}
+
+func handleFolderFile(d fs.DirEntry, path string, folders map[string]FolderInfo) error {
+	if !strings.HasSuffix(d.Name(), ".tf") {
+		return nil
+	}
+
+	dir := filepath.Dir(path)
+	if containsIgnoredSegment(dir) || !containsEnvSegment(dir) {
+		return nil
+	}
+
+	if _, exists := folders[dir]; !exists {
+		folders[dir] = FolderInfo{Path: dir}
+	}
+	return nil
+}
+
+func buildFolderInfoList(folders map[string]FolderInfo) ([]FolderInfo, error) {
 	paths := make([]FolderInfo, 0, len(folders))
 	for _, info := range folders {
 		score, hasState, err := scoreFolder(info.Path)
@@ -226,14 +240,16 @@ func scanEnvironmentFolders(ctx context.Context, root string, maxDepth int) ([]F
 		info.HasState = hasState
 		paths = append(paths, info)
 	}
+	return paths, nil
+}
 
+func sortFolderInfos(paths []FolderInfo) {
 	sort.Slice(paths, func(i, j int) bool {
 		if paths[i].Score == paths[j].Score {
 			return paths[i].Path < paths[j].Path
 		}
 		return paths[i].Score > paths[j].Score
 	})
-	return paths, nil
 }
 
 func containsEnvSegment(path string) bool {

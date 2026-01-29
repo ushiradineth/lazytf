@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -48,7 +49,7 @@ func TestBuildContextDiffAddsGapMarker(t *testing.T) {
 	lines := buildContextDiff(before, after, 0)
 	hasGap := false
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "..." {
+		if strings.TrimSpace(line) == consts.GapMarker {
 			hasGap = true
 			break
 		}
@@ -64,7 +65,7 @@ func TestContextDiffGapMarkerOnlyOnceBetweenSpans(t *testing.T) {
 	lines := buildContextDiff(before, after, 0)
 	count := 0
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "..." {
+		if strings.TrimSpace(line) == consts.GapMarker {
 			count++
 		}
 	}

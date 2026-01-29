@@ -6,16 +6,18 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 func TestParseWorkspaceListOutput(t *testing.T) {
 	output := "  default\n* dev\n  staging\n\n"
 	parsed := parseWorkspaceListOutput(output)
-	wantList := []string{"default", "dev", "staging"}
+	wantList := []string{consts.DefaultName, consts.EnvDev, "staging"}
 	if !reflect.DeepEqual(parsed.Workspaces, wantList) {
 		t.Fatalf("expected workspaces %v, got %v", wantList, parsed.Workspaces)
 	}
-	if parsed.Current != "dev" {
+	if parsed.Current != consts.EnvDev {
 		t.Fatalf("expected current dev, got %q", parsed.Current)
 	}
 }
@@ -125,7 +127,7 @@ func TestTerraformWorkspaceListOutputMissingBinary(t *testing.T) {
 
 func TestTerraformWorkspaceSelectMissingBinary(t *testing.T) {
 	t.Setenv("PATH", "")
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err == nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err == nil {
 		t.Fatalf("expected error when terraform binary missing")
 	}
 }
@@ -136,21 +138,21 @@ func TestTerraformWorkspaceListOutputSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "default") || !strings.Contains(out, "dev") {
+	if !strings.Contains(out, consts.DefaultName) || !strings.Contains(out, consts.EnvDev) {
 		t.Fatalf("unexpected output: %q", out)
 	}
 }
 
 func TestTerraformWorkspaceSelectSuccess(t *testing.T) {
 	setupFakeTerraform(t)
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err != nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestTerraformWorkspaceSelectErrorOutput(t *testing.T) {
 	setupFakeTerraformError(t)
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), "dev"); err == nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err == nil {
 		t.Fatalf("expected error when terraform workspace select fails")
 	}
 }
@@ -163,10 +165,10 @@ func TestWorkspaceManagerNil(t *testing.T) {
 	if _, err := manager.Current(context.Background()); err == nil {
 		t.Fatalf("expected current error for nil manager")
 	}
-	if err := manager.Switch(context.Background(), "dev"); err == nil {
+	if err := manager.Switch(context.Background(), consts.EnvDev); err == nil {
 		t.Fatalf("expected switch error for nil manager")
 	}
-	if err := manager.Validate(context.Background(), "dev"); err == nil {
+	if err := manager.Validate(context.Background(), consts.EnvDev); err == nil {
 		t.Fatalf("expected validate error for nil manager")
 	}
 }

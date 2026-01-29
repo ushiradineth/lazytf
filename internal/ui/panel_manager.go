@@ -4,9 +4,11 @@ import (
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
-// PanelManager manages panel registration, focus, and layout
+// PanelManager manages panel registration, focus, and layout.
 type PanelManager struct {
 	panels            map[PanelID]Panel
 	focusedPanel      PanelID
@@ -15,7 +17,7 @@ type PanelManager struct {
 	executionMode     bool
 }
 
-// NewPanelManager creates a new panel manager
+// NewPanelManager creates a new panel manager.
 func NewPanelManager() *PanelManager {
 	return &PanelManager{
 		panels:            make(map[PanelID]Panel),
@@ -25,18 +27,18 @@ func NewPanelManager() *PanelManager {
 	}
 }
 
-// RegisterPanel adds a panel to the manager
+// RegisterPanel adds a panel to the manager.
 func (pm *PanelManager) RegisterPanel(id PanelID, panel Panel) {
 	pm.panels[id] = panel
 }
 
-// GetPanel retrieves a panel by ID
+// GetPanel retrieves a panel by ID.
 func (pm *PanelManager) GetPanel(id PanelID) (Panel, bool) {
 	panel, ok := pm.panels[id]
 	return panel, ok
 }
 
-// SetFocus changes the focused panel
+// SetFocus changes the focused panel.
 func (pm *PanelManager) SetFocus(id PanelID) tea.Cmd {
 	// Unfocus current panel
 	if currentPanel, ok := pm.panels[pm.focusedPanel]; ok {
@@ -65,7 +67,7 @@ func (pm *PanelManager) SetFocus(id PanelID) tea.Cmd {
 	return nil
 }
 
-// GetFocusedPanel returns the currently focused panel ID
+// GetFocusedPanel returns the currently focused panel ID.
 func (pm *PanelManager) GetFocusedPanel() PanelID {
 	if pm.commandLogFocused {
 		return PanelCommandLog
@@ -73,7 +75,7 @@ func (pm *PanelManager) GetFocusedPanel() PanelID {
 	return pm.focusedPanel
 }
 
-// CycleFocus cycles to the next panel
+// CycleFocus cycles to the next panel.
 func (pm *PanelManager) CycleFocus(reverse bool) tea.Cmd {
 	// Define focus order: Workspace -> Resources -> History -> Main
 	focusOrder := []PanelID{PanelWorkspace, PanelResources, PanelHistory, PanelMain}
@@ -100,26 +102,27 @@ func (pm *PanelManager) CycleFocus(reverse bool) tea.Cmd {
 		return pm.SetFocus(PanelWorkspace)
 	}
 
-	// Calculate next index
-	var nextIdx int
-	if reverse {
-		if currentIdx <= 0 {
-			nextIdx = len(focusOrder) - 1
-		} else {
-			nextIdx = currentIdx - 1
-		}
-	} else {
-		if currentIdx < 0 || currentIdx >= len(focusOrder)-1 {
-			nextIdx = 0
-		} else {
-			nextIdx = currentIdx + 1
-		}
-	}
-
+	nextIdx := nextFocusIndex(reverse, currentIdx, len(focusOrder))
 	return pm.SetFocus(focusOrder[nextIdx])
 }
 
-// ToggleCommandLog toggles command log visibility
+func nextFocusIndex(reverse bool, currentIdx, total int) int {
+	if total == 0 {
+		return 0
+	}
+	if reverse {
+		if currentIdx <= 0 {
+			return total - 1
+		}
+		return currentIdx - 1
+	}
+	if currentIdx < 0 || currentIdx >= total-1 {
+		return 0
+	}
+	return currentIdx + 1
+}
+
+// ToggleCommandLog toggles command log visibility.
 func (pm *PanelManager) ToggleCommandLog() bool {
 	pm.commandLogVisible = !pm.commandLogVisible
 	// Also update the panel's visibility
@@ -131,7 +134,7 @@ func (pm *PanelManager) ToggleCommandLog() bool {
 	return pm.commandLogVisible
 }
 
-// SetCommandLogVisible sets command log visibility
+// SetCommandLogVisible sets command log visibility.
 func (pm *PanelManager) SetCommandLogVisible(visible bool) {
 	pm.commandLogVisible = visible
 	// Also update the panel's visibility
@@ -142,22 +145,22 @@ func (pm *PanelManager) SetCommandLogVisible(visible bool) {
 	}
 }
 
-// IsCommandLogVisible returns whether command log is visible
+// IsCommandLogVisible returns whether command log is visible.
 func (pm *PanelManager) IsCommandLogVisible() bool {
 	return pm.commandLogVisible
 }
 
-// SetExecutionMode sets whether the app is in execution mode (affects layout)
+// SetExecutionMode sets whether the app is in execution mode (affects layout).
 func (pm *PanelManager) SetExecutionMode(mode bool) {
 	pm.executionMode = mode
 }
 
-// IsExecutionMode returns whether the app is in execution mode
+// IsExecutionMode returns whether the app is in execution mode.
 func (pm *PanelManager) IsExecutionMode() bool {
 	return pm.executionMode
 }
 
-// CalculateLayout computes layout specifications for all panels
+// CalculateLayout computes layout specifications for all panels.
 func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	layout := LayoutSpec{
 		FilterBarHeight:   FilterBarHeight,
@@ -322,7 +325,7 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 }
 
 // HandleNavigation handles navigation keys (number keys, tab)
-// Returns true if the key was handled
+// Returns true if the key was handled.
 func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "1":
@@ -353,7 +356,7 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, pm.SetFocus(PanelResources)
 		}
 		return true, nil
-	case "esc":
+	case consts.KeyEsc:
 		// Return to resource list
 		if pm.focusedPanel != PanelResources || pm.commandLogFocused {
 			return true, pm.SetFocus(PanelResources)
@@ -364,7 +367,7 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-// UpdatePanelSizes updates all panel sizes based on current layout
+// UpdatePanelSizes updates all panel sizes based on current layout.
 func (pm *PanelManager) UpdatePanelSizes(layout LayoutSpec) {
 	if panel, ok := pm.panels[PanelWorkspace]; ok && panel != nil {
 		panel.SetSize(layout.Workspace.Width, layout.Workspace.Height)

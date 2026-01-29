@@ -90,50 +90,55 @@ func ANSICutLeft(s string, n int) string {
 	}
 
 	var result strings.Builder
-	var activeANSI strings.Builder // Track active ANSI codes
+	var activeANSI strings.Builder
+	runes := []rune(s)
 	visualPos := 0
 	i := 0
-	runes := []rune(s)
 
-	// Skip first n visual characters while tracking ANSI codes
 	for i < len(runes) && visualPos < n {
-		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
-			// Capture ANSI escape sequence
-			j := i + 2
-			for j < len(runes) && !IsANSITerminator(runes[j]) {
-				j++
-			}
-			if j < len(runes) {
-				j++ // Include terminator
-			}
-			// Track this ANSI code - it might affect remaining text
-			ansiCode := string(runes[i:j])
-			// Check if it's a reset code
-			if ansiCode == "\x1b[0m" || ansiCode == "\x1b[m" {
-				activeANSI.Reset()
-			} else {
-				activeANSI.WriteString(ansiCode)
-			}
-			i = j
-		} else {
-			// Regular character - count it
-			visualPos++
-			i++
+		if isANSIStart(runes, i) {
+			i = consumeANSISequence(runes, i, &activeANSI)
+			continue
 		}
-	}
-
-	// Prepend active ANSI codes to maintain styling
-	if activeANSI.Len() > 0 {
-		result.WriteString(activeANSI.String())
-	}
-
-	// Collect remaining characters
-	for i < len(runes) {
-		result.WriteRune(runes[i])
+		visualPos++
 		i++
 	}
 
+	if activeANSI.Len() > 0 {
+		result.WriteString(activeANSI.String())
+	}
+	appendRunes(&result, runes[i:])
 	return result.String()
+}
+
+func isANSIStart(runes []rune, index int) bool {
+	return runes[index] == '\x1b' && index+1 < len(runes) && runes[index+1] == '['
+}
+
+func consumeANSISequence(runes []rune, index int, activeANSI *strings.Builder) int {
+	j := index + 2
+	for j < len(runes) && !IsANSITerminator(runes[j]) {
+		j++
+	}
+	if j < len(runes) {
+		j++
+	}
+	updateActiveANSI(activeANSI, string(runes[index:j]))
+	return j
+}
+
+func updateActiveANSI(activeANSI *strings.Builder, ansiCode string) {
+	if ansiCode == "\x1b[0m" || ansiCode == "\x1b[m" {
+		activeANSI.Reset()
+		return
+	}
+	activeANSI.WriteString(ansiCode)
+}
+
+func appendRunes(builder *strings.Builder, runes []rune) {
+	for _, r := range runes {
+		builder.WriteRune(r)
+	}
 }
 
 // IsANSITerminator checks if a rune is an ANSI escape sequence terminator.

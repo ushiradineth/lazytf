@@ -16,11 +16,11 @@ func TestFolderManagerListOrdersByScore(t *testing.T) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "main.tf"), []byte(""), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "main.tf"), []byte(""), 0o600); err != nil {
 			t.Fatalf("write tf: %v", err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(prodDir, "terraform.tfstate"), []byte(""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(prodDir, "terraform.tfstate"), []byte(""), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestFolderManagerValidate(t *testing.T) {
 	if err := manager.Validate(context.Background(), target); err == nil {
 		t.Fatal("expected error for missing terraform files")
 	}
-	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o600); err != nil {
 		t.Fatalf("write tf: %v", err)
 	}
 	if err := manager.Validate(context.Background(), target); err != nil {
@@ -76,7 +76,7 @@ func TestFolderManagerSwitchUsesChangeDir(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o600); err != nil {
 		t.Fatalf("write tf: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestFolderManagerSwitchUsesChangeDir(t *testing.T) {
 
 func TestFolderHasState(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "terraform.tfstate"), []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "terraform.tfstate"), []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 	hasState, err := folderHasState(dir)
@@ -132,7 +132,7 @@ func TestScanEnvironmentFoldersNested(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "main.tf"), []byte(""), 0o600); err != nil {
 		t.Fatalf("write tf: %v", err)
 	}
 

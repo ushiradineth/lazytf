@@ -20,7 +20,7 @@ type ListPanelItem interface {
 // - Scrollbar on the right side
 // - Item count footer ("7 of 29")
 // - Full-line selection highlighting
-// - Keyboard navigation (up/down)
+// - Keyboard navigation (up/down).
 type ListPanel struct {
 	styles *styles.Styles
 	frame  *PanelFrame
@@ -277,38 +277,18 @@ func (l *ListPanel) adjustScrollOffset() {
 		return
 	}
 
-	maxOffset := max(0, len(l.items)-contentHeight)
-
 	// Anchor positions for smooth scrolling
 	anchorTop := min(2, contentHeight-1)
 	anchorBottom := max(contentHeight-3, anchorTop)
-
-	switch {
-	case l.lastMove > 0: // Moving down
-		threshold := l.scrollOffset + anchorBottom
-		if l.selectedIndex > threshold {
-			l.scrollOffset = l.selectedIndex - anchorBottom
-		}
-	case l.lastMove < 0: // Moving up
-		threshold := l.scrollOffset + anchorTop
-		if l.selectedIndex < threshold {
-			l.scrollOffset = l.selectedIndex - anchorTop
-		}
-	default:
-		// Ensure selected is visible
-		if l.selectedIndex < l.scrollOffset {
-			l.scrollOffset = l.selectedIndex
-		} else if l.selectedIndex >= l.scrollOffset+contentHeight {
-			l.scrollOffset = l.selectedIndex - contentHeight + 1
-		}
-	}
-
-	// Clamp offset
-	if l.scrollOffset < 0 {
-		l.scrollOffset = 0
-	} else if l.scrollOffset > maxOffset {
-		l.scrollOffset = maxOffset
-	}
+	l.scrollOffset = adjustScrollOffset(
+		l.scrollOffset,
+		l.selectedIndex,
+		len(l.items),
+		contentHeight,
+		l.lastMove,
+		anchorTop,
+		anchorBottom,
+	)
 }
 
 // renderContent renders the visible content lines.

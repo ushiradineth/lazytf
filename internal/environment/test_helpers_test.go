@@ -24,7 +24,10 @@ func setupFakeTerraform(t *testing.T) {
 		"  exit 0\n" +
 		"fi\n" +
 		"exit 1\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}
 	t.Setenv("PATH", dir)
@@ -47,7 +50,10 @@ func setupFakeTerraformError(t *testing.T) {
 		"  exit 1\n" +
 		"fi\n" +
 		"exit 1\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}
 	t.Setenv("PATH", dir)

@@ -14,7 +14,7 @@ import (
 
 // Layout-related methods for Model
 
-// renderStatusBar renders the bottom status bar
+// renderStatusBar renders the bottom status bar.
 func (m *Model) renderStatusBar() string {
 	var parts []string
 
@@ -40,7 +40,7 @@ func (m *Model) renderStatusBar() string {
 		Render(statusText)
 }
 
-// resourceSummaryText returns a summary of resource changes like "+5 ~3 -2 ±2"
+// resourceSummaryText returns a summary of resource changes like "+5 ~3 -2 ±2".
 func (m *Model) resourceSummaryText() string {
 	if m.plan == nil {
 		return ""
@@ -117,66 +117,75 @@ func (m *Model) renderMainContent() string {
 		return m.renderLegacyMainContent()
 	}
 
-	// Calculate layout to get the widths
 	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	m.syncMainAreaSelection()
+	contentHeight := contentAreaHeight(m.height)
+	leftColumn := m.renderLeftColumn(layout, contentHeight)
+	rightColumn := m.renderRightColumn(layout, contentHeight)
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+}
 
-	// Update main area with selected resource (layout is already calculated in updateLayout())
+func (m *Model) syncMainAreaSelection() {
 	if m.mainArea != nil && m.resourceList != nil {
 		m.mainArea.SetSelectedResource(m.resourceList.GetSelectedResource())
 	}
+}
 
-	// Calculate total height for the content area (excluding status bar)
-	contentHeight := m.height - StatusBarHeight
+func contentAreaHeight(totalHeight int) int {
+	contentHeight := totalHeight - StatusBarHeight
 	if contentHeight < 1 {
-		contentHeight = 1
+		return 1
 	}
+	return contentHeight
+}
 
-	// Helper to enforce dimensions on panel output
-	enforceDimensions := func(view string, width, height int) string {
-		if width <= 0 || height <= 0 {
-			return ""
-		}
-		lines := strings.Split(view, "\n")
-		// Enforce width on each line
-		for i, line := range lines {
-			lineWidth := lipgloss.Width(line)
-			if lineWidth < width {
-				lines[i] = line + strings.Repeat(" ", width-lineWidth)
-			} else if lineWidth > width {
-				lines[i] = lipgloss.NewStyle().MaxWidth(width).Render(line)
-			}
-		}
-		// Enforce height: truncate or pad
-		if len(lines) > height {
-			lines = lines[:height]
-		}
-		for len(lines) < height {
-			lines = append(lines, strings.Repeat(" ", width))
-		}
-		return strings.Join(lines, "\n")
+func enforceDimensions(view string, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
 	}
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth < width {
+			lines[i] = line + strings.Repeat(" ", width-lineWidth)
+			continue
+		}
+		if lineWidth > width {
+			lines[i] = lipgloss.NewStyle().MaxWidth(width).Render(line)
+		}
+	}
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for len(lines) < height {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+	return strings.Join(lines, "\n")
+}
 
-	// Render left column panels with explicit dimensions
+func (m *Model) renderLeftColumn(layout LayoutSpec, contentHeight int) string {
 	var leftPanels []string
 	if m.environmentPanel != nil {
 		leftPanels = append(leftPanels, enforceDimensions(m.environmentPanel.View(), layout.LeftColumnWidth, layout.Workspace.Height))
 	}
-	// Render resources panel with tabs (Resources / State)
-	leftPanels = append(leftPanels, enforceDimensions(m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height), layout.LeftColumnWidth, layout.Resources.Height))
+	leftPanels = append(leftPanels, enforceDimensions(
+		m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height),
+		layout.LeftColumnWidth,
+		layout.Resources.Height,
+	))
 	if m.historyPanel != nil && m.executionMode {
 		leftPanels = append(leftPanels, enforceDimensions(m.historyPanel.View(), layout.LeftColumnWidth, layout.History.Height))
 	}
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftPanels...)
-
-	// Left column total height should equal sum of panel heights
-	leftColumn = lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Width(layout.LeftColumnWidth).
 		MaxWidth(layout.LeftColumnWidth).
 		Height(contentHeight).
 		MaxHeight(contentHeight).
 		Render(leftColumn)
+}
 
-	// Render right column (main area + command log)
+func (m *Model) renderRightColumn(layout LayoutSpec, contentHeight int) string {
 	var rightPanels []string
 	if m.mainArea != nil {
 		rightPanels = append(rightPanels, enforceDimensions(m.mainArea.View(), layout.RightColumnWidth, layout.Main.Height))
@@ -188,22 +197,15 @@ func (m *Model) renderMainContent() string {
 		}
 	}
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightPanels...)
-
-	// Right column total height should equal main + command log heights
-	rightColumn = lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Width(layout.RightColumnWidth).
 		MaxWidth(layout.RightColumnWidth).
 		Height(contentHeight).
 		MaxHeight(contentHeight).
 		Render(rightColumn)
-
-	// Join left and right columns horizontally
-	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
-
-	return mainContent
 }
 
-// renderResourcesPanelWithTabs renders the resources panel with tabs (Resources / State)
+// renderResourcesPanelWithTabs renders the resources panel with tabs (Resources / State).
 func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
 	if m.resourceList == nil {
 		return ""
@@ -279,7 +281,7 @@ func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
 	return frame.RenderWithContent(result)
 }
 
-// addTabsToPanel adds tab indicators to the first line of a panel
+// addTabsToPanel adds tab indicators to the first line of a panel.
 func (m *Model) addTabsToPanel(panel string, width int, tabs []string, activeTab int) string {
 	lines := strings.Split(panel, "\n")
 	if len(lines) == 0 {
@@ -462,28 +464,36 @@ func (m *Model) updateLegacyLayout() {
 	}
 
 	if m.showSplit && m.width >= 100 {
-		listWidth := utils.MaxInt(40, int(float64(m.width)*0.45))
-		diffWidth := m.width - listWidth - 1
-		if diffWidth < 20 {
-			diffWidth = 20
-			listWidth = m.width - diffWidth - 1
-		}
-		m.resourceList.SetSize(listWidth, listHeight)
-		if m.historyPanel != nil {
-			m.historyPanel.SetSize(listWidth, historyHeight)
-		}
-		if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
-		}
-		m.diffViewer.SetSize(diffWidth, listHeight)
-	} else {
-		m.resourceList.SetSize(m.width, listHeight)
-		if m.historyPanel != nil {
-			m.historyPanel.SetSize(m.width, historyHeight)
-		}
-		if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
-		}
-		m.diffViewer.SetSize(m.width, listHeight)
+		m.updateLegacyLayoutSplit(listHeight, historyHeight, diagnosticsHeight)
+		return
 	}
+	m.updateLegacyLayoutSingle(listHeight, historyHeight, diagnosticsHeight)
+}
+
+func (m *Model) updateLegacyLayoutSplit(listHeight, historyHeight, diagnosticsHeight int) {
+	listWidth := utils.MaxInt(40, int(float64(m.width)*0.45))
+	diffWidth := m.width - listWidth - 1
+	if diffWidth < 20 {
+		diffWidth = 20
+		listWidth = m.width - diffWidth - 1
+	}
+	m.resourceList.SetSize(listWidth, listHeight)
+	if m.historyPanel != nil {
+		m.historyPanel.SetSize(listWidth, historyHeight)
+	}
+	if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
+	}
+	m.diffViewer.SetSize(diffWidth, listHeight)
+}
+
+func (m *Model) updateLegacyLayoutSingle(listHeight, historyHeight, diagnosticsHeight int) {
+	m.resourceList.SetSize(m.width, listHeight)
+	if m.historyPanel != nil {
+		m.historyPanel.SetSize(m.width, historyHeight)
+	}
+	if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetSize(m.width, diagnosticsHeight)
+	}
+	m.diffViewer.SetSize(m.width, listHeight)
 }
