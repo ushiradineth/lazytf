@@ -89,9 +89,10 @@ type Model struct {
 	envOptions         []environment.Environment
 
 	// Overlay components
-	toast      *components.Toast
-	helpModal  *components.Modal
-	themeModal *components.Modal
+	toast         *components.Toast
+	helpModal     *components.Modal
+	themeModal    *components.Modal
+	settingsModal *components.Modal
 
 	// Theme switching
 	configManager    *config.Manager
@@ -186,6 +187,7 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	toast.SetPosition(components.ToastTopLeft)
 	helpModal := components.NewModal(appStyles)
 	themeModal := components.NewModal(appStyles)
+	settingsModal := components.NewModal(appStyles)
 
 	m := &Model{
 		plan:          plan,
@@ -203,9 +205,10 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		configView:    views.NewConfigView(appStyles),
 
 		// Overlay components
-		toast:      toast,
-		helpModal:  helpModal,
-		themeModal: themeModal,
+		toast:         toast,
+		helpModal:     helpModal,
+		themeModal:    themeModal,
+		settingsModal: settingsModal,
 
 		// Panel system
 		panelManager:     panelManager,
@@ -619,6 +622,16 @@ func (m *Model) handleModalSettingsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case consts.KeyEsc, ",":
 		m.modalState = ModalNone
 		return true, nil
+	case "j", consts.KeyDown:
+		if m.settingsModal != nil {
+			m.settingsModal.ScrollDown()
+		}
+		return true, nil
+	case "k", "up":
+		if m.settingsModal != nil {
+			m.settingsModal.ScrollUp()
+		}
+		return true, nil
 	default:
 		return true, nil
 	}
@@ -743,6 +756,7 @@ func (m *Model) toggleSettingsModal() {
 		return
 	}
 	m.modalState = ModalSettings
+	m.updateSettingsModalContent()
 }
 
 func (m *Model) showConfirmApplyModal() {
@@ -964,9 +978,6 @@ func (m *Model) viewImmediate() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
-	if m.modalState == ModalSettings {
-		return m.renderSettings()
-	}
 	if view := m.viewExecutionOverride(); view != "" {
 		return view
 	}
@@ -1006,6 +1017,9 @@ func (m *Model) applyViewOverlays(view string) string {
 	}
 	if m.modalState == ModalTheme && m.themeModal != nil {
 		view = m.themeModal.Overlay(view)
+	}
+	if m.modalState == ModalSettings && m.settingsModal != nil {
+		view = m.settingsModal.Overlay(view)
 	}
 	if m.toast != nil && m.toast.IsVisible() {
 		view = m.toast.Overlay(view)

@@ -1,15 +1,15 @@
 package ui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
-	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
 // Modal-related methods for Model
@@ -147,27 +147,69 @@ func helpSections(executionMode bool) []helpSection {
 	return sections
 }
 
-func (m *Model) renderSettings() string {
-	if m.styles == nil {
-		return ""
+func (m *Model) updateSettingsModalContent() {
+	if m.settingsModal == nil {
+		return
 	}
-	if m.configView == nil {
-		lines := []string{
-			m.styles.Highlight.Render("Settings"),
-			"",
-			"No configuration loaded.",
-			"",
-			"esc: back",
-		}
-		content := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-		box := m.styles.Border.Width(utils.MinInt(50, m.width-4)).Render(content)
-		if m.width == 0 || m.height == 0 {
-			return box
-		}
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+
+	var items []components.HelpItem
+
+	if m.config == nil {
+		items = make([]components.HelpItem, 0, 3)
+		items = append(items, components.HelpItem{Key: "No configuration loaded.", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "esc: back", IsHeader: true})
+	} else {
+		cfg := m.config
+		items = make([]components.HelpItem, 0, 24)
+
+		// Theme section
+		items = append(items, components.HelpItem{Key: "Theme", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "name", Description: cfg.Theme.Name})
+
+		// Terraform section
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "Terraform", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "binary", Description: fallbackValue(cfg.Terraform.Binary, "default")})
+		items = append(items, components.HelpItem{Key: "working dir", Description: fallbackValue(cfg.Terraform.WorkingDir, "default")})
+		items = append(items, components.HelpItem{Key: "timeout", Description: cfg.Terraform.Timeout.String()})
+		items = append(items, components.HelpItem{Key: "parallelism", Description: strconv.Itoa(cfg.Terraform.Parallelism)})
+		items = append(items, components.HelpItem{Key: "default flags", Description: strings.Join(cfg.Terraform.DefaultFlags, " ")})
+
+		// UI section
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "UI", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "mouse enabled", Description: strconv.FormatBool(cfg.UI.MouseEnabled)})
+		items = append(items, components.HelpItem{Key: "compact mode", Description: strconv.FormatBool(cfg.UI.CompactMode)})
+		items = append(items, components.HelpItem{Key: "animations", Description: strconv.FormatBool(cfg.UI.AnimationsEnabled)})
+		items = append(items, components.HelpItem{Key: "split default", Description: strconv.FormatBool(cfg.UI.SplitViewDefault)})
+		items = append(items, components.HelpItem{Key: "split ratio", Description: fmt.Sprintf("%.2f", cfg.UI.SplitRatio)})
+
+		// History section
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "History", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "enabled", Description: strconv.FormatBool(cfg.History.Enabled)})
+		items = append(items, components.HelpItem{Key: "level", Description: cfg.History.Level})
+		items = append(items, components.HelpItem{Key: "path", Description: fallbackValue(cfg.History.Path, "default")})
+		items = append(items, components.HelpItem{Key: "retention days", Description: strconv.Itoa(cfg.History.RetentionDays)})
+		items = append(items, components.HelpItem{Key: "max entries", Description: strconv.Itoa(cfg.History.MaxEntries)})
+
+		// Footer
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "esc: back", IsHeader: true})
 	}
-	m.configView.SetConfig(m.config)
-	return m.configView.View()
+
+	m.settingsModal.SetTitle("Settings")
+	m.settingsModal.SetItems(items)
+	m.settingsModal.SetSize(m.width, m.height)
+	m.settingsModal.Show()
+}
+
+func fallbackValue(value, defaultValue string) string {
+	if strings.TrimSpace(value) == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // Theme modal methods
@@ -380,6 +422,9 @@ func (m *Model) applyStyles(newStyles *styles.Styles) {
 	}
 	if m.themeModal != nil {
 		m.themeModal.SetStyles(newStyles)
+	}
+	if m.settingsModal != nil {
+		m.settingsModal.SetStyles(newStyles)
 	}
 	if m.toast != nil {
 		m.toast.SetStyles(newStyles)

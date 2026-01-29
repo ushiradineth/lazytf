@@ -737,12 +737,19 @@ func TestWaitApplyCompleteCmdNilResult(t *testing.T) {
 	}
 }
 
-func TestRenderSettings(t *testing.T) {
+func TestSettingsModal(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.width = 80
 	m.height = 24
 
-	out := m.renderSettings()
+	m.updateSettingsModalContent()
+	if m.settingsModal == nil {
+		t.Fatalf("expected settings modal to be initialized")
+	}
+	if !m.settingsModal.IsVisible() {
+		t.Fatalf("expected settings modal to be visible")
+	}
+	out := m.settingsModal.View()
 	if !strings.Contains(out, "No configuration loaded.") {
 		t.Fatalf("expected settings fallback text")
 	}
@@ -1307,6 +1314,7 @@ func TestViewModalStates(t *testing.T) {
 	m.updateLayout() // Update layout to set overlay component sizes
 
 	m.modalState = ModalSettings
+	m.updateSettingsModalContent() // Populate settings modal content
 	if out := m.View(); !strings.Contains(out, "Settings") {
 		t.Fatalf("expected settings view")
 	}
@@ -1818,4 +1826,69 @@ type fakeDetector struct {
 
 func (f *fakeDetector) Detect(_ context.Context) (environment.DetectionResult, error) {
 	return f.result, f.err
+}
+
+func TestToggleHelpModal(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	// Toggle help modal on
+	m.toggleHelpModal()
+	if m.modalState != ModalHelp {
+		t.Errorf("expected modal state ModalHelp, got %v", m.modalState)
+	}
+
+	// Toggle help modal off
+	m.toggleHelpModal()
+	if m.modalState != ModalNone {
+		t.Errorf("expected modal state ModalNone, got %v", m.modalState)
+	}
+}
+
+func TestToggleSettingsModal(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	// Toggle settings modal on
+	m.toggleSettingsModal()
+	if m.modalState != ModalSettings {
+		t.Errorf("expected modal state ModalSettings, got %v", m.modalState)
+	}
+
+	// Toggle settings modal off
+	m.toggleSettingsModal()
+	if m.modalState != ModalNone {
+		t.Errorf("expected modal state ModalNone, got %v", m.modalState)
+	}
+}
+
+func TestSwitchResourcesTab(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+	m.executionMode = true
+	m.resourceList = components.NewResourceList(m.styles)
+
+	// Test switching to state tab (just verify no panic)
+	m.switchResourcesTab(1)
+	m.switchResourcesTab(0)
+}
+
+func TestCanSwitchResourcesTab(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.executionMode = true
+
+	// Should be able to switch
+	if !m.canSwitchResourcesTab() {
+		t.Error("expected to be able to switch tabs in execution mode")
+	}
+
+	// Read-only mode - can't switch
+	m.executionMode = false
+	if m.canSwitchResourcesTab() {
+		t.Error("expected not to be able to switch tabs in read-only mode")
+	}
 }
