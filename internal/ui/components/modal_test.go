@@ -123,6 +123,55 @@ func TestModalScrolling(t *testing.T) {
 	}
 }
 
+func TestModalConfirmMode(t *testing.T) {
+	s := styles.DefaultStyles()
+
+	// Create modal in confirm mode
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Confirm Apply")
+
+	actions := []ModalAction{
+		{Key: "y", Label: "Yes, apply"},
+		{Key: "n", Label: "No, cancel"},
+	}
+	modal.SetConfirm("Plan summary:\n  + 3 to add\n  ~ 1 to change\n\nDo you want to apply these changes?", actions)
+	modal.Show()
+
+	// Verify confirm mode is active
+	if !modal.IsConfirmMode() {
+		t.Error("Expected modal to be in confirm mode")
+	}
+
+	// Render the modal
+	view := modal.View()
+	fmt.Println("=== CONFIRM MODAL ===")
+	fmt.Println(view)
+
+	// Check content is visible
+	if !strings.Contains(view, "Confirm Apply") {
+		t.Error("Title not visible in confirm modal")
+	}
+	if !strings.Contains(view, "Plan summary") {
+		t.Error("Message not visible in confirm modal")
+	}
+	if !strings.Contains(view, "Yes, apply") {
+		t.Error("Yes action not visible in confirm modal")
+	}
+	if !strings.Contains(view, "No, cancel") {
+		t.Error("No action not visible in confirm modal")
+	}
+
+	// Verify actions are retrievable
+	retrievedActions := modal.GetConfirmActions()
+	if len(retrievedActions) != 2 {
+		t.Errorf("Expected 2 actions, got %d", len(retrievedActions))
+	}
+	if retrievedActions[0].Key != "y" {
+		t.Errorf("Expected first action key to be 'y', got '%s'", retrievedActions[0].Key)
+	}
+}
+
 func TestModalOverlayWithANSI(t *testing.T) {
 	s := styles.DefaultStyles()
 
@@ -177,5 +226,80 @@ func TestModalOverlayWithANSI(t *testing.T) {
 	}
 	if !strings.Contains(result, "Resource 20") {
 		t.Error("Last line should be visible below modal")
+	}
+}
+
+func TestModalHideAndVisibility(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+	modal.SetContent("Content")
+
+	// Initially not visible
+	if modal.IsVisible() {
+		t.Error("Expected modal to be hidden initially")
+	}
+
+	// Show it
+	modal.Show()
+	if !modal.IsVisible() {
+		t.Error("Expected modal to be visible after Show()")
+	}
+
+	// Hide it
+	modal.Hide()
+	if modal.IsVisible() {
+		t.Error("Expected modal to be hidden after Hide()")
+	}
+}
+
+func TestModalSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+
+	newStyles := styles.DefaultStyles()
+	modal.SetStyles(newStyles)
+
+	if modal.styles != newStyles {
+		t.Error("Expected styles to be updated")
+	}
+}
+
+func TestModalItemModeSelection(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Select")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "2", Description: "Item 2"},
+		{Key: "3", Description: "Item 3"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Check initial selection
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected initial selection 0, got %d", modal.GetSelectedIndex())
+	}
+
+	// Set valid selection
+	modal.SetSelectedIndex(1)
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection 1, got %d", modal.GetSelectedIndex())
+	}
+
+	// Invalid selection (out of bounds) should be ignored
+	modal.SetSelectedIndex(100)
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection to remain 1 after invalid set, got %d", modal.GetSelectedIndex())
+	}
+
+	// Negative selection should be ignored
+	modal.SetSelectedIndex(-1)
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection to remain 1 after negative set, got %d", modal.GetSelectedIndex())
 	}
 }

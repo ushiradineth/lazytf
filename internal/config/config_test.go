@@ -439,3 +439,342 @@ func TestUnlockClosedFileError(t *testing.T) {
 		t.Fatalf("expected unlock error on closed file")
 	}
 }
+
+func TestProjectOverrideFor(t *testing.T) {
+	t.Run("empty path", func(t *testing.T) {
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				"/some/path": {Theme: "dark"},
+			},
+		}
+		if cfg.ProjectOverrideFor("") != nil {
+			t.Error("expected nil for empty path")
+		}
+	})
+
+	t.Run("no overrides", func(t *testing.T) {
+		cfg := Config{}
+		if cfg.ProjectOverrideFor("/some/path") != nil {
+			t.Error("expected nil when no overrides configured")
+		}
+	})
+
+	t.Run("matching path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				tmpDir: {Theme: "nord", Flags: []string{"-no-color"}},
+			},
+		}
+		override := cfg.ProjectOverrideFor(tmpDir)
+		if override == nil {
+			t.Fatal("expected override for matching path")
+		}
+		if override.Theme != "nord" {
+			t.Errorf("expected theme 'nord', got %q", override.Theme)
+		}
+	})
+
+	t.Run("non-matching path", func(t *testing.T) {
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				"/project/a": {Theme: "dark"},
+			},
+		}
+		if cfg.ProjectOverrideFor("/project/b") != nil {
+			t.Error("expected nil for non-matching path")
+		}
+	})
+
+	t.Run("nil override value", func(t *testing.T) {
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				"/some/path": nil,
+			},
+		}
+		if cfg.ProjectOverrideFor("/some/path") != nil {
+			t.Error("expected nil for nil override")
+		}
+	})
+
+	t.Run("empty key", func(t *testing.T) {
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				"": {Theme: "dark"},
+			},
+		}
+		if cfg.ProjectOverrideFor("/any/path") != nil {
+			t.Error("expected nil when key is empty")
+		}
+	})
+
+	t.Run("tilde expansion", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+
+		projectDir := filepath.Join(home, "myproject")
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				"~/myproject": {Theme: "mocha"},
+			},
+		}
+		override := cfg.ProjectOverrideFor(projectDir)
+		if override == nil {
+			t.Fatal("expected override for tilde-expanded path")
+		}
+		if override.Theme != "mocha" {
+			t.Errorf("expected theme 'mocha', got %q", override.Theme)
+		}
+	})
+}
+
+func TestPresetByName(t *testing.T) {
+	t.Run("empty name", func(t *testing.T) {
+		cfg := Config{
+			Presets: []EnvironmentPreset{
+				{Name: "dev"},
+			},
+		}
+		preset, found := cfg.PresetByName("")
+		if found || preset != nil {
+			t.Error("expected no match for empty name")
+		}
+	})
+
+	t.Run("no presets", func(t *testing.T) {
+		cfg := Config{}
+		preset, found := cfg.PresetByName("dev")
+		if found || preset != nil {
+			t.Error("expected no match when no presets configured")
+		}
+	})
+
+	t.Run("matching preset", func(t *testing.T) {
+		cfg := Config{
+			Presets: []EnvironmentPreset{
+				{Name: "dev", Environment: "development", Theme: "dark"},
+				{Name: "prod", Environment: "production", Theme: "light"},
+			},
+		}
+		preset, found := cfg.PresetByName("prod")
+		if !found {
+			t.Fatal("expected to find preset")
+		}
+		if preset.Environment != "production" {
+			t.Errorf("expected environment 'production', got %q", preset.Environment)
+		}
+		if preset.Theme != "light" {
+			t.Errorf("expected theme 'light', got %q", preset.Theme)
+		}
+	})
+
+	t.Run("non-matching preset", func(t *testing.T) {
+		cfg := Config{
+			Presets: []EnvironmentPreset{
+				{Name: "dev"},
+				{Name: "staging"},
+			},
+		}
+		preset, found := cfg.PresetByName("prod")
+		if found || preset != nil {
+			t.Error("expected no match for non-existent preset")
+		}
+	})
+
+	t.Run("first match wins", func(t *testing.T) {
+		cfg := Config{
+			Presets: []EnvironmentPreset{
+				{Name: "test", Environment: "first"},
+				{Name: "test", Environment: "second"},
+			},
+		}
+		preset, found := cfg.PresetByName("test")
+		if !found {
+			t.Fatal("expected to find preset")
+		}
+		if preset.Environment != "first" {
+			t.Errorf("expected first match, got environment %q", preset.Environment)
+		}
+	})
+}
+
+func TestExpandConfigPathsWithPresets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := &Config{
+		Presets: []EnvironmentPreset{
+			{Name: "dev", WorkDir: "~/projects/dev"},
+			{Name: "empty", WorkDir: ""},
+			{Name: "spaces", WorkDir: "   "},
+		},
+	}
+
+	err := expandConfigPaths(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := filepath.Join(home, "projects", "dev")
+	if cfg.Presets[0].WorkDir != expected {
+		t.Errorf("expected WorkDir %q, got %q", expected, cfg.Presets[0].WorkDir)
+	}
+
+	// Empty and whitespace-only should be unchanged
+	if cfg.Presets[1].WorkDir != "" {
+		t.Errorf("expected empty WorkDir unchanged")
+	}
+	if cfg.Presets[2].WorkDir != "   " {
+		t.Errorf("expected whitespace WorkDir unchanged")
+	}
+}
+
+func TestExpandConfigPathsWithProjectOverrides(t *testing.T) {
+	cfg := &Config{
+		ProjectOverrides: map[string]*ProjectConfig{
+			"/some/path": {Theme: "dark"},
+			"/other":     nil,
+		},
+	}
+
+	err := expandConfigPaths(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Just make sure it doesn't panic with nil project
+	if cfg.ProjectOverrides["/some/path"].Theme != "dark" {
+		t.Errorf("expected theme unchanged")
+	}
+}
+
+func TestResolveXDGConfigPath(t *testing.T) {
+	t.Run("with XDG_CONFIG_HOME", func(t *testing.T) {
+		xdgPath := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", xdgPath)
+
+		path, err := resolveXDGConfigPath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := filepath.Join(xdgPath, "lazytf", "config.yaml")
+		if path != expected {
+			t.Errorf("expected %q, got %q", expected, path)
+		}
+	})
+
+	t.Run("without XDG_CONFIG_HOME", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", "")
+
+		path, err := resolveXDGConfigPath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := filepath.Join(home, ".config", "lazytf", "config.yaml")
+		if path != expected {
+			t.Errorf("expected %q, got %q", expected, path)
+		}
+	})
+}
+
+func TestResolvePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LAZYTF_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	t.Run("default resolution", func(t *testing.T) {
+		result, err := ResolvePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result == "" {
+			t.Error("expected non-empty path")
+		}
+	})
+
+	t.Run("with LAZYTF_CONFIG env", func(t *testing.T) {
+		configPath := filepath.Join(t.TempDir(), "custom.yaml")
+		t.Setenv("LAZYTF_CONFIG", configPath)
+		result, err := ResolvePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != configPath {
+			t.Errorf("expected %q, got %q", configPath, result)
+		}
+	})
+
+	t.Run("finds existing config", func(t *testing.T) {
+		configDir := filepath.Join(home, ".config", "lazytf")
+		if err := os.MkdirAll(configDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		configPath := filepath.Join(configDir, "config.yaml")
+		if err := os.WriteFile(configPath, []byte("version: 1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Setenv("LAZYTF_CONFIG", "")
+		result, err := ResolvePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result == "" {
+			t.Error("expected to find existing config")
+		}
+	})
+}
+
+func TestValidateMoreCases(t *testing.T) {
+	t.Run("valid split ratio", func(t *testing.T) {
+		cfg := &Config{
+			UI: UIConfig{SplitRatio: 0.5},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("expected valid config, got error: %v", err)
+		}
+	})
+
+	t.Run("invalid split ratio negative", func(t *testing.T) {
+		cfg := &Config{
+			UI: UIConfig{SplitRatio: -0.1},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for negative split ratio")
+		}
+	})
+
+	t.Run("invalid split ratio too high", func(t *testing.T) {
+		cfg := &Config{
+			UI: UIConfig{SplitRatio: 1.5},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for split ratio above 1")
+		}
+	})
+
+	t.Run("negative terraform timeout", func(t *testing.T) {
+		cfg := &Config{
+			Terraform: TerraformConfig{Timeout: -1},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for negative timeout")
+		}
+	})
+
+	t.Run("negative parallelism", func(t *testing.T) {
+		cfg := &Config{
+			Terraform: TerraformConfig{Parallelism: -1},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for negative parallelism")
+		}
+	})
+}

@@ -80,3 +80,82 @@ func TestDiagnosticsPanelUpdate(_ *testing.T) {
 	panel.SetSize(40, 5)
 	_, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 }
+
+func TestDiagnosticsPanelSetParsedText(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+	// SetParsedText is a no-op, just make sure it doesn't panic
+	panel.SetParsedText("some parsed text")
+	panel.SetParsedText("")
+}
+
+func TestDiagnosticsPanelSetShowRaw(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+	// SetShowRaw is a no-op, just make sure it doesn't panic
+	panel.SetShowRaw(true)
+	panel.SetShowRaw(false)
+}
+
+func TestDiagnosticsPanelUpdateNil(t *testing.T) {
+	var panel *DiagnosticsPanel
+	result, cmd := panel.Update(nil)
+	if result != nil {
+		t.Error("Expected nil result for nil panel")
+	}
+	if cmd != nil {
+		t.Error("Expected nil cmd for nil panel")
+	}
+}
+
+func TestDiagnosticsPanelViewNil(t *testing.T) {
+	var panel *DiagnosticsPanel
+	if panel.View() != "" {
+		t.Error("Expected empty string for nil panel")
+	}
+
+	panel = &DiagnosticsPanel{}
+	if panel.View() != "" {
+		t.Error("Expected empty string for nil styles")
+	}
+}
+
+func TestDiagnosticsPanelViewNoSize(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+	panel.SetLogText("some log content")
+	// Without SetSize, width/height are 0 so we get viewport content directly
+	out := panel.View()
+	// The view returns viewport content even without size
+	_ = out // Just verify it doesn't panic
+}
+
+func TestFormatDiagnosticNoDetails(t *testing.T) {
+	diag := terraform.Diagnostic{}
+	line := formatDiagnostic(diag)
+	if !strings.Contains(line, "no details") {
+		t.Errorf("Expected 'no details' for empty diagnostic, got %q", line)
+	}
+}
+
+func TestFormatDiagnosticWithRange(t *testing.T) {
+	diag := terraform.Diagnostic{
+		Summary: "test",
+		Range: &terraform.DiagnosticRange{
+			Filename: "main.tf",
+		},
+	}
+	line := formatDiagnostic(diag)
+	if !strings.Contains(line, "main.tf") {
+		t.Errorf("Expected filename in output, got %q", line)
+	}
+}
+
+func TestWrapTextZeroWidth(t *testing.T) {
+	result := wrapText("some text", 0)
+	if result != "some text" {
+		t.Errorf("Expected unchanged text for zero width, got %q", result)
+	}
+
+	result = wrapText("some text", -1)
+	if result != "some text" {
+		t.Errorf("Expected unchanged text for negative width, got %q", result)
+	}
+}

@@ -224,3 +224,15 @@ func TestCalculateScrollParams(t *testing.T) {
 		})
 	}
 }
+
+func TestPanelFrame_SetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+
+	newStyles := styles.DefaultStyles()
+	frame.SetStyles(newStyles)
+
+	if frame.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}

@@ -336,22 +336,28 @@ func TestPlanConfirmApplySuccessFlow(t *testing.T) {
 	m.planView = views.NewPlanView("", m.styles)
 	m.executor = &terraform.Executor{}
 
+	// Press 'a' to open confirm modal
 	handled, cmd := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
-	if !handled || m.execView != viewPlanConfirm {
-		t.Fatalf("expected plan confirm view")
-	}
-	if cmd != nil {
-		cmd()
-	}
-	handled, cmd = m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	if !handled {
-		t.Fatalf("expected key to be handled")
+	if !handled || m.modalState != ModalConfirmApply {
+		t.Fatalf("expected confirm apply modal, got modalState=%d", m.modalState)
 	}
 	if cmd != nil {
 		cmd()
 	}
 
-	// In the new layout, we stay in viewMain and main area switches to logs mode
+	// Press 'y' to confirm (handled by modal key handler)
+	handled, cmd = m.handleModalConfirmApplyKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if !handled {
+		t.Fatalf("expected key to be handled")
+	}
+	if m.modalState != ModalNone {
+		t.Fatalf("expected modal to be closed after confirm")
+	}
+	if cmd != nil {
+		cmd()
+	}
+
+	// In the new layout, we stay in viewMain and main area switches back to diff mode
 	m.handleApplyComplete(ApplyCompleteMsg{Success: true, Result: &terraform.ExecutionResult{}})
 	if m.execView != viewMain {
 		t.Fatalf("expected to stay in main view after apply, got %d", m.execView)
@@ -989,6 +995,43 @@ func TestApplyEnvironmentSelectionWorkspace(t *testing.T) {
 	}
 }
 
+func TestApplyEnvironmentSelectionSavesPreference(t *testing.T) {
+	origNewWorkspaceManager := newWorkspaceManager
+	defer func() {
+		newWorkspaceManager = origNewWorkspaceManager
+	}()
+
+	manager := &fakeWorkspaceManager{}
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return manager, nil
+	}
+
+	// Create a temp directory for testing
+	tmpDir := t.TempDir()
+
+	m := NewModel(&terraform.Plan{})
+	m.executionMode = true
+	m.envWorkDir = tmpDir
+
+	// Apply a workspace selection
+	env := environment.Environment{Name: "production", Strategy: environment.StrategyWorkspace}
+	if err := m.applyEnvironmentSelection(env); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify preference was saved
+	pref, err := environment.LoadPreference(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load preference: %v", err)
+	}
+	if pref.Strategy != environment.StrategyWorkspace {
+		t.Fatalf("expected strategy workspace, got %s", pref.Strategy)
+	}
+	if pref.Environment != "production" {
+		t.Fatalf("expected environment production, got %s", pref.Environment)
+	}
+}
+
 func TestCurrentUserNameFallbacks(t *testing.T) {
 	orig := currentUserFunc
 	currentUserFunc = func() (*user.User, error) {
@@ -1278,21 +1321,23 @@ func TestViewModalStates(t *testing.T) {
 func TestHandleExecutionKeyPlanConfirm(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.execView = viewPlanConfirm
+	m.modalState = ModalConfirmApply
 
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	if !handled || m.execView != viewMain {
-		t.Fatalf("expected plan confirm to return to main view")
+	// Test 'n' closes the modal
+	handled, _ := m.handleModalConfirmApplyKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if !handled || m.modalState != ModalNone {
+		t.Fatalf("expected confirm modal to close on 'n'")
 	}
 
-	m.execView = viewPlanConfirm
+	// Test ctrl+c cancels and closes modal
+	m.modalState = ModalConfirmApply
 	called := false
 	m.cancelFunc = func() {
 		called = true
 	}
-	handled, _ = m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
-	if !handled || !called {
-		t.Fatalf("expected cancel execution")
+	handled, _ = m.handleModalConfirmApplyKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !handled || !called || m.modalState != ModalNone {
+		t.Fatalf("expected cancel execution and modal close")
 	}
 }
 
@@ -1742,11 +1787,11 @@ func TestHandleHistoryKeysUnknown(t *testing.T) {
 func TestHandleExecutionKeyPlanConfirmQuit(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.execView = viewPlanConfirm
+	m.modalState = ModalConfirmApply
 
-	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	handled, _ := m.handleModalConfirmApplyKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if !handled || !m.quitting {
-		t.Fatalf("expected quitting in plan confirm")
+		t.Fatalf("expected quitting in confirm modal")
 	}
 }
 

@@ -132,7 +132,7 @@ func run(cmd *cobra.Command, args []string) error {
 	readOnlyMode = resolveReadOnlyMode(cmd, args)
 
 	if !readOnlyMode {
-		return runExecutionMode(&cfg, overrideFlags)
+		return runExecutionMode(&cfg, overrideFlags, configManager)
 	}
 
 	return runReadOnlyMode(&cfg, args)

@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
@@ -569,4 +570,586 @@ func (f *fakeModel) Update(_ tea.Msg) (tea.Model, tea.Cmd) {
 
 func (f *fakeModel) View() string {
 	return ""
+}
+
+func TestOpenHistoryDisabled(t *testing.T) {
+	cfg := testConfig()
+	cfg.History.Enabled = false
+
+	store, logger, err := openHistory(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store != nil {
+		t.Fatalf("expected nil store when disabled")
+	}
+	if logger != nil {
+		t.Fatalf("expected nil logger when disabled")
+	}
+}
+
+func TestOpenHistoryWithCustomPath(t *testing.T) {
+	cfg := testConfig()
+	cfg.History.Enabled = true
+	cfg.History.Path = filepath.Join(t.TempDir(), "history.db")
+	cfg.History.CompressionThreshold = 1024
+
+	store, logger, err := openHistory(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store == nil {
+		t.Fatalf("expected non-nil store")
+	}
+	if logger == nil {
+		t.Fatalf("expected non-nil logger")
+	}
+	t.Cleanup(func() {
+		_ = store.Close()
+	})
+}
+
+func TestOpenHistoryWithDefaultPath(t *testing.T) {
+	cfg := testConfig()
+	cfg.History.Enabled = true
+	cfg.History.Path = ""
+
+	// Set a temp XDG data home to avoid polluting the user's actual data directory
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	store, logger, err := openHistory(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if store == nil {
+		t.Fatalf("expected non-nil store")
+	}
+	if logger == nil {
+		t.Fatalf("expected non-nil logger")
+	}
+	t.Cleanup(func() {
+		_ = store.Close()
+	})
+}
+
+func TestOpenHistoryInvalidPath(t *testing.T) {
+	cfg := testConfig()
+	cfg.History.Enabled = true
+	cfg.History.Path = "/nonexistent/path/that/cannot/be/created/history.db"
+
+	_, _, err := openHistory(&cfg)
+	if err == nil {
+		t.Fatalf("expected error for invalid path")
+	}
+	if !strings.Contains(err.Error(), "history store") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyPresetEmpty(t *testing.T) {
+	oldPreset := presetName
+	t.Cleanup(func() {
+		presetName = oldPreset
+	})
+
+	presetName = ""
+	cfg := testConfig()
+	flags := []string{"-var", "a=b"}
+
+	result, err := applyPreset(&cfg, flags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != len(flags) {
+		t.Fatalf("expected flags unchanged, got %v", result)
+	}
+}
+
+func TestApplyPresetNotFound(t *testing.T) {
+	oldPreset := presetName
+	t.Cleanup(func() {
+		presetName = oldPreset
+	})
+
+	presetName = "missing-preset"
+	cfg := testConfig()
+	flags := []string{}
+
+	_, err := applyPreset(&cfg, flags)
+	if err == nil {
+		t.Fatalf("expected error for missing preset")
+	}
+	if !strings.Contains(err.Error(), "preset not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyPresetWithAllOptions(t *testing.T) {
+	oldPreset := presetName
+	oldWorkDir := workDir
+	oldTheme := themeName
+	oldEnv := envName
+	t.Cleanup(func() {
+		presetName = oldPreset
+		workDir = oldWorkDir
+		themeName = oldTheme
+		envName = oldEnv
+	})
+
+	presetName = "dev"
+	themeName = ""
+	envName = ""
+	workDir = "original"
+
+	cfg := testConfig()
+	cfg.Presets = []config.EnvironmentPreset{
+		{
+			Name:        "dev",
+			WorkDir:     "/custom/workdir",
+			Flags:       []string{"-var-file=dev.tfvars"},
+			Theme:       "dark",
+			Environment: "development",
+		},
+	}
+	flags := []string{"-lock=false"}
+
+	result, err := applyPreset(&cfg, flags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workDir != "/custom/workdir" {
+		t.Fatalf("expected workdir to be set to /custom/workdir, got %s", workDir)
+	}
+	if cfg.Theme.Name != "dark" {
+		t.Fatalf("expected theme to be set to dark, got %s", cfg.Theme.Name)
+	}
+	if envName != "development" {
+		t.Fatalf("expected envName to be set to development, got %s", envName)
+	}
+	if len(result) != 2 || result[1] != "-var-file=dev.tfvars" {
+		t.Fatalf("expected flags to include preset flags, got %v", result)
+	}
+}
+
+func TestApplyPresetThemeNotOverridden(t *testing.T) {
+	oldPreset := presetName
+	oldTheme := themeName
+	t.Cleanup(func() {
+		presetName = oldPreset
+		themeName = oldTheme
+	})
+
+	presetName = "dev"
+	themeName = "existing-theme" // Already set
+
+	cfg := testConfig()
+	cfg.Presets = []config.EnvironmentPreset{
+		{
+			Name:  "dev",
+			Theme: "new-theme",
+		},
+	}
+
+	_, err := applyPreset(&cfg, []string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Theme should not be changed because themeName is already set
+	if cfg.Theme.Name != "" {
+		t.Fatalf("theme should not be overridden when themeName is already set")
+	}
+}
+
+func TestResolveSelectedEnvWorkspace(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldEnv := envName
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		envName = oldEnv
+	})
+
+	workspaceName = "prod"
+	folderPath = ""
+	envName = "dev"
+
+	result := resolveSelectedEnv()
+	if result != "prod" {
+		t.Fatalf("expected workspace name 'prod', got %q", result)
+	}
+}
+
+func TestResolveSelectedEnvFolder(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldWorkDir := workDir
+	oldEnv := envName
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		workDir = oldWorkDir
+		envName = oldEnv
+	})
+
+	workspaceName = ""
+	folderPath = "environments/dev"
+	workDir = "/project/environments/dev"
+	envName = "other"
+
+	result := resolveSelectedEnv()
+	if result != "dev" {
+		t.Fatalf("expected folder base name 'dev', got %q", result)
+	}
+}
+
+func TestResolveSelectedEnvEnvName(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldEnv := envName
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		envName = oldEnv
+	})
+
+	workspaceName = ""
+	folderPath = ""
+	envName = "staging"
+
+	result := resolveSelectedEnv()
+	if result != "staging" {
+		t.Fatalf("expected env name 'staging', got %q", result)
+	}
+}
+
+func TestStripFlagEmpty(t *testing.T) {
+	result := stripFlag(nil, "-json")
+	if result != nil {
+		t.Fatalf("expected nil for nil input")
+	}
+
+	result = stripFlag([]string{}, "-json")
+	if len(result) != 0 {
+		t.Fatalf("expected empty slice for empty input")
+	}
+}
+
+func TestStripFlagWithTarget(t *testing.T) {
+	flags := []string{"-var-file=dev.tfvars", "-json", "-lock=false"}
+	result := stripFlag(flags, "-json")
+	if len(result) != 2 {
+		t.Fatalf("expected 2 flags, got %d", len(result))
+	}
+	for _, f := range result {
+		if f == "-json" {
+			t.Fatalf("expected -json to be stripped")
+		}
+	}
+}
+
+func TestPrepareExecutionFlagsWithOverrides(t *testing.T) {
+	oldPreset := presetName
+	oldTfFlags := tfFlags
+	t.Cleanup(func() {
+		presetName = oldPreset
+		tfFlags = oldTfFlags
+	})
+
+	presetName = ""
+	tfFlags = "-lock=false"
+	cfg := testConfig()
+	cfg.Terraform.DefaultFlags = []string{"-var-file=default.tfvars"}
+	overrideFlags := []string{"-var-file=override.tfvars"}
+
+	result, err := prepareExecutionFlags(&cfg, overrideFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 3 {
+		t.Fatalf("expected 3 flags, got %v", result)
+	}
+	if result[0] != "-var-file=default.tfvars" {
+		t.Fatalf("expected default flag first, got %s", result[0])
+	}
+	if result[1] != "-lock=false" {
+		t.Fatalf("expected tf-flags second, got %s", result[1])
+	}
+	if result[2] != "-var-file=override.tfvars" {
+		t.Fatalf("expected override flag third, got %s", result[2])
+	}
+}
+
+func TestPrepareExecutionFlagsPresetError(t *testing.T) {
+	oldPreset := presetName
+	t.Cleanup(func() {
+		presetName = oldPreset
+	})
+
+	presetName = "nonexistent"
+	cfg := testConfig()
+
+	_, err := prepareExecutionFlags(&cfg, nil)
+	if err == nil {
+		t.Fatalf("expected error for missing preset")
+	}
+}
+
+func TestFlagExplicitNilCmd(t *testing.T) {
+	result := flagExplicit(nil, "read-only")
+	if result {
+		t.Fatalf("expected false for nil command")
+	}
+}
+
+func TestFlagExplicitUnchanged(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("test-flag", false, "test flag")
+
+	result := flagExplicit(cmd, "test-flag")
+	if result {
+		t.Fatalf("expected false for unchanged flag")
+	}
+}
+
+func TestFlagExplicitMissing(t *testing.T) {
+	cmd := &cobra.Command{}
+
+	result := flagExplicit(cmd, "nonexistent")
+	if result {
+		t.Fatalf("expected false for missing flag")
+	}
+}
+
+func TestResolveReadOnlyModeExplicitReadOnly(t *testing.T) {
+	oldReadOnly := readOnlyMode
+	t.Cleanup(func() {
+		readOnlyMode = oldReadOnly
+	})
+
+	readOnlyMode = true
+	cmd := &cobra.Command{}
+
+	result := resolveReadOnlyMode(cmd, nil)
+	if !result {
+		t.Fatalf("expected true when readOnlyMode is set")
+	}
+}
+
+func TestResolveAppStylesSuccess(t *testing.T) {
+	cfg := testConfig()
+	cfg.Theme.Name = "default"
+
+	styles, err := resolveAppStyles(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if styles == nil {
+		t.Fatalf("expected non-nil styles")
+	}
+}
+
+func TestResolveAppStylesInvalidTheme(t *testing.T) {
+	cfg := testConfig()
+	cfg.Theme.Name = "invalid-theme-name"
+
+	_, err := resolveAppStyles(&cfg)
+	if err == nil {
+		t.Fatalf("expected error for invalid theme")
+	}
+}
+
+func TestConfigureWorkDirAndWorkspaceInitError(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldWorkDir := workDir
+	oldNewWs := newWorkspaceManager
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		workDir = oldWorkDir
+		newWorkspaceManager = oldNewWs
+	})
+
+	workspaceName = "dev"
+	folderPath = ""
+	workDir = t.TempDir()
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return nil, errors.New("init failed")
+	}
+
+	err := configureWorkDirAndWorkspace()
+	if err == nil {
+		t.Fatalf("expected error for workspace init failure")
+	}
+	if !strings.Contains(err.Error(), "failed to initialize workspace manager") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigureWorkDirAndWorkspaceNoWorkspace(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+	})
+
+	workspaceName = ""
+	folderPath = ""
+
+	err := configureWorkDirAndWorkspace()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildExecutorWithOptions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldWorkDir := workDir
+	oldFactory := executorFactory
+	t.Cleanup(func() {
+		workDir = oldWorkDir
+		executorFactory = oldFactory
+	})
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	workDir = t.TempDir()
+	cfg := testConfig()
+	cfg.Terraform.Binary = tfPath
+	cfg.Terraform.Timeout = 60
+
+	exec, err := buildExecutor(&cfg, []string{"-lock=false"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exec == nil {
+		t.Fatalf("expected non-nil executor")
+	}
+}
+
+func TestResolveFolderSelectionManagerError(t *testing.T) {
+	oldNewFolder := newFolderManager
+	t.Cleanup(func() {
+		newFolderManager = oldNewFolder
+	})
+
+	newFolderManager = func(_ string) (folderManager, error) {
+		return nil, errors.New("init failed")
+	}
+
+	_, err := resolveFolderSelection(t.TempDir(), "envs/dev")
+	if err == nil {
+		t.Fatalf("expected error for manager init failure")
+	}
+	if !strings.Contains(err.Error(), "failed to initialize folder manager") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunWithProjectOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldReadOnly := readOnlyMode
+	oldWorkDir := workDir
+	oldRunner := programRunner
+	oldTheme := themeName
+	oldPreset := presetName
+	t.Cleanup(func() {
+		readOnlyMode = oldReadOnly
+		workDir = oldWorkDir
+		programRunner = oldRunner
+		themeName = oldTheme
+		presetName = oldPreset
+	})
+	useTempConfig(t)
+
+	tempDir := t.TempDir()
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	// Create config with project override
+	configContent := `
+projects:
+  - path: "` + tempDir + `"
+    theme: "dark"
+    preset: "dev"
+    flags:
+      - "-lock=false"
+presets:
+  - name: "dev"
+    flags:
+      - "-var-file=dev.tfvars"
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	workDir = tempDir
+	readOnlyMode = false
+	themeName = ""
+	presetName = ""
+	programRunner = func(_ tea.Model) error {
+		return nil
+	}
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunProgramWithMouse(t *testing.T) {
+	oldNewProgram := newProgram
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		newProgram = oldNewProgram
+		mouseEnabled = oldMouse
+	})
+
+	mouseEnabled = true
+	var capturedOpts int
+	newProgram = func(model tea.Model, opts ...tea.ProgramOption) teaProgram {
+		capturedOpts = len(opts)
+		return fakeTeaProgram{model: model}
+	}
+
+	if err := runProgram(&fakeModel{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// With mouse enabled, we should have 2 options: WithAltScreen and WithMouseCellMotion
+	if capturedOpts != 2 {
+		t.Fatalf("expected 2 program options with mouse, got %d", capturedOpts)
+	}
+}
+
+func testConfig() config.Config {
+	return config.Config{
+		Theme: config.ThemeConfig{
+			Name: "",
+		},
+		Terraform: config.TerraformConfig{
+			DefaultFlags: []string{},
+		},
+		History: config.HistoryConfig{
+			Enabled: false,
+		},
+		Presets: []config.EnvironmentPreset{},
+	}
 }

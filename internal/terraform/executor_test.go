@@ -537,3 +537,159 @@ func inOrder(lines []string, seq []string) bool {
 	}
 	return false
 }
+
+func TestExecutorRefresh(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, _, err := exec.Refresh(context.Background(), RefreshOptions{})
+	if err != nil {
+		t.Fatalf("refresh error: %v", err)
+	}
+	<-result.Done()
+	if result.ExitCode != 0 {
+		t.Fatalf("expected refresh to succeed, got exit code %d", result.ExitCode)
+	}
+}
+
+func TestExecutorValidate(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, err := exec.Validate(context.Background(), ValidateOptions{})
+	if err != nil {
+		t.Fatalf("validate error: %v", err)
+	}
+	<-result.Done()
+	if result.ExitCode != 0 {
+		t.Fatalf("expected validate to succeed")
+	}
+}
+
+func TestExecutorFormat(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, err := exec.Format(context.Background(), FormatOptions{Check: true})
+	if err != nil {
+		t.Fatalf("format error: %v", err)
+	}
+	<-result.Done()
+}
+
+func TestExecutorStateList(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, err := exec.StateList(context.Background(), StateListOptions{})
+	if err != nil {
+		t.Fatalf("state list error: %v", err)
+	}
+	<-result.Done()
+	if result.ExitCode != 0 {
+		t.Errorf("expected state list to succeed, got exit code %d", result.ExitCode)
+	}
+}
+
+func TestExecutorStateShow(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+	result, err := exec.StateShow(context.Background(), "aws_instance.web", StateShowOptions{})
+	if err != nil {
+		t.Fatalf("state show error: %v", err)
+	}
+	<-result.Done()
+	if result.ExitCode != 0 {
+		t.Error("expected state show to succeed")
+	}
+}
+
+func writeFakeTerraformExtended(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "terraform")
+	script := `#!/bin/sh
+cmd="$1"
+shift
+if [ "$cmd" = "version" ]; then
+  echo "Terraform v1.0.0"
+  exit 0
+fi
+if [ "$cmd" = "show" ]; then
+  echo "show output"
+  exit 0
+fi
+if [ "$cmd" = "refresh" ]; then
+  echo "refresh complete"
+  exit 0
+fi
+if [ "$cmd" = "validate" ]; then
+  echo "Success! The configuration is valid."
+  exit 0
+fi
+if [ "$cmd" = "fmt" ]; then
+  echo "formatted"
+  exit 0
+fi
+if [ "$cmd" = "state" ]; then
+  if [ "$1" = "list" ]; then
+    echo "aws_instance.web"
+    echo "aws_s3_bucket.data"
+    exit 0
+  fi
+  if [ "$1" = "show" ]; then
+    echo "# aws_instance.web:"
+    echo "resource \"aws_instance\" \"web\" {"
+    echo "  ami = \"ami-12345\""
+    echo "}"
+    exit 0
+  fi
+fi
+if [ "$cmd" = "plan" ] || [ "$cmd" = "apply" ]; then
+  echo "stdout $cmd"
+  echo "stderr $cmd" 1>&2
+fi
+if [ "$cmd" = "init" ]; then
+  echo "stdout init"
+fi
+echo "ARGS:$cmd $*"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return path
+}

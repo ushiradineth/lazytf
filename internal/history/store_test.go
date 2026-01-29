@@ -272,3 +272,211 @@ func TestOpenTildePath(t *testing.T) {
 		}
 	})
 }
+
+func TestListRecent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	// Record multiple entries
+	for i := range 5 {
+		entry := Entry{
+			StartedAt:   time.Now().Add(time.Duration(-i) * time.Minute),
+			FinishedAt:  time.Now().Add(time.Duration(-i) * time.Minute),
+			Duration:    time.Second,
+			Status:      StatusSuccess,
+			Summary:     "apply",
+			Environment: "env",
+		}
+		if err := store.RecordApply(entry); err != nil {
+			t.Fatalf("record apply: %v", err)
+		}
+	}
+
+	// Test with default limit
+	entries, err := store.ListRecent(0)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 5 {
+		t.Errorf("expected 5 entries, got %d", len(entries))
+	}
+
+	// Test with limit
+	entries, err = store.ListRecent(3)
+	if err != nil {
+		t.Fatalf("list recent with limit: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("expected 3 entries, got %d", len(entries))
+	}
+}
+
+func TestListRecentNilStore(t *testing.T) {
+	var store *Store
+	entries, err := store.ListRecent(10)
+	if err != nil {
+		t.Errorf("expected no error for nil store, got %v", err)
+	}
+	if entries != nil {
+		t.Errorf("expected nil entries for nil store")
+	}
+}
+
+func TestListRecentForEnvironmentEmptyEnv(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	entry := Entry{
+		StartedAt:   time.Now(),
+		FinishedAt:  time.Now(),
+		Duration:    time.Second,
+		Status:      StatusSuccess,
+		Environment: "test",
+	}
+	if err := store.RecordApply(entry); err != nil {
+		t.Fatalf("record apply: %v", err)
+	}
+
+	// Empty environment should fall back to ListRecent
+	entries, err := store.ListRecentForEnvironment("", 5)
+	if err != nil {
+		t.Fatalf("list recent for empty env: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(entries))
+	}
+
+	// Whitespace-only environment
+	entries, err = store.ListRecentForEnvironment("   ", 5)
+	if err != nil {
+		t.Fatalf("list recent for whitespace env: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(entries))
+	}
+}
+
+func TestListRecentForEnvironmentNilStore(t *testing.T) {
+	var store *Store
+	entries, err := store.ListRecentForEnvironment("test", 10)
+	if err != nil {
+		t.Errorf("expected no error for nil store, got %v", err)
+	}
+	if entries != nil {
+		t.Errorf("expected nil entries for nil store")
+	}
+}
+
+func TestStoreCloseNil(t *testing.T) {
+	var store *Store
+	err := store.Close()
+	if err != nil {
+		t.Errorf("expected nil error for nil store close, got %v", err)
+	}
+}
+
+func TestQueryOperationsNoFilters(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	entry := OperationEntry{
+		StartedAt:  time.Now(),
+		FinishedAt: time.Now(),
+		Duration:   time.Second,
+		Action:     "plan",
+		Command:    "terraform plan",
+		ExitCode:   0,
+		Status:     StatusSuccess,
+	}
+	if err := store.RecordOperation(entry); err != nil {
+		t.Fatalf("record operation: %v", err)
+	}
+
+	// Query with empty filter
+	entries, err := store.QueryOperations(OperationFilter{})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(entries))
+	}
+}
+
+func TestQueryOperationsNilStore(t *testing.T) {
+	var store *Store
+	entries, err := store.QueryOperations(OperationFilter{})
+	if err != nil {
+		t.Errorf("expected no error for nil store, got %v", err)
+	}
+	if entries != nil {
+		t.Errorf("expected nil entries for nil store")
+	}
+}
+
+func TestGetByIDNotFound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	_, err = store.GetByID(99999)
+	// Should return sql.ErrNoRows for non-existent ID
+	if err == nil {
+		t.Error("expected error for non-existent ID")
+	}
+	if err != nil && err != sql.ErrNoRows {
+		t.Errorf("expected sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestGetOperationByIDNotFound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	_, err = store.GetOperationByID(99999)
+	// Should return sql.ErrNoRows for non-existent ID
+	if err == nil {
+		t.Error("expected error for non-existent ID")
+	}
+	if err != nil && err != sql.ErrNoRows {
+		t.Errorf("expected sql.ErrNoRows, got %v", err)
+	}
+}

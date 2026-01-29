@@ -580,3 +580,428 @@ func TestReplaceMarkerMultipleIndexPaths(t *testing.T) {
 		t.Fatalf("expected replace marker for list index path")
 	}
 }
+
+func TestHasMultilineDiffTrue(t *testing.T) {
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"simple"}, OldValue: 1, NewValue: 2, Action: diff.DiffChange},
+		{Path: []string{"multi"}, OldValue: "a\nb", NewValue: "a\nc", Action: diff.DiffChange},
+	}
+	if !hasMultilineDiff(diffs) {
+		t.Error("expected hasMultilineDiff to return true")
+	}
+}
+
+func TestHasMultilineDiffFalse(t *testing.T) {
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"a"}, OldValue: 1, NewValue: 2, Action: diff.DiffChange},
+		{Path: []string{"b"}, OldValue: "x", NewValue: "y", Action: diff.DiffChange},
+	}
+	if hasMultilineDiff(diffs) {
+		t.Error("expected hasMultilineDiff to return false")
+	}
+}
+
+func TestIsMultilineChangeTrue(t *testing.T) {
+	// isMultilineChange only returns true for DiffChange with multiline strings
+	item := diff.MinimalDiff{Action: diff.DiffChange, OldValue: "a\nb", NewValue: "a\nc"}
+	if !isMultilineChange(item) {
+		t.Error("expected isMultilineChange to return true")
+	}
+}
+
+func TestIsMultilineChangeFalse(t *testing.T) {
+	item := diff.MinimalDiff{Action: diff.DiffChange, OldValue: "abc", NewValue: "def"}
+	if isMultilineChange(item) {
+		t.Error("expected isMultilineChange to return false")
+	}
+}
+
+func TestIsMultilineChangeNonChangeAction(t *testing.T) {
+	// isMultilineChange returns false for non-change actions
+	addItem := diff.MinimalDiff{Action: diff.DiffAdd, NewValue: "a\nb"}
+	if isMultilineChange(addItem) {
+		t.Error("expected isMultilineChange to return false for add action")
+	}
+
+	removeItem := diff.MinimalDiff{Action: diff.DiffRemove, OldValue: "a\nb"}
+	if isMultilineChange(removeItem) {
+		t.Error("expected isMultilineChange to return false for remove action")
+	}
+}
+
+func TestActionLabelCreate(t *testing.T) {
+	result := actionLabel(terraform.ActionCreate)
+	if result != "create" {
+		t.Errorf("expected 'create', got %q", result)
+	}
+}
+
+func TestActionLabelDelete(t *testing.T) {
+	result := actionLabel(terraform.ActionDelete)
+	if result != "destroy" {
+		t.Errorf("expected 'destroy', got %q", result)
+	}
+}
+
+func TestActionLabelUpdate(t *testing.T) {
+	result := actionLabel(terraform.ActionUpdate)
+	if result != "update" {
+		t.Errorf("expected 'update', got %q", result)
+	}
+}
+
+func TestActionLabelReplace(t *testing.T) {
+	result := actionLabel(terraform.ActionReplace)
+	if result != "replace" {
+		t.Errorf("expected 'replace', got %q", result)
+	}
+}
+
+func TestActionLabelNoop(t *testing.T) {
+	// actionLabel returns empty string for NoOp
+	result := actionLabel(terraform.ActionNoOp)
+	if result != "" {
+		t.Errorf("expected empty string for no-op, got %q", result)
+	}
+}
+
+func TestActionLabelRead(t *testing.T) {
+	// actionLabel returns empty string for Read
+	result := actionLabel(terraform.ActionRead)
+	if result != "" {
+		t.Errorf("expected empty string for read, got %q", result)
+	}
+}
+
+func TestRenderDiffRowRemove(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(60, 10)
+	columns := viewer.columnWidths()
+	item := diff.MinimalDiff{
+		Path:     []string{"name"},
+		OldValue: "oldvalue",
+		Action:   diff.DiffRemove,
+	}
+	out := viewer.renderDiffRow(columns, item, nil)
+	out = stripANSIDiffViewer(out)
+	if !strings.Contains(out, "name") {
+		t.Errorf("expected path in output, got %q", out)
+	}
+}
+
+func TestViewCreateAction(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionCreate,
+		Change: &terraform.Change{
+			Before: nil,
+			After:  map[string]any{"name": "new"},
+		},
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "new") {
+		t.Errorf("expected after value to render, got %q", out)
+	}
+}
+
+func TestViewReplaceAction(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionReplace,
+		Change: &terraform.Change{
+			Before: map[string]any{"name": "old"},
+			After:  map[string]any{"name": "new"},
+		},
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "replace") {
+		t.Errorf("expected replace in header, got %q", out)
+	}
+}
+
+func TestViewNoOpAction(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionNoOp,
+		Change: &terraform.Change{
+			Before: map[string]any{"name": "same"},
+			After:  map[string]any{"name": "same"},
+		},
+	}
+	out := viewer.View(resource)
+	// No-op resources should still render something
+	if out == "" {
+		t.Error("expected some output for no-op action")
+	}
+}
+
+func TestViewReadAction(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+	resource := &terraform.ResourceChange{
+		Address: "data.aws_ami.latest",
+		Action:  terraform.ActionRead,
+		Change: &terraform.Change{
+			Before: nil,
+			After:  map[string]any{"id": "ami-123"},
+		},
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "ami-123") {
+		t.Errorf("expected after value to render, got %q", out)
+	}
+}
+
+func TestDiffViewerPadWithSize(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(40, 10)
+	result := viewer.pad("test content")
+	if result == "" {
+		t.Error("expected non-empty padded content")
+	}
+}
+
+func TestDiffViewerPadNoSize(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	// No SetSize called
+	result := viewer.pad("test content")
+	if result != "test content" {
+		t.Errorf("expected unchanged content without size, got %q", result)
+	}
+}
+
+func TestRenderDiffRowDefaultCase(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(60, 10)
+	columns := viewer.columnWidths()
+
+	// Use an unknown action
+	item := diff.MinimalDiff{
+		Path:   []string{"field"},
+		Action: diff.DiffAction("unknown"), // Unknown action
+	}
+	out := viewer.renderDiffRow(columns, item, nil)
+	if out == "" {
+		t.Error("expected non-empty output for unknown action")
+	}
+}
+
+func TestRenderInlineChangeDefaultCase(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(60, 10)
+
+	// Use an unknown action
+	item := diff.MinimalDiff{
+		Path:   []string{"field"},
+		Action: diff.DiffAction("unknown"), // Unknown action
+	}
+	out := viewer.renderInlineChange(item, nil)
+	if !strings.Contains(out, "?") {
+		t.Errorf("expected '?' prefix for unknown action, got %q", out)
+	}
+}
+
+func TestViewNonNoOpActionWithNoDiffs(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+
+	// Create a resource with non-no-op action but no Change data
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionUpdate,
+		Change:  nil, // No change data
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "streaming mode") {
+		t.Errorf("expected streaming mode message, got %q", out)
+	}
+}
+
+func TestViewWithCustomActionLabel(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+
+	// Use an action type that returns empty string from actionLabel
+	resource := &terraform.ResourceChange{
+		Address: "custom.resource",
+		Action:  terraform.ActionType("custom"), // Custom action
+		Change:  nil,
+	}
+	out := viewer.View(resource)
+	// Should still render without panicking
+	if out == "" {
+		t.Error("expected non-empty output")
+	}
+}
+
+func TestLinePrefixAllCases(t *testing.T) {
+	tests := []struct {
+		line string
+		want string
+	}{
+		{"- removed", "-"},
+		{"+ added", "+"},
+		{"  ...", "."},
+		{"  context", ""},
+		{"plain text", ""},
+	}
+
+	for _, tt := range tests {
+		got := linePrefix(tt.line)
+		if got != tt.want {
+			t.Errorf("linePrefix(%q) = %q, want %q", tt.line, got, tt.want)
+		}
+	}
+}
+
+func TestPathMatchesReplaceEdgeCases(t *testing.T) {
+	// Empty replace path
+	if pathMatchesReplace([]string{"a"}, []string{}) {
+		t.Error("expected false for empty replace path")
+	}
+
+	// Path shorter than replace
+	if pathMatchesReplace([]string{"a"}, []string{"a", "b"}) {
+		t.Error("expected false when path shorter than replace")
+	}
+
+	// Non-matching paths
+	if pathMatchesReplace([]string{"a", "b"}, []string{"a", "c"}) {
+		t.Error("expected false for non-matching paths")
+	}
+}
+
+func TestDiffSpansEdgeCases(t *testing.T) {
+	// Test merging adjacent spans
+	indexes := []int{1, 2, 3}
+	spans := diffSpans(indexes, 0, 5)
+	if len(spans) != 1 {
+		t.Errorf("expected 1 merged span, got %d", len(spans))
+	}
+
+	// Test extending existing span
+	indexes2 := []int{0, 1}
+	spans2 := diffSpans(indexes2, 1, 5)
+	// With context=1, spans should merge
+	if len(spans2) != 1 {
+		t.Errorf("expected 1 span with context, got %d", len(spans2))
+	}
+}
+
+func TestColumnWidthsSmallWidth(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(30, 10) // Small width
+
+	cols := viewer.columnWidths()
+	sum := 0
+	for _, c := range cols {
+		sum += c
+	}
+	if sum != 30 {
+		t.Errorf("expected columns to sum to 30, got %d", sum)
+	}
+}
+
+func TestRenderBlocksWithEmptyPath(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+
+	diffs := []diff.MinimalDiff{
+		{Path: []string{}, OldValue: "a", NewValue: "b", Action: diff.DiffChange},
+	}
+	out := viewer.renderBlocks(diffs, nil)
+	if out == "" {
+		t.Error("expected non-empty output for empty path")
+	}
+}
+
+func TestTruncateMiddleEdgeCases(t *testing.T) {
+	// maxLen <= 3
+	result := truncateMiddle("abcdef", 3)
+	if result != "abcdef" {
+		t.Errorf("expected no truncation for maxLen=3, got %q", result)
+	}
+
+	// Short string
+	result2 := truncateMiddle("ab", 10)
+	if result2 != "ab" {
+		t.Errorf("expected unchanged short string, got %q", result2)
+	}
+}
+
+func TestRenderDiffRowChange(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(60, 10)
+	columns := viewer.columnWidths()
+
+	item := diff.MinimalDiff{
+		Path:     []string{"field"},
+		OldValue: "old",
+		NewValue: "new",
+		Action:   diff.DiffChange,
+	}
+	out := viewer.renderDiffRow(columns, item, nil)
+	out = stripANSIDiffViewer(out)
+	if !strings.Contains(out, "old") || !strings.Contains(out, "new") {
+		t.Errorf("expected old and new values in output, got %q", out)
+	}
+}
+
+func TestViewWithMultilineDiff(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{"script": "line1\nline2\n"},
+			After:  map[string]any{"script": "line1\nline3\n"},
+		},
+	}
+	out := viewer.View(resource)
+	if out == "" {
+		t.Error("expected non-empty output for multiline diff")
+	}
+}
+
+func TestViewDeleteAction(t *testing.T) {
+	engine := diff.NewEngine()
+	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
+	viewer.SetSize(80, 20)
+
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.web",
+		Action:  terraform.ActionDelete,
+		Change: &terraform.Change{
+			Before: map[string]any{"name": "deleted"},
+			After:  nil,
+		},
+	}
+	out := viewer.View(resource)
+	if !strings.Contains(out, "destroy") {
+		t.Errorf("expected 'destroy' label in header, got %q", out)
+	}
+}
+
+func TestDiffViewerSetStyles(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	newStyles := styles.DefaultStyles()
+	viewer.SetStyles(newStyles)
+
+	if viewer.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
