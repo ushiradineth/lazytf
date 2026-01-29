@@ -64,9 +64,9 @@ type Model struct {
 	outputChan       <-chan string
 	cancelFunc       context.CancelFunc
 	execView         executionView
-	planStartedAt     time.Time
-	applyStartedAt    time.Time
-	refreshStartedAt  time.Time
+	planStartedAt    time.Time
+	applyStartedAt   time.Time
+	refreshStartedAt time.Time
 	planFilePath     string
 	operationState   *terraform.OperationState
 	diagnosticsPanel *components.DiagnosticsPanel
@@ -79,7 +79,6 @@ type Model struct {
 	historySelected    int
 	historyFocused     bool
 	diagnosticsFocused bool
-	historyView        *views.HistoryView
 	historyDetail      *history.Entry
 	historyLogger      *history.Logger
 	stateListView      *views.StateListView
@@ -275,7 +274,6 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	m.historyPanel = components.NewHistoryPanel(m.styles)
 	m.historyHeight = 6
 	m.showHistory = false
-	m.historyView = views.NewHistoryView(m.styles)
 	// Register history panel with panel manager
 	m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
 	m.config = cfg.Config
@@ -346,9 +344,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.planView.SetSize(m.width, m.height)
 		}
 		// Note: historyPanel size is now set via panelManager.UpdatePanelSizes() in updateLayout()
-		if m.historyView != nil {
-			m.historyView.SetSize(m.width, m.height)
-		}
+		// Note: historyView is now embedded in mainArea, sized via mainArea.SetSize()
 		if m.configView != nil {
 			m.configView.SetSize(m.width, m.height)
 		}
@@ -422,12 +418,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		m.historyDetail = &msg.Entry
-		if m.historyView != nil {
+		// Update history content in main area
+		if m.mainArea != nil {
 			title := "Apply details"
 			if msg.Entry.WorkDir != "" {
 				title = "Apply details - " + msg.Entry.WorkDir
 			}
-			m.historyView.SetTitle(title)
 			content := strings.TrimRight(msg.Entry.Output, "\n")
 			if content == "" {
 				content = "No stored output for this apply."
@@ -437,7 +433,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					content = parsed
 				}
 			}
-			m.historyView.SetContent(content)
+			m.mainArea.SetHistoryContent(title, content)
 		}
 		return m, nil
 	case EnvironmentDetectedMsg:
@@ -608,10 +604,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.execView != viewMain {
-			if m.execView == viewHistoryDetail && m.historyView != nil {
-				m.historyView, cmd = m.historyView.Update(msg)
-				return m, cmd
-			}
 			if m.execView == viewCommandLog && m.commandLogPanel != nil {
 				// Forward scroll keys to diagnostics panel
 				if diagPanel := m.commandLogPanel.GetDiagnosticsPanel(); diagPanel != nil {
@@ -706,13 +698,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.executionMode && m.execView == viewHistoryDetail {
-		if m.historyView != nil {
-			m.historyView, cmd = m.historyView.Update(msg)
-			return m, cmd
-		}
-	}
-
 	// Handle keys for State tab when active
 	if m.executionMode && m.resourcesActiveTab == 1 && m.stateListContent != nil {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
@@ -768,10 +753,6 @@ func (m *Model) View() string {
 		case viewPlanConfirm:
 			if m.planView != nil {
 				return m.planView.View()
-			}
-		case viewHistoryDetail:
-			if m.historyView != nil {
-				return m.historyView.View()
 			}
 		case viewCommandLog:
 			return m.renderFullScreenCommandLog()
@@ -1639,15 +1620,6 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 				return true, nil
 			}
 		}
-	case viewHistoryDetail:
-		switch key {
-		case "q":
-			m.quitting = true
-			return true, tea.Quit
-		case "esc":
-			m.execView = viewMain
-			return true, nil
-		}
 	case viewCommandLog:
 		switch key {
 		case "q":
@@ -1751,6 +1723,12 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "ctrl+c":
 			if m.planRunning || m.applyRunning || m.refreshRunning {
 				m.cancelExecution()
+				return true, nil
+			}
+		case "esc":
+			// Exit history detail mode when pressing esc
+			if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
+				m.mainArea.ExitHistoryDetail()
 				return true, nil
 			}
 		}
@@ -2621,7 +2599,11 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) updateExecutionViewForStreaming() {
-	if m.execView == viewPlanConfirm || m.execView == viewHistoryDetail {
+	if m.execView == viewPlanConfirm {
+		return
+	}
+	// Don't interrupt history detail mode when showing in main area
+	if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
 		return
 	}
 	if m.execView != viewMain {
@@ -3025,10 +3007,10 @@ func (m *Model) handleHistoryKeys(key string) (bool, tea.Cmd) {
 			return true, nil
 		}
 		entry := m.historyEntries[m.historySelected]
-		m.execView = viewHistoryDetail
-		if m.historyView != nil {
-			m.historyView.SetTitle("Apply details")
-			m.historyView.SetContent("Loading...")
+		// Show history detail in main area [0] instead of full-screen view
+		if m.mainArea != nil {
+			m.mainArea.EnterHistoryDetail()
+			m.mainArea.SetHistoryContent("Apply details", "Loading...")
 		}
 		return true, m.loadHistoryDetailCmd(entry.ID)
 	default:

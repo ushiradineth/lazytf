@@ -24,13 +24,13 @@ type TabContent interface {
 
 // TabbedPanel is a panel that can display multiple tabs.
 type TabbedPanel struct {
-	tabs         []Tab
-	activeIndex  int
-	styles       *styles.Styles
-	width        int
-	height       int
-	focused      bool
-	panelID      string // For display purposes like "[2]"
+	tabs        []Tab
+	activeIndex int
+	styles      *styles.Styles
+	width       int
+	height      int
+	focused     bool
+	panelID     string // For display purposes like "[2]"
 }
 
 // NewTabbedPanel creates a new tabbed panel.

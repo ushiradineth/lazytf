@@ -57,7 +57,7 @@ func (v *HistoryView) Update(msg tea.Msg) (*HistoryView, tea.Cmd) {
 	return v, cmd
 }
 
-// View renders the history output.
+// View renders the history output with full-screen header/footer.
 func (v *HistoryView) View() string {
 	if v.styles == nil {
 		return ""
@@ -73,4 +73,21 @@ func (v *HistoryView) View() string {
 	}
 	footer := v.styles.StatusBar.Width(v.width).Render("esc: back | q: quit")
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+}
+
+// ViewContent renders just the viewport content (for embedding in MainArea).
+func (v *HistoryView) ViewContent() string {
+	if v.styles == nil {
+		return ""
+	}
+	body := v.viewport.View()
+	if v.width > 0 {
+		body = lipgloss.NewStyle().Width(v.width).Height(v.viewport.Height).Render(body)
+	}
+	return body
+}
+
+// GetTitle returns the current title.
+func (v *HistoryView) GetTitle() string {
+	return v.title
 }

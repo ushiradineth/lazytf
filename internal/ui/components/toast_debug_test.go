@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 

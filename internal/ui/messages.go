@@ -88,10 +88,10 @@ type ValidateStartMsg struct{}
 
 // ValidateCompleteMsg signals validation completion.
 type ValidateCompleteMsg struct {
-	Result       *terraform.ValidateResult
-	RawOutput    string
-	Error        error
-	ExecResult   *terraform.ExecutionResult
+	Result     *terraform.ValidateResult
+	RawOutput  string
+	Error      error
+	ExecResult *terraform.ExecutionResult
 }
 
 // FormatStartMsg is sent when formatting begins.

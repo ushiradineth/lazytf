@@ -17,20 +17,23 @@ import (
 type MainAreaMode int
 
 const (
-	ModeDiff MainAreaMode = iota // Show diff viewer
-	ModeLogs                     // Show operation logs
+	ModeDiff          MainAreaMode = iota // Show diff viewer
+	ModeLogs                              // Show operation logs
+	ModeHistoryDetail                     // Show history detail
 )
 
 // MainArea is a wrapper component that switches between diff view and logs
 type MainArea struct {
-	styles     *styles.Styles
-	width      int
-	height     int
-	focused    bool
-	mode       MainAreaMode
-	diffViewer *components.DiffViewer
-	applyView  *views.ApplyView
-	planView   *views.PlanView
+	styles       *styles.Styles
+	width        int
+	height       int
+	focused      bool
+	mode         MainAreaMode
+	previousMode MainAreaMode // Store previous mode for returning from history detail
+	diffViewer   *components.DiffViewer
+	applyView    *views.ApplyView
+	planView     *views.PlanView
+	historyView  *views.HistoryView
 
 	// Current state for diff mode
 	selectedResource *terraform.ResourceChange
@@ -39,11 +42,12 @@ type MainArea struct {
 // NewMainArea creates a new main area component
 func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.ApplyView, planView *views.PlanView) *MainArea {
 	return &MainArea{
-		styles:     s,
-		mode:       ModeDiff,
-		diffViewer: components.NewDiffViewer(s, diffEngine),
-		applyView:  applyView,
-		planView:   planView,
+		styles:      s,
+		mode:        ModeDiff,
+		diffViewer:  components.NewDiffViewer(s, diffEngine),
+		applyView:   applyView,
+		planView:    planView,
+		historyView: views.NewHistoryView(s),
 	}
 }
 
@@ -72,6 +76,9 @@ func (m *MainArea) SetSize(width, height int) {
 	if m.planView != nil {
 		m.planView.SetSize(innerWidth, innerHeight)
 	}
+	if m.historyView != nil {
+		m.historyView.SetSize(innerWidth, innerHeight)
+	}
 }
 
 // SetFocused sets the focus state
@@ -94,6 +101,30 @@ func (m *MainArea) GetMode() MainAreaMode {
 	return m.mode
 }
 
+// EnterHistoryDetail switches to history detail mode, saving the current mode
+func (m *MainArea) EnterHistoryDetail() {
+	m.previousMode = m.mode
+	m.mode = ModeHistoryDetail
+}
+
+// ExitHistoryDetail returns to the previous mode
+func (m *MainArea) ExitHistoryDetail() {
+	m.mode = m.previousMode
+}
+
+// SetHistoryContent sets the history detail content
+func (m *MainArea) SetHistoryContent(title, content string) {
+	if m.historyView != nil {
+		m.historyView.SetTitle(title)
+		m.historyView.SetContent(content)
+	}
+}
+
+// GetHistoryView returns the history view (for external updates)
+func (m *MainArea) GetHistoryView() *views.HistoryView {
+	return m.historyView
+}
+
 // SetSelectedResource updates the selected resource for diff view
 func (m *MainArea) SetSelectedResource(resource *terraform.ResourceChange) {
 	m.selectedResource = resource
@@ -111,6 +142,10 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 		}
 	case ModeDiff:
 		// DiffViewer doesn't have Update method, it's stateless
+	case ModeHistoryDetail:
+		if m.historyView != nil {
+			m.historyView, cmd = m.historyView.Update(msg)
+		}
 	}
 
 	return m, cmd
@@ -136,6 +171,15 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 		}
 	case ModeDiff:
 		// Diff viewer is stateless, no key handling needed
+	case ModeHistoryDetail:
+		// History view handles scrolling
+		if m.historyView != nil {
+			switch msg.String() {
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
+				_, cmd := m.Update(msg)
+				return true, cmd
+			}
+		}
 	}
 
 	return false, nil
@@ -181,6 +225,21 @@ func (m *MainArea) View() string {
 			content = m.diffViewer.View(m.selectedResource)
 		} else {
 			content = m.styles.Dimmed.Render("No diff available")
+		}
+
+	case ModeHistoryDetail:
+		// Show history detail
+		if m.historyView != nil {
+			historyTitle := m.historyView.GetTitle()
+			if historyTitle != "" {
+				title = "[0] " + historyTitle
+			} else {
+				title = "[0] History Detail"
+			}
+			content = m.historyView.ViewContent()
+		} else {
+			title = "[0] History Detail"
+			content = m.styles.Dimmed.Render("No history detail available")
 		}
 	}
 

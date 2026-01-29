@@ -272,8 +272,9 @@ func TestHistoryDetailOpenFlow(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
 	m.historyPanel = components.NewHistoryPanel(m.styles)
-	m.historyView = views.NewHistoryView(m.styles)
-	m.historyView.SetSize(80, 20)
+	// History view is now embedded in mainArea
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.SetSize(80, 20)
 	store, err := history.Open(filepath.Join(t.TempDir(), "history.db"))
 	if err != nil {
 		t.Fatalf("open history store: %v", err)
@@ -313,8 +314,9 @@ func TestHistoryDetailOpenFlow(t *testing.T) {
 	}
 	msg := cmd()
 	m.Update(msg)
-	if m.execView != viewHistoryDetail {
-		t.Fatalf("expected history detail view")
+	// History detail is now shown in mainArea [0], not as a full-screen view
+	if m.mainArea == nil || m.mainArea.GetMode() != ModeHistoryDetail {
+		t.Fatalf("expected mainArea to be in history detail mode")
 	}
 	if m.historyDetail == nil || m.historyDetail.Output != "output text" {
 		t.Fatalf("expected history detail output")
@@ -413,11 +415,13 @@ func TestHistoryFocusNoEntriesNoOp(t *testing.T) {
 func TestHistoryDetailFallbackContent(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.historyView = views.NewHistoryView(m.styles)
-	m.historyView.SetSize(80, 10)
+	// History view is now embedded in mainArea
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.SetSize(80, 10)
 
 	m.Update(HistoryDetailMsg{Entry: history.Entry{Output: ""}})
-	out := m.historyView.View()
+	m.mainArea.EnterHistoryDetail() // Ensure we're in history detail mode
+	out := m.mainArea.GetHistoryView().View()
 	if !strings.Contains(out, "No stored output") {
 		t.Fatalf("expected fallback text in history view")
 	}
@@ -616,12 +620,19 @@ func TestUpdateExecutionViewForStreaming(t *testing.T) {
 		t.Fatalf("expected plan confirm view to remain, got %v", m.execView)
 	}
 
-	m.execView = viewHistoryDetail
+	// History detail is now shown in mainArea [0], not as a full-screen view
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.EnterHistoryDetail()
+	m.execView = viewMain
 	m.updateExecutionViewForStreaming()
-	if m.execView != viewHistoryDetail {
-		t.Fatalf("expected history detail view to remain, got %v", m.execView)
+	if m.mainArea.GetMode() != ModeHistoryDetail {
+		t.Fatalf("expected mainArea to remain in history detail mode")
+	}
+	if m.execView != viewMain {
+		t.Fatalf("expected main view, got %v", m.execView)
 	}
 
+	m.mainArea.ExitHistoryDetail()
 	m.execView = viewCommandLog
 	m.updateExecutionViewForStreaming()
 	if m.execView != viewMain {
@@ -1291,11 +1302,14 @@ func TestHandleExecutionKeyPlanOutputExit(t *testing.T) {
 func TestHandleExecutionKeyHistoryDetailExit(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.execView = viewHistoryDetail
+	m.execView = viewMain
+	// History detail is now shown in mainArea [0]
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.EnterHistoryDetail()
 
 	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyEsc})
-	if !handled || m.execView != viewMain {
-		t.Fatalf("expected history detail to return to main")
+	if !handled || m.mainArea.GetMode() != ModeDiff {
+		t.Fatalf("expected history detail to exit and return to previous mode")
 	}
 }
 
@@ -1413,7 +1427,9 @@ func TestViewExecutionModes(t *testing.T) {
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsPanel.SetSize(40, 5)
 	m.diagnosticsPanel.SetParsedText("parsed")
-	m.historyView = views.NewHistoryView(m.styles)
+	// History view is now embedded in mainArea
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.SetSize(80, 20)
 
 	m.execView = viewPlanConfirm
 	if out := m.View(); out == "" {
@@ -1430,9 +1446,12 @@ func TestViewExecutionModes(t *testing.T) {
 		t.Fatalf("expected diagnostics view")
 	}
 
-	m.execView = viewHistoryDetail
+	// History detail is now shown in mainArea [0], not as a full-screen view
+	m.execView = viewMain
+	m.mainArea.EnterHistoryDetail()
+	m.mainArea.SetHistoryContent("Test", "History content")
 	if out := m.View(); out == "" {
-		t.Fatalf("expected history detail view")
+		t.Fatalf("expected main view with history detail")
 	}
 }
 
@@ -1618,11 +1637,18 @@ func TestHandleExecutionKeyPlanOutputQuitWhileRunning(t *testing.T) {
 func TestHandleExecutionKeyHistoryDetailQuit(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
-	m.execView = viewHistoryDetail
+	m.execView = viewMain
+	// History detail is now shown in mainArea [0]
+	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
+	m.mainArea.EnterHistoryDetail()
 
+	// Pressing q in mainArea history detail mode should still allow normal quit
+	// (q key handling is in the main view default case, not specific to history detail)
 	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if !handled || !m.quitting {
-		t.Fatalf("expected quit in history detail")
+	// The 'q' key in main view is handled elsewhere (not in handleExecutionKey)
+	// so this test now expects it NOT to be handled here
+	if handled {
+		t.Fatalf("q key should not be handled by handleExecutionKey in main view")
 	}
 }
 
