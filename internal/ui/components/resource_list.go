@@ -79,6 +79,18 @@ func (r *ResourceList) SetSize(width, height int) {
 	r.updateViewport()
 }
 
+// contentWidth returns the width available for content (excluding borders and scrollbar).
+func (r *ResourceList) contentWidth() int {
+	w := r.width - 2 // left and right border
+	if len(r.visibleItems) > r.viewport.Height {
+		w-- // scrollbar
+	}
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
 // SetResources updates the list of resources to display.
 func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 	r.resources = resources
@@ -129,6 +141,14 @@ func (r *ResourceList) SetFocused(focused bool) {
 // IsFocused returns whether the panel is focused (implements Panel interface).
 func (r *ResourceList) IsFocused() bool {
 	return r.focused
+}
+
+// SetStyles updates the component styles.
+func (r *ResourceList) SetStyles(s *styles.Styles) {
+	r.styles = s
+	if r.frame != nil {
+		r.frame.SetStyles(s)
+	}
 }
 
 // HandleKey handles key events (implements Panel interface).
@@ -426,14 +446,16 @@ func (r *ResourceList) renderVisibleItems() string {
 	}
 
 	var content strings.Builder
+	contentWidth := r.contentWidth()
 	for i := start; i < end; i++ {
 		item := r.visibleItems[i]
-		isSelected := i == r.selectedIndex
+		// Only show selection highlight when panel is focused
+		isSelected := r.focused && i == r.selectedIndex
 		switch item.kind {
 		case itemGroup:
-			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent))
+			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent, contentWidth))
 		case itemResource:
-			content.WriteString(r.renderResource(item.resource, isSelected, item.indent))
+			content.WriteString(r.renderResource(item.resource, isSelected, item.indent, contentWidth))
 		}
 		content.WriteString("\n")
 	}
@@ -448,7 +470,7 @@ func (r *ResourceList) renderVisibleItems() string {
 }
 
 // renderResource renders a single resource line.
-func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSelected bool, indent int) string {
+func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSelected bool, indent int, contentWidth int) string {
 	var output strings.Builder
 
 	// Get action style and icon
@@ -506,15 +528,15 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 		headerLine += statusText + spaceStyle.Render(" ")
 	}
 	headerLine += addressText + suffixText
-	if r.width > 0 {
-		headerLine = lipgloss.NewStyle().MaxWidth(r.width).Render(headerLine)
+	if contentWidth > 0 {
+		headerLine = lipgloss.NewStyle().MaxWidth(contentWidth).Render(headerLine)
 	}
 	if isSelected {
-		if r.width > 0 {
-			headerLine = padAfterStyledWithBackground(headerLine, r.width, selectedBg)
+		if contentWidth > 0 {
+			headerLine = padAfterStyledWithBackground(headerLine, contentWidth, selectedBg)
 		}
-	} else if r.width > 0 {
-		headerLine = padAfterStyled(headerLine, r.width)
+	} else if contentWidth > 0 {
+		headerLine = padAfterStyled(headerLine, contentWidth)
 	}
 	output.WriteString(headerLine)
 
@@ -939,7 +961,7 @@ func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 	return items
 }
 
-func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded bool, indent int) string {
+func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded bool, indent int, contentWidth int) string {
 	indicator := "▶"
 	if expanded {
 		indicator = "▼"
@@ -949,22 +971,22 @@ func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded
 		prefix = strings.Repeat(" ", indent)
 	}
 	line := fmt.Sprintf("%s%s %s (%d)", prefix, indicator, group, count)
-	if r.width > 0 {
-		line = runewidth.Truncate(line, r.width, "...")
+	if contentWidth > 0 {
+		line = runewidth.Truncate(line, contentWidth, "...")
 	}
 
 	if isSelected {
 		selectedBg := r.styles.SelectedLineBackground
 		line = r.styles.LineItemText.Background(selectedBg).Bold(true).Render(line)
-		if r.width > 0 {
-			line = padAfterStyledWithBackground(line, r.width, selectedBg)
+		if contentWidth > 0 {
+			line = padAfterStyledWithBackground(line, contentWidth, selectedBg)
 		}
 		return line
 	}
 
 	line = r.styles.Dimmed.Bold(true).Render(line)
-	if r.width > 0 {
-		line = padAfterStyled(line, r.width)
+	if contentWidth > 0 {
+		line = padAfterStyled(line, contentWidth)
 	}
 	return line
 }

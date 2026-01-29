@@ -140,7 +140,7 @@ func TestResourceListShowStatusToggle(t *testing.T) {
 func TestResourceListRenderGroupAndVisibleItems(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetSize(40, 5)
-	group := r.renderGroup(consts.ModuleAlpha, 2, true, true, 2)
+	group := r.renderGroup(consts.ModuleAlpha, 2, true, true, 2, 38)
 	if !strings.Contains(group, consts.ModuleAlpha) {
 		t.Fatalf("expected group label")
 	}
@@ -190,7 +190,7 @@ func TestRenderResourceDoesNotExpandDiffs(t *testing.T) {
 		},
 	}
 
-	out := r.renderResource(&resource, false, 0)
+	out := r.renderResource(&resource, false, 0, 80)
 	if !strings.Contains(out, "aws_vpc.main") || strings.Contains(out, "~ name") {
 		t.Fatalf("unexpected render output: %q", out)
 	}
@@ -204,7 +204,7 @@ func TestRenderResourceTrimsModulePrefix(t *testing.T) {
 		Change:  &terraform.Change{Before: map[string]any{"a": 1}, After: map[string]any{"a": 2}},
 	}
 
-	out := r.renderResource(&resource, false, 2)
+	out := r.renderResource(&resource, false, 2, 80)
 	if !strings.Contains(out, "aws_instance.web") || strings.Contains(out, consts.ModuleAlpha) {
 		t.Fatalf("expected trimmed module prefix, got %q", out)
 	}
@@ -446,7 +446,7 @@ func TestRenderLongResourceAddressTruncates(t *testing.T) {
 		Action:  terraform.ActionCreate,
 		Change:  &terraform.Change{Actions: []string{"create"}, Before: nil, After: map[string]any{"x": "y"}},
 	}
-	out := stripANSI(r.renderResource(&resource, false, 0))
+	out := stripANSI(r.renderResource(&resource, false, 0, 18))
 	lines := strings.Split(out, "\n")
 	if len(lines) == 0 || len(lines[0]) > 20 {
 		t.Fatalf("expected truncated header line, got %q", out)
@@ -460,7 +460,7 @@ func TestExpandedResourceZeroDiffsNoExtraLine(t *testing.T) {
 		Action:  terraform.ActionUpdate,
 		Change:  &terraform.Change{Actions: []string{"update"}, Before: map[string]any{"a": 1}, After: map[string]any{"a": 1}},
 	}
-	out := r.renderResource(&resource, false, 0)
+	out := r.renderResource(&resource, false, 0, 80)
 	if strings.Count(out, "\n") != 0 {
 		t.Fatalf("expected no extra diff lines, got %q", out)
 	}
