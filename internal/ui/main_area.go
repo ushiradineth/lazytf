@@ -25,6 +25,7 @@ const (
 // MainArea is a wrapper component that switches between diff view and logs
 type MainArea struct {
 	styles       *styles.Styles
+	frame        *components.PanelFrame
 	width        int
 	height       int
 	focused      bool
@@ -43,6 +44,7 @@ type MainArea struct {
 func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.ApplyView, planView *views.PlanView) *MainArea {
 	return &MainArea{
 		styles:      s,
+		frame:       components.NewPanelFrame(s),
 		mode:        ModeDiff,
 		diffViewer:  components.NewDiffViewer(s, diffEngine),
 		applyView:   applyView,
@@ -55,6 +57,7 @@ func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.App
 func (m *MainArea) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.frame.SetSize(width, height)
 
 	// Calculate inner dimensions (accounting for border)
 	innerWidth := width - 2
@@ -194,21 +197,15 @@ func (m *MainArea) View() string {
 		return fmt.Sprintf("[DEBUG: height=%d width=%d]", m.height, m.width)
 	}
 
-	// Determine border style and title based on focus
-	borderStyle := m.styles.Border
-	titleStyle := m.styles.PanelTitle
-	if m.focused {
-		borderStyle = m.styles.FocusedBorder
-		titleStyle = m.styles.FocusedPanelTitle
-	}
-
 	var content string
 	var title string
+	var tabs []string
 
 	switch m.mode {
 	case ModeLogs:
 		// Show operation logs (plan or apply)
-		title = "[0] Operation Logs"
+		title = "Operation Logs"
+		tabs = []string{title}
 		switch {
 		case m.applyView != nil:
 			content = m.applyView.View()
@@ -220,7 +217,8 @@ func (m *MainArea) View() string {
 
 	case ModeDiff:
 		// Show diff viewer
-		title = "[0] Diff View"
+		title = "Diff View"
+		tabs = []string{title}
 		if m.diffViewer != nil {
 			content = m.diffViewer.View(m.selectedResource)
 		} else {
@@ -232,41 +230,69 @@ func (m *MainArea) View() string {
 		if m.historyView != nil {
 			historyTitle := m.historyView.GetTitle()
 			if historyTitle != "" {
-				title = "[0] " + historyTitle
+				title = historyTitle
 			} else {
-				title = "[0] History Detail"
+				title = "History Detail"
 			}
 			content = m.historyView.ViewContent()
 		} else {
-			title = "[0] History Detail"
+			title = "History Detail"
 			content = m.styles.Dimmed.Render("No history detail available")
 		}
+		tabs = []string{title}
 	}
 
-	// Wrap in border
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(m.width - 2).
-		Height(m.height - 2).
-		Render(content)
+	// Split content into lines for frame rendering
+	contentLines := strings.Split(content, "\n")
+	contentHeight := max(1, m.height-2)
 
-	// Add title to border
-	if title != "" {
-		titleRendered := titleStyle.Render(" " + title + " ")
-		lines := strings.Split(panel, "\n")
-		if len(lines) > 0 && m.width > 4 {
-			// Use the same panel title rendering function as other panels
-			if line, ok := components.RenderPanelTitleLine(m.width, borderStyle, titleRendered); ok {
-				lines[0] = line
-			}
+	// Configure the frame
+	m.frame.SetConfig(components.PanelFrameConfig{
+		PanelID:       "[0]",
+		Tabs:          tabs,
+		ActiveTab:     0,
+		Focused:       m.focused,
+		FooterText:    "",
+		ShowScrollbar: len(contentLines) > contentHeight,
+		ScrollPos:     0, // Content providers handle their own scrolling
+		ThumbSize:     m.calculateThumbSize(contentHeight, len(contentLines)),
+	})
+
+	// Pad content lines to fill panel
+	result := make([]string, contentHeight)
+	for i := range contentHeight {
+		if i < len(contentLines) {
+			result[i] = m.padLine(contentLines[i], m.frame.ContentWidth())
+		} else {
+			result[i] = strings.Repeat(" ", m.frame.ContentWidth())
 		}
-		panel = strings.Join(lines, "\n")
 	}
 
-	return panel
+	return m.frame.RenderWithContent(result)
+}
+
+// calculateThumbSize calculates the thumb size for the scrollbar.
+func (m *MainArea) calculateThumbSize(visibleHeight, totalLines int) float64 {
+	if totalLines <= visibleHeight || visibleHeight <= 0 {
+		return 1.0
+	}
+	thumbSize := float64(visibleHeight) / float64(totalLines)
+	if thumbSize > 1.0 {
+		thumbSize = 1.0
+	}
+	return thumbSize
+}
+
+// padLine pads a line to the given width.
+func (m *MainArea) padLine(line string, width int) string {
+	runes := []rune(line)
+	if len(runes) >= width {
+		if len(runes) > width {
+			return string(runes[:width])
+		}
+		return line
+	}
+	return line + strings.Repeat(" ", width-len(runes))
 }
 
 // GetApplyView returns the apply view (for external updates)

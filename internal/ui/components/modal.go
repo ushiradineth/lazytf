@@ -166,7 +166,7 @@ func (m *Modal) Overlay(baseView string) string {
 		// Build the new line using ANSI-aware functions:
 		// [left part][modal line][right part]
 		left := ansi.Truncate(baseLine, startCol, "")
-		right := ansiCutLeft(baseLine, startCol+modalWidth)
+		right := ANSICutLeft(baseLine, startCol+modalWidth)
 
 		baseLines[row] = left + modalLine + right
 	}
@@ -223,49 +223,4 @@ func (m *Modal) renderBox() string {
 		Render(content)
 
 	return box
-}
-
-// ansiCutLeft returns the portion of s after skipping the first n visual characters.
-// It properly handles ANSI escape sequences, preserving them in the output.
-func ansiCutLeft(s string, n int) string {
-	if n <= 0 {
-		return s
-	}
-
-	var result strings.Builder
-	visualPos := 0
-	i := 0
-	runes := []rune(s)
-
-	// Skip first n visual characters
-	for i < len(runes) && visualPos < n {
-		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
-			// Skip ANSI escape sequence
-			j := i + 2
-			for j < len(runes) && !isAnsiTerminator(runes[j]) {
-				j++
-			}
-			if j < len(runes) {
-				j++ // Include terminator
-			}
-			i = j
-		} else {
-			// Regular character - count it
-			visualPos++
-			i++
-		}
-	}
-
-	// Collect remaining characters
-	for i < len(runes) {
-		result.WriteRune(runes[i])
-		i++
-	}
-
-	return result.String()
-}
-
-// isAnsiTerminator checks if a rune is an ANSI escape sequence terminator.
-func isAnsiTerminator(r rune) bool {
-	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
 }

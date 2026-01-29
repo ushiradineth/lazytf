@@ -6,52 +6,175 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
-// HistoryPanel renders recent apply history entries.
+// HistoryItem implements ListPanelItem for history entries.
+type HistoryItem struct {
+	entry history.Entry
+}
+
+// Render renders the history item.
+func (h HistoryItem) Render(s *styles.Styles, width int, selected bool) string {
+	// Get timestamp
+	ts := h.entry.FinishedAt
+	if ts.IsZero() {
+		ts = h.entry.StartedAt
+	}
+	when := formatTime(ts)
+
+	// Get plain status text for width calculation
+	var statusPlain string
+	switch h.entry.Status {
+	case history.StatusSuccess:
+		statusPlain = "ok"
+	case history.StatusFailed:
+		statusPlain = "fail"
+	case history.StatusCanceled:
+		statusPlain = "cancel"
+	default:
+		statusPlain = string(h.entry.Status)
+	}
+
+	// Get duration
+	dur := formatDuration(h.entry.Duration)
+
+	// Get description - prefer Summary (shows what happened), fall back to Environment/WorkDir
+	desc := strings.TrimSpace(h.entry.Summary)
+	if desc == "" {
+		desc = strings.TrimSpace(h.entry.Environment)
+	}
+	if desc == "" {
+		// Get last component of WorkDir for brevity
+		wd := strings.TrimSpace(h.entry.WorkDir)
+		if idx := strings.LastIndex(wd, "/"); idx >= 0 && idx < len(wd)-1 {
+			wd = wd[idx+1:]
+		}
+		desc = wd
+	}
+	if desc == "" {
+		desc = "apply"
+	}
+
+	// Build line: "HH:MM ok 5s + 1 to create" or "HH:MM fail prod"
+	// Calculate available space for description
+	// Fixed parts: "HH:MM " (6) + status (max 6 visual chars) + space (1) = 13 chars
+	fixedLen := 6 + len(statusPlain) + 1
+	if dur != "" {
+		fixedLen += len(dur) + 1 // duration + space
+	}
+	descWidth := max(3, width-fixedLen)
+	desc = trimString(desc, descWidth)
+
+	// Apply styling and ensure full-width
+	if selected {
+		// For selected: build plain text line, then apply full background
+		var line string
+		if dur != "" {
+			line = fmt.Sprintf("%s %s %s %s", when, statusPlain, dur, desc)
+		} else {
+			line = fmt.Sprintf("%s %s %s", when, statusPlain, desc)
+		}
+		bg := s.SelectedLineBackground
+		styled := s.LineItemText.Background(bg).Bold(true).Render(line)
+		return PadLineWithBg(styled, width, bg)
+	}
+
+	// Non-selected: apply status color styling
+	var statusText string
+	switch h.entry.Status {
+	case history.StatusSuccess:
+		statusText = s.Create.Render(statusPlain)
+	case history.StatusFailed:
+		statusText = s.Delete.Render(statusPlain)
+	case history.StatusCanceled:
+		statusText = s.Update.Render(statusPlain)
+	default:
+		statusText = statusPlain
+	}
+
+	var line string
+	if dur != "" {
+		line = fmt.Sprintf("%s %s %s %s", when, statusText, dur, desc)
+	} else {
+		line = fmt.Sprintf("%s %s %s", when, statusText, desc)
+	}
+	return PadLine(line, width)
+}
+
+// HistoryPanel renders recent apply history entries using ListPanel.
 type HistoryPanel struct {
-	styles   *styles.Styles
-	width    int
-	height   int
-	entries  []history.Entry
-	selected int
-	focused  bool
+	listPanel *ListPanel
+	entries   []history.Entry
 }
 
 // NewHistoryPanel creates a new history panel.
 func NewHistoryPanel(s *styles.Styles) *HistoryPanel {
-	return &HistoryPanel{styles: s}
+	if s == nil {
+		s = styles.DefaultStyles()
+	}
+	panel := NewListPanel("[3]", s)
+	panel.SetTabs([]string{"Recent Applies"})
+	return &HistoryPanel{
+		listPanel: panel,
+	}
 }
 
 // SetSize updates the panel dimensions.
 func (h *HistoryPanel) SetSize(width, height int) {
-	h.width = width
-	h.height = height
+	h.listPanel.SetSize(width, height)
 }
 
 // SetEntries updates the history entries.
 func (h *HistoryPanel) SetEntries(entries []history.Entry) {
 	h.entries = entries
+	items := make([]ListPanelItem, len(entries))
+	for i, entry := range entries {
+		items[i] = HistoryItem{entry: entry}
+	}
+	h.listPanel.SetItems(items)
 }
 
 // SetSelection updates the selected entry index and focus state.
 func (h *HistoryPanel) SetSelection(index int, focused bool) {
-	h.selected = index
-	h.focused = focused
+	h.listPanel.SetSelectedIndex(index)
+	h.listPanel.SetFocused(focused)
 }
 
 // SetFocused sets the focus state (implements Panel interface)
 func (h *HistoryPanel) SetFocused(focused bool) {
-	h.focused = focused
+	h.listPanel.SetFocused(focused)
 }
 
 // IsFocused returns whether the panel is focused (implements Panel interface)
 func (h *HistoryPanel) IsFocused() bool {
-	return h.focused
+	return h.listPanel.IsFocused()
+}
+
+// GetSelectedIndex returns the currently selected index.
+func (h *HistoryPanel) GetSelectedIndex() int {
+	return h.listPanel.GetSelectedIndex()
+}
+
+// GetSelectedEntry returns the currently selected entry.
+func (h *HistoryPanel) GetSelectedEntry() *history.Entry {
+	idx := h.listPanel.GetSelectedIndex()
+	if idx >= 0 && idx < len(h.entries) {
+		return &h.entries[idx]
+	}
+	return nil
+}
+
+// MoveUp moves the selection up.
+func (h *HistoryPanel) MoveUp() bool {
+	return h.listPanel.MoveUp()
+}
+
+// MoveDown moves the selection down.
+func (h *HistoryPanel) MoveDown() bool {
+	return h.listPanel.MoveDown()
 }
 
 // Update handles Bubble Tea messages (implements Panel interface)
@@ -68,136 +191,7 @@ func (h *HistoryPanel) HandleKey(_ tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 
 // View renders the history panel.
 func (h *HistoryPanel) View() string {
-	if h.styles == nil || h.height <= 0 || h.width <= 0 {
-		return ""
-	}
-
-	// Determine border style based on focus
-	borderStyle := h.styles.Border
-	titleStyle := h.styles.PanelTitle
-	if h.focused {
-		borderStyle = h.styles.FocusedBorder
-		titleStyle = h.styles.FocusedPanelTitle
-	}
-
-	// Build content
-	available := h.height - 2
-	if available < 1 {
-		available = 1
-	}
-
-	// Content width is panel width minus border chars
-	contentWidth := h.width - 2
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-
-	var lines []string
-	if len(h.entries) == 0 {
-		lines = append(lines, h.styles.Dimmed.Render("No history yet"))
-	} else {
-		for i := 0; i < len(h.entries) && i < available; i++ {
-			lines = append(lines, h.renderEntry(h.entries[i], i == h.selected, contentWidth))
-		}
-	}
-
-	content := strings.Join(lines, "\n")
-
-	// Build panel with border
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(contentWidth).
-		Height(h.height - 2).
-		Render(content)
-
-	// Add title to border
-	titleText := " [3] Recent Applies "
-	title := titleStyle.Render(titleText)
-
-	panelLines := strings.Split(panel, "\n")
-	if len(panelLines) > 0 && h.width > 4 {
-		if line, ok := RenderPanelTitleLine(h.width, borderStyle, title); ok {
-			panelLines[0] = line
-		}
-	}
-
-	return strings.Join(panelLines, "\n")
-}
-
-func (h *HistoryPanel) renderEntry(entry history.Entry, selected bool, maxWidth int) string {
-	// Get timestamp
-	ts := entry.FinishedAt
-	if ts.IsZero() {
-		ts = entry.StartedAt
-	}
-	when := formatTime(ts)
-
-	// Get status with styling
-	var statusText string
-	switch entry.Status {
-	case history.StatusSuccess:
-		statusText = h.styles.Create.Render("ok")
-	case history.StatusFailed:
-		statusText = h.styles.Delete.Render("fail")
-	case history.StatusCanceled:
-		statusText = h.styles.Update.Render("cancel")
-	default:
-		statusText = string(entry.Status)
-	}
-
-	// Get duration
-	dur := formatDuration(entry.Duration)
-
-	// Get description - prefer Summary (shows what happened), fall back to Environment/WorkDir
-	desc := strings.TrimSpace(entry.Summary)
-	if desc == "" {
-		desc = strings.TrimSpace(entry.Environment)
-	}
-	if desc == "" {
-		// Get last component of WorkDir for brevity
-		wd := strings.TrimSpace(entry.WorkDir)
-		if idx := strings.LastIndex(wd, "/"); idx >= 0 && idx < len(wd)-1 {
-			wd = wd[idx+1:]
-		}
-		desc = wd
-	}
-	if desc == "" {
-		desc = "apply"
-	}
-
-	// Build line: "HH:MM ok 5s + 1 to create" or "HH:MM fail prod"
-	// Calculate available space for description
-	// Fixed parts: "HH:MM " (6) + status (4 visual chars) + space (1) = 11 chars
-	fixedLen := 11
-	if dur != "" {
-		fixedLen += len(dur) + 1 // duration + space
-	}
-	descWidth := maxWidth - fixedLen
-	if descWidth < 3 {
-		descWidth = 3
-	}
-	desc = trimString(desc, descWidth)
-
-	var line string
-	if dur != "" {
-		line = fmt.Sprintf("%s %s %s %s", when, statusText, dur, desc)
-	} else {
-		line = fmt.Sprintf("%s %s %s", when, statusText, desc)
-	}
-
-	// Pad line to maxWidth to ensure consistent selection highlighting
-	lineWidth := lipgloss.Width(line)
-	if lineWidth < maxWidth {
-		line = line + strings.Repeat(" ", maxWidth-lineWidth)
-	}
-
-	if selected && h.focused {
-		return h.styles.Selected.MaxWidth(maxWidth).Render(line)
-	}
-	return line
+	return h.listPanel.View()
 }
 
 func formatTime(ts time.Time) string {

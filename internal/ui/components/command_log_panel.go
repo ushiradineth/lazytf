@@ -9,88 +9,90 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
-// CommandLogPanel wraps DiagnosticsPanel and adds Panel interface support
+// CommandLogPanel wraps DiagnosticsPanel with a PanelFrame for consistent styling.
 type CommandLogPanel struct {
+	frame            *PanelFrame
 	diagnosticsPanel *DiagnosticsPanel
 	styles           *styles.Styles
-	width            int
 	height           int
 	focused          bool
 	visible          bool
 }
 
-// NewCommandLogPanel creates a new command log panel
+// NewCommandLogPanel creates a new command log panel.
 func NewCommandLogPanel(s *styles.Styles) *CommandLogPanel {
+	if s == nil {
+		s = styles.DefaultStyles()
+	}
 	return &CommandLogPanel{
+		frame:            NewPanelFrame(s),
 		diagnosticsPanel: NewDiagnosticsPanel(s),
 		styles:           s,
 		visible:          true, // Visible by default
 	}
 }
 
-// SetSize updates the panel dimensions
+// SetSize updates the panel dimensions.
 func (c *CommandLogPanel) SetSize(width, height int) {
-	c.width = width
 	c.height = height
+	c.frame.SetSize(width, height)
 	if c.diagnosticsPanel != nil {
 		// Reserve space for border
-		innerHeight := height - 2
-		if innerHeight < 1 {
-			innerHeight = 1
-		}
-		c.diagnosticsPanel.SetSize(width-2, innerHeight)
+		innerWidth := max(1, width-2)
+		innerHeight := max(1, height-2)
+		c.diagnosticsPanel.SetSize(innerWidth, innerHeight)
 	}
 }
 
-// SetFocused sets the focus state
+// SetFocused sets the focus state.
 func (c *CommandLogPanel) SetFocused(focused bool) {
 	c.focused = focused
 }
 
-// IsFocused returns whether the panel is focused
+// IsFocused returns whether the panel is focused.
 func (c *CommandLogPanel) IsFocused() bool {
 	return c.focused
 }
 
-// SetVisible sets the visibility state
+// SetVisible sets the visibility state.
 func (c *CommandLogPanel) SetVisible(visible bool) {
 	c.visible = visible
 }
 
-// IsVisible returns whether the panel is visible
+// IsVisible returns whether the panel is visible.
 func (c *CommandLogPanel) IsVisible() bool {
 	return c.visible
 }
 
-// SetDiagnostics updates the diagnostics list
+// SetDiagnostics updates the diagnostics list.
 func (c *CommandLogPanel) SetDiagnostics(items []terraform.Diagnostic) {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.SetDiagnostics(items)
 	}
 }
 
-// SetLogText sets raw log output
+// SetLogText sets raw log output.
 func (c *CommandLogPanel) SetLogText(text string) {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.SetLogText(text)
 	}
 }
 
-// SetParsedText sets the parsed summary text
+// SetParsedText sets the parsed summary text.
 func (c *CommandLogPanel) SetParsedText(text string) {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.SetParsedText(text)
 	}
 }
 
-// SetShowRaw toggles between raw logs and parsed summary
+// SetShowRaw toggles between raw logs and parsed summary.
 func (c *CommandLogPanel) SetShowRaw(show bool) {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.SetShowRaw(show)
 	}
 }
 
-// Update handles Bubble Tea messages (implements Panel interface)
+// Update handles Bubble Tea messages (implements Panel interface).
 func (c *CommandLogPanel) Update(msg tea.Msg) (any, tea.Cmd) {
 	if c.diagnosticsPanel == nil {
 		return c, nil
@@ -101,7 +103,7 @@ func (c *CommandLogPanel) Update(msg tea.Msg) (any, tea.Cmd) {
 	return c, cmd
 }
 
-// HandleKey handles key events
+// HandleKey handles key events.
 func (c *CommandLogPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	if !c.focused {
 		return false, nil
@@ -132,18 +134,10 @@ func (c *CommandLogPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) 
 	return false, nil
 }
 
-// View renders the command log panel
+// View renders the command log panel.
 func (c *CommandLogPanel) View() string {
 	if c.styles == nil || c.height <= 0 || !c.visible {
 		return ""
-	}
-
-	// Determine border style based on focus
-	borderStyle := c.styles.Border
-	titleStyle := c.styles.PanelTitle
-	if c.focused {
-		borderStyle = c.styles.FocusedBorder
-		titleStyle = c.styles.FocusedPanelTitle
 	}
 
 	// Get content from diagnostics panel
@@ -155,43 +149,74 @@ func (c *CommandLogPanel) View() string {
 		content = c.styles.Dimmed.Render("No logs available.")
 	}
 
-	// Build panel with border
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(c.width - 2).
-		Height(c.height - 2).
-		Render(content)
+	// Calculate content dimensions
+	contentHeight := max(1, c.height-2)
 
-	// Add title to border using consistent styling
-	titleText := " [4] Command Log "
-	title := titleStyle.Render(titleText)
+	// Split content into lines
+	contentLines := strings.Split(content, "\n")
 
-	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 && c.width > 4 {
-		if line, ok := RenderPanelTitleLine(c.width, borderStyle, title); ok {
-			lines[0] = line
+	// Configure the frame
+	c.frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[4]",
+		Tabs:          []string{"Command Log"},
+		ActiveTab:     0,
+		Focused:       c.focused,
+		FooterText:    "",
+		ShowScrollbar: len(contentLines) > contentHeight,
+		ScrollPos:     0, // DiagnosticsPanel handles its own scrolling
+		ThumbSize:     c.calculateThumbSize(contentHeight, len(contentLines)),
+	})
+
+	// Pad content lines to fill panel
+	result := make([]string, contentHeight)
+	for i := range contentHeight {
+		if i < len(contentLines) {
+			result[i] = c.padLine(contentLines[i], c.frame.ContentWidth())
+		} else {
+			result[i] = strings.Repeat(" ", c.frame.ContentWidth())
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return c.frame.RenderWithContent(result)
 }
 
-// GetDiagnosticsPanel returns the underlying diagnostics panel
+// calculateThumbSize calculates the thumb size for the frame.
+func (c *CommandLogPanel) calculateThumbSize(visibleHeight, totalLines int) float64 {
+	if totalLines <= visibleHeight || visibleHeight <= 0 {
+		return 1.0
+	}
+	thumbSize := float64(visibleHeight) / float64(totalLines)
+	if thumbSize > 1.0 {
+		thumbSize = 1.0
+	}
+	return thumbSize
+}
+
+// padLine pads a line to the given width.
+func (c *CommandLogPanel) padLine(line string, width int) string {
+	runes := []rune(line)
+	if len(runes) >= width {
+		if len(runes) > width {
+			return string(runes[:width])
+		}
+		return line
+	}
+	return line + strings.Repeat(" ", width-len(runes))
+}
+
+// GetDiagnosticsPanel returns the underlying diagnostics panel.
 func (c *CommandLogPanel) GetDiagnosticsPanel() *DiagnosticsPanel {
 	return c.diagnosticsPanel
 }
 
-// AppendSessionLog adds a command log entry to the session history
+// AppendSessionLog adds a command log entry to the session history.
 func (c *CommandLogPanel) AppendSessionLog(command, output string) {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.AppendSessionLog(command, output)
 	}
 }
 
-// ClearSessionLogs clears all session log entries
+// ClearSessionLogs clears all session log entries.
 func (c *CommandLogPanel) ClearSessionLogs() {
 	if c.diagnosticsPanel != nil {
 		c.diagnosticsPanel.ClearSessionLogs()

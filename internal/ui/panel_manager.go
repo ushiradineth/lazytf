@@ -271,12 +271,10 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 	// When not in execution mode, history panel is not shown
 	// Divide space between workspace and resources only
 	if !pm.executionMode {
-		workspaceRatio := 0.25
+		// Environment: 5% when inactive, 20% when active
+		workspaceRatio := 0.05
 		if pm.focusedPanel == PanelWorkspace {
-			workspaceRatio = 0.40
-		}
-		if pm.focusedPanel == PanelWorkspace && pm.workspaceSelectorActive() {
-			workspaceRatio = 0.50
+			workspaceRatio = 0.20
 		}
 		workspaceHeight := int(math.Round(float64(panelsHeight) * workspaceRatio))
 		minHeight := 3
@@ -290,22 +288,17 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 		return workspaceHeight, resourcesHeight, 0
 	}
 
+	// Environment: 5% when inactive, 20% when active
+	// History: fixed at 20%
+	// Resources: takes the remainder
 	type ratios struct {
 		workspace float64
 		resources float64
 		history   float64
 	}
-	current := ratios{workspace: 0.20, resources: 0.60, history: 0.20}
-	switch pm.focusedPanel {
-	case PanelWorkspace:
-		current = ratios{workspace: 0.60, resources: 0.20, history: 0.20}
-	case PanelResources:
+	current := ratios{workspace: 0.05, resources: 0.75, history: 0.20}
+	if pm.focusedPanel == PanelWorkspace {
 		current = ratios{workspace: 0.20, resources: 0.60, history: 0.20}
-	case PanelHistory:
-		current = ratios{workspace: 0.20, resources: 0.20, history: 0.60}
-	}
-	if pm.focusedPanel == PanelWorkspace && pm.workspaceSelectorActive() {
-		current = ratios{workspace: 0.60, resources: 0.20, history: 0.20}
 	}
 
 	minHeight := 3
@@ -326,68 +319,18 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 	sum := workspaceHeight + resourcesHeight + historyHeight
 	diff := panelsHeight - sum
 
-	add := func(index int) {
-		switch index {
-		case 0:
-			workspaceHeight++
-		case 1:
-			resourcesHeight++
-		case 2:
-			historyHeight++
-		}
-	}
-	subtract := func(index int) bool {
-		switch index {
-		case 0:
-			if workspaceHeight > minHeight {
-				workspaceHeight--
-				return true
-			}
-		case 1:
-			if resourcesHeight > minHeight {
-				resourcesHeight--
-				return true
-			}
-		case 2:
-			if historyHeight > minHeight {
-				historyHeight--
-				return true
-			}
-		}
-		return false
-	}
-
-	focusIndex := 1
-	switch pm.focusedPanel {
-	case PanelWorkspace:
-		focusIndex = 0
-	case PanelResources:
-		focusIndex = 1
-	case PanelHistory:
-		focusIndex = 2
-	}
-
+	// Always adjust rounding differences on resources panel to keep other panels stable
 	for diff > 0 {
-		add(focusIndex)
+		resourcesHeight++
 		diff--
 	}
 	for diff < 0 {
-		if !subtract(focusIndex) {
-			if focusIndex != 0 && subtract(0) {
-				diff++
-				continue
-			}
-			if focusIndex != 1 && subtract(1) {
-				diff++
-				continue
-			}
-			if focusIndex != 2 && subtract(2) {
-				diff++
-				continue
-			}
+		if resourcesHeight > minHeight {
+			resourcesHeight--
+			diff++
+		} else {
 			break
 		}
-		diff++
 	}
 
 	return workspaceHeight, resourcesHeight, historyHeight

@@ -2,9 +2,12 @@ package components
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/ushiradineth/lazytf/internal/environment"
@@ -16,24 +19,36 @@ type EnvironmentChangedMsg struct {
 	Environment environment.Environment
 }
 
-// EnvironmentPanel displays current workspace/folder with inline selector
+// envListItem represents an environment in the list
+type envListItem struct {
+	env    environment.Environment
+	label  string
+	detail string
+}
+
+// EnvironmentPanel displays a list of workspaces/environments with filtering
 type EnvironmentPanel struct {
-	styles       *styles.Styles
-	width        int
-	height       int
+	styles *styles.Styles
+	frame  *PanelFrame
+	width  int
+	height int
+
+	// Focus and filtering state
 	focused      bool
-	selectorMode bool // true when 'e' is pressed and selector is active
-	infoList     *KeyValueList
+	filterActive bool
+	filterText   string
 
 	// Environment state
 	current      string
-	workDir      string
 	strategy     environment.StrategyType
 	environments []environment.Environment
-	warnings     []string
 
-	// Selector state
-	envSelector *EnvSelector
+	// List state
+	items         []envListItem
+	filteredItems []envListItem
+	selectedIndex int
+	scrollOffset  int
+	lastMove      int
 }
 
 // NewEnvironmentPanel creates a new environment panel
@@ -41,13 +56,9 @@ func NewEnvironmentPanel(s *styles.Styles) *EnvironmentPanel {
 	if s == nil {
 		s = styles.DefaultStyles()
 	}
-	envSelector := NewEnvSelector(s)
-	envSelector.SetShowTitle(false)
 	return &EnvironmentPanel{
-		styles:       s,
-		selectorMode: false,
-		infoList:     NewKeyValueList(),
-		envSelector:  envSelector,
+		styles: s,
+		frame:  NewPanelFrame(s),
 	}
 }
 
@@ -55,13 +66,15 @@ func NewEnvironmentPanel(s *styles.Styles) *EnvironmentPanel {
 func (e *EnvironmentPanel) SetSize(width, height int) {
 	e.width = width
 	e.height = height
+	e.frame.SetSize(width, height)
+	e.adjustScrollOffset()
 }
 
 // SetFocused sets the focus state
 func (e *EnvironmentPanel) SetFocused(focused bool) {
 	e.focused = focused
 	if !focused {
-		e.selectorMode = false
+		e.filterActive = false
 	}
 }
 
@@ -70,52 +83,38 @@ func (e *EnvironmentPanel) IsFocused() bool {
 	return e.focused
 }
 
-// SelectorActive reports whether the environment selector is active.
+// SelectorActive reports whether filtering is active.
+// For compatibility - the panel is always in "selector" mode now.
 func (e *EnvironmentPanel) SelectorActive() bool {
-	return e.selectorMode
+	return e.focused
 }
 
 // SetEnvironmentInfo updates the environment information
-func (e *EnvironmentPanel) SetEnvironmentInfo(current, workDir string, strategy environment.StrategyType, environments []environment.Environment) {
+func (e *EnvironmentPanel) SetEnvironmentInfo(current, _ string, strategy environment.StrategyType, environments []environment.Environment) {
 	e.current = current
-	e.workDir = workDir
 	e.strategy = strategy
 	e.environments = environments
-	e.refreshEnvSelector()
+	e.rebuildItems()
 }
 
-// SetWarnings updates warnings shown in selector mode.
-func (e *EnvironmentPanel) SetWarnings(warnings []string) {
-	e.warnings = warnings
+// SetWarnings is a no-op for compatibility (warnings are not displayed in list mode).
+func (e *EnvironmentPanel) SetWarnings(_ []string) {
+	// No-op - warnings are not displayed in the new list-based UI
 }
 
-// Filtering reports whether selector filtering is active.
+// Filtering reports whether filter input is active.
 func (e *EnvironmentPanel) Filtering() bool {
-	if !e.selectorMode || e.envSelector == nil {
-		return false
-	}
-	return e.envSelector.Filtering()
+	return e.filterActive
 }
 
-// ActivateSelector enters selector mode.
+// ActivateSelector is a no-op now - the panel is always in list mode.
 func (e *EnvironmentPanel) ActivateSelector() {
-	e.selectorMode = true
+	// No-op for compatibility
 }
 
-// Update handles Bubble Tea messages (implements Panel interface)
-func (e *EnvironmentPanel) Update(msg tea.Msg) (any, tea.Cmd) {
-	if !e.selectorMode {
-		return e, nil
-	}
-	if _, ok := msg.(tea.KeyMsg); ok {
-		return e, nil
-	}
-	if e.envSelector == nil {
-		return e, nil
-	}
-	updated, cmd := e.envSelector.Update(msg)
-	e.envSelector = updated
-	return e, cmd
+// Update handles Bubble Tea messages
+func (e *EnvironmentPanel) Update(_ tea.Msg) (any, tea.Cmd) {
+	return e, nil
 }
 
 // HandleKey handles key events
@@ -124,37 +123,79 @@ func (e *EnvironmentPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 		return false, nil
 	}
 
-	// Toggle selector mode
-	if msg.String() == "e" && !e.selectorMode {
-		e.ActivateSelector()
-		return true, nil
-	}
+	key := msg.String()
 
-	// Handle selector navigation
-	if e.selectorMode {
-		if e.envSelector == nil {
+	// Handle filter input when active
+	if e.filterActive {
+		switch msg.Type {
+		case tea.KeyEsc:
+			e.filterActive = false
+			e.filterText = ""
+			e.applyFilter()
+			return true, nil
+		case tea.KeyEnter:
+			// Select current item
+			if selected := e.selectedEnvironment(); selected != nil {
+				e.filterActive = false
+				e.filterText = ""
+				e.applyFilter()
+				return true, func() tea.Msg {
+					return EnvironmentChangedMsg{Environment: *selected}
+				}
+			}
+			return true, nil
+		case tea.KeyBackspace:
+			if e.filterText != "" {
+				e.filterText = e.filterText[:len(e.filterText)-1]
+				e.applyFilter()
+			}
+			return true, nil
+		case tea.KeyCtrlU:
+			e.filterText = ""
+			e.applyFilter()
+			return true, nil
+		case tea.KeyRunes:
+			e.filterText += string(msg.Runes)
+			e.applyFilter()
+			return true, nil
+		case tea.KeyUp:
+			e.moveUp()
+			return true, nil
+		case tea.KeyDown:
+			e.moveDown()
 			return true, nil
 		}
-		switch msg.String() {
-		case "enter":
-			selected := e.envSelector.SelectedEnvironment()
-			if selected == nil {
-				return true, nil
-			}
-			e.selectorMode = false
+	}
+
+	// Navigation and actions
+	switch key {
+	case "/":
+		// Activate filter mode
+		e.filterActive = true
+		return true, nil
+	case "up", "k":
+		e.moveUp()
+		return true, nil
+	case "down", "j":
+		e.moveDown()
+		return true, nil
+	case "enter":
+		if selected := e.selectedEnvironment(); selected != nil {
 			return true, func() tea.Msg {
 				return EnvironmentChangedMsg{Environment: *selected}
 			}
-		case "esc":
-			e.selectorMode = false
+		}
+		return true, nil
+	case "esc":
+		if e.filterText != "" {
+			e.filterText = ""
+			e.applyFilter()
 			return true, nil
 		}
-		if cmd, handled := e.envSelector.HandleFilterKey(msg); handled {
-			return true, cmd
-		}
-		updated, cmd := e.envSelector.Update(msg)
-		e.envSelector = updated
-		return true, cmd
+		return false, nil
+	case "e":
+		// Legacy key - now just focuses the panel (no-op when already focused)
+		return true, nil
 	}
 
 	return false, nil
@@ -166,200 +207,459 @@ func (e *EnvironmentPanel) View() string {
 		return ""
 	}
 
-	// Determine border style based on focus
-	borderStyle := e.styles.Border
-	titleStyle := e.styles.PanelTitle
+	// Total content area (excluding borders)
+	totalContentHeight := max(1, e.height-2)
+
+	contentWidth := e.contentWidth()
+
+	// Only show scrollbar and footer when focused
+	hasScrollbar := e.focused && len(e.filteredItems) > e.itemsHeight()
+	footerText := ""
 	if e.focused {
-		borderStyle = e.styles.FocusedBorder
-		titleStyle = e.styles.FocusedPanelTitle
+		footerText = e.buildFooterText()
 	}
 
-	var content string
-	if e.selectorMode {
-		content = e.renderSelector()
+	// Build title - always "Environment"
+	titleText := "Environment"
+
+	// Configure frame
+	scrollPos, thumbSize := CalculateScrollParams(e.scrollOffset, e.itemsHeight(), len(e.filteredItems))
+	e.frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[1]",
+		Tabs:          []string{titleText},
+		ActiveTab:     0,
+		Focused:       e.focused,
+		FooterText:    footerText,
+		ShowScrollbar: hasScrollbar,
+		ScrollPos:     scrollPos,
+		ThumbSize:     thumbSize,
+	})
+
+	// Render content
+	lines := e.renderContent(contentWidth, totalContentHeight)
+
+	return e.frame.RenderWithContent(lines)
+}
+
+// rebuildItems creates the item list from environments
+func (e *EnvironmentPanel) rebuildItems() {
+	e.items = make([]envListItem, 0, len(e.environments))
+
+	for _, env := range e.environments {
+		item := envListItem{
+			env:    env,
+			label:  e.envLabel(env),
+			detail: e.formatMetadata(env.Metadata),
+		}
+		if e.isCurrentEnv(env) {
+			item.env.IsCurrent = true
+		}
+		e.items = append(e.items, item)
+	}
+
+	e.applyFilter()
+}
+
+// applyFilter filters items based on filter text
+func (e *EnvironmentPanel) applyFilter() {
+	query := strings.ToLower(strings.TrimSpace(e.filterText))
+
+	if query == "" {
+		e.filteredItems = e.items
 	} else {
-		content = e.renderCurrentEnvironment()
-	}
-
-	// Title
-	titleText := "[1] Workspace"
-	if e.selectorMode {
-		titleText = "[1] Select Environment"
-	}
-
-	// Build panel with border and title
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderTopForeground(borderStyle.GetBorderTopForeground()).
-		Width(e.width - 2).
-		Height(e.height - 2).
-		Render(content)
-
-	titleRendered := titleStyle.Render(" " + titleText + " ")
-
-	// Split panel and replace top border with title-inserted version
-	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 && e.width > 4 {
-		if line, ok := RenderPanelTitleLine(e.width, borderStyle, titleRendered); ok {
-			lines[0] = line
+		e.filteredItems = make([]envListItem, 0)
+		for _, item := range e.items {
+			if e.itemMatchesFilter(item, query) {
+				e.filteredItems = append(e.filteredItems, item)
+			}
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	// Adjust selection
+	if e.selectedIndex >= len(e.filteredItems) {
+		e.selectedIndex = max(0, len(e.filteredItems)-1)
+	}
+
+	// Try to keep current environment selected if visible
+	if query == "" {
+		for i, item := range e.filteredItems {
+			if item.env.IsCurrent {
+				e.selectedIndex = i
+				break
+			}
+		}
+	}
+
+	e.adjustScrollOffset()
 }
 
-// renderCurrentEnvironment renders the current environment display
-func (e *EnvironmentPanel) renderCurrentEnvironment() string {
-	maxLines := e.height - 2
-	lines := make([]string, 0, maxLines)
-	contentWidth := e.contentWidth()
-
-	// Current environment
-	currentLabel := e.current
-	if currentLabel == "" {
-		currentLabel = "default"
+// itemMatchesFilter checks if an item matches the filter query
+func (e *EnvironmentPanel) itemMatchesFilter(item envListItem, query string) bool {
+	if fuzzyMatchEnvPanel(query, strings.ToLower(item.label)) {
+		return true
 	}
-
-	rows := []KeyValueRow{
-		{
-			Label:      "Current: ",
-			Value:      currentLabel,
-			LabelStyle: e.styles.Bold,
-		},
+	if item.detail != "" && fuzzyMatchEnvPanel(query, strings.ToLower(item.detail)) {
+		return true
 	}
-
-	// Strategy
-	strategyLabel := string(e.strategy)
-	switch e.strategy {
-	case environment.StrategyWorkspace:
-		strategyLabel = "Workspace"
-	case environment.StrategyFolder:
-		strategyLabel = "Folder"
-	case environment.StrategyMixed:
-		strategyLabel = "Mixed"
-	}
-	rows = append(rows, KeyValueRow{
-		Label:      "Strategy: ",
-		Value:      strategyLabel,
-		LabelStyle: e.styles.Dimmed,
-		ValueStyle: e.styles.Dimmed,
-	})
-
-	// Environment count
-	envCount := fmt.Sprintf("%d available", len(e.environments))
-	rows = append(rows, KeyValueRow{
-		Value:      envCount,
-		LabelStyle: e.styles.Dimmed,
-		ValueStyle: e.styles.Dimmed,
-	})
-
-	if e.infoList == nil {
-		e.infoList = NewKeyValueList()
-	}
-	e.infoList.SetWidth(contentWidth)
-	e.infoList.SetRows(rows)
-	lines = append(lines, strings.Split(e.infoList.View(), "\n")...)
-
-	// Instruction
-	for len(lines) < maxLines {
-		lines = append(lines, "")
-	}
-
-	return strings.Join(lines, "\n")
+	return false
 }
 
-// renderSelector renders the environment selector
-func (e *EnvironmentPanel) renderSelector() string {
-	maxLines := e.height - 2
-	if maxLines < 1 {
-		maxLines = 1
+// fuzzyMatchEnvPanel performs fuzzy matching
+func fuzzyMatchEnvPanel(query, candidate string) bool {
+	if query == "" {
+		return true
 	}
-	lines := make([]string, 0, maxLines)
-	contentWidth := e.contentWidth()
-
-	var warnLines []string
-	if len(e.warnings) > 0 && maxLines >= 3 {
-		warnLines = append(warnLines, e.styles.Dimmed.Render("Warnings:"))
-		warnLines = append(warnLines, e.styles.Dimmed.Render("  "+truncateVisible(e.warnings[0], contentWidth-2)))
+	q := []rune(query)
+	c := []rune(candidate)
+	if len(q) > len(c) {
+		return false
 	}
-
-	helpLine := "type: filter | enter: select | esc: back"
-
-	filterText := ""
-	if e.envSelector != nil {
-		filterText = e.envSelector.FilterText()
+	qi := 0
+	for _, r := range c {
+		if r == q[qi] {
+			qi++
+			if qi == len(q) {
+				return true
+			}
+		}
 	}
-	filterLine := e.styles.Dimmed.Render("Filter: " + filterText)
-
-	listHeight := maxLines - len(warnLines)
-	if filterLine != "" {
-		listHeight--
-	}
-	if helpLine != "" {
-		listHeight--
-	}
-	if listHeight < 1 {
-		listHeight = 1
-	}
-
-	if filterLine != "" {
-		lines = append(lines, filterLine)
-	}
-
-	if e.envSelector != nil {
-		e.envSelector.SetSize(contentWidth, listHeight)
-		lines = appendLines(lines, e.envSelector.View())
-	}
-
-	lines = append(lines, warnLines...)
-	if helpLine != "" {
-		lines = append(lines, e.styles.Help.Render(helpLine))
-	}
-
-	for len(lines) < maxLines {
-		lines = append(lines, "")
-	}
-
-	return strings.Join(lines, "\n")
+	return false
 }
 
-func (e *EnvironmentPanel) contentWidth() int {
-	width := e.width - 4
-	if width < 1 {
+// envLabel returns the display label for an environment
+func (e *EnvironmentPanel) envLabel(env environment.Environment) string {
+	// Try Name first
+	if env.Name != "" {
+		return env.Name
+	}
+	// Fallback to path basename
+	if env.Path != "" {
+		return filepath.Base(env.Path)
+	}
+	return "(unknown)"
+}
+
+// isCurrentEnv checks if an environment is the current one
+func (e *EnvironmentPanel) isCurrentEnv(env environment.Environment) bool {
+	if e.current == "" {
+		return env.IsCurrent
+	}
+	if env.Strategy == environment.StrategyWorkspace {
+		return env.Name == e.current
+	}
+	return env.Path == e.current || env.Name == e.current
+}
+
+// formatMetadata creates a compact metadata string
+func (e *EnvironmentPanel) formatMetadata(meta environment.EnvironmentMetadata) string {
+	parts := []string{}
+	if meta.ResourceCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d res", meta.ResourceCount))
+	}
+	if meta.HasState && meta.ResourceCount == 0 {
+		parts = append(parts, "state")
+	}
+	if !meta.LastModified.IsZero() {
+		parts = append(parts, formatEnvAge(meta.LastModified))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// selectedEnvironment returns the currently selected environment
+func (e *EnvironmentPanel) selectedEnvironment() *environment.Environment {
+	if e.selectedIndex >= 0 && e.selectedIndex < len(e.filteredItems) {
+		env := e.filteredItems[e.selectedIndex].env
+		return &env
+	}
+	return nil
+}
+
+// moveUp moves selection up
+func (e *EnvironmentPanel) moveUp() {
+	if e.selectedIndex > 0 {
+		e.selectedIndex--
+		e.lastMove = -1
+		e.adjustScrollOffset()
+	}
+}
+
+// moveDown moves selection down
+func (e *EnvironmentPanel) moveDown() {
+	if e.selectedIndex < len(e.filteredItems)-1 {
+		e.selectedIndex++
+		e.lastMove = 1
+		e.adjustScrollOffset()
+	}
+}
+
+// itemsHeight returns height available for item list (excluding filter line if active)
+func (e *EnvironmentPanel) itemsHeight() int {
+	h := e.height - 2 // borders
+	if e.filterActive {
+		h-- // filter input line
+	}
+	if h < 1 {
 		return 1
 	}
-	return width
+	return h
 }
 
-func (e *EnvironmentPanel) refreshEnvSelector() {
-	if e.envSelector == nil {
+// contentWidth returns width available for content
+func (e *EnvironmentPanel) contentWidth() int {
+	w := e.width - 2 // borders
+	if len(e.filteredItems) > e.itemsHeight() {
+		w-- // scrollbar
+	}
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
+// adjustScrollOffset ensures selected item is visible
+func (e *EnvironmentPanel) adjustScrollOffset() {
+	itemsHeight := e.itemsHeight()
+	if itemsHeight <= 0 || len(e.filteredItems) == 0 {
+		e.scrollOffset = 0
 		return
 	}
-	baseDir := e.workDir
-	if strings.TrimSpace(baseDir) == "" {
-		baseDir = "."
+
+	maxOffset := max(0, len(e.filteredItems)-itemsHeight)
+
+	// Anchor positions for smooth scrolling
+	anchorTop := min(1, itemsHeight-1)
+	anchorBottom := max(itemsHeight-2, anchorTop)
+
+	switch {
+	case e.lastMove > 0:
+		threshold := e.scrollOffset + anchorBottom
+		if e.selectedIndex > threshold {
+			e.scrollOffset = e.selectedIndex - anchorBottom
+		}
+	case e.lastMove < 0:
+		threshold := e.scrollOffset + anchorTop
+		if e.selectedIndex < threshold {
+			e.scrollOffset = e.selectedIndex - anchorTop
+		}
+	default:
+		if e.selectedIndex < e.scrollOffset {
+			e.scrollOffset = e.selectedIndex
+		} else if e.selectedIndex >= e.scrollOffset+itemsHeight {
+			e.scrollOffset = e.selectedIndex - itemsHeight + 1
+		}
 	}
-	e.envSelector.SetBaseDir(baseDir)
-	e.envSelector.SetStrategy(e.strategy)
-	e.envSelector.SetEnvironments(e.environments, e.current)
+
+	if e.scrollOffset < 0 {
+		e.scrollOffset = 0
+	} else if e.scrollOffset > maxOffset {
+		e.scrollOffset = maxOffset
+	}
 }
 
-func truncateVisible(text string, maxWidth int) string {
-	if maxWidth <= 0 {
+// renderContent renders the panel content
+func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
+	lines := make([]string, 0, totalHeight)
+
+	// When not focused, show only the current workspace (no selection highlight)
+	if !e.focused {
+		return e.renderUnfocusedContent(width, totalHeight)
+	}
+
+	// Filter input line (if active)
+	if e.filterActive {
+		filterLine := e.styles.Dimmed.Render("/") + e.filterText
+		if e.filterText == "" {
+			filterLine = e.styles.Dimmed.Render("/ type to filter...")
+		}
+		lines = append(lines, e.padLine(filterLine, width))
+	}
+
+	// Calculate remaining height for items
+	itemsHeight := totalHeight
+	if e.filterActive {
+		itemsHeight--
+	}
+
+	// Empty state
+	if len(e.filteredItems) == 0 {
+		msg := "No workspaces"
+		if e.filterText != "" {
+			msg = "No matches"
+		}
+		lines = append(lines, e.padLine(e.styles.Dimmed.Render(msg), width))
+		for len(lines) < totalHeight {
+			lines = append(lines, strings.Repeat(" ", width))
+		}
+		return lines
+	}
+
+	// Render visible items
+	start := e.scrollOffset
+	end := min(start+itemsHeight, len(e.filteredItems))
+
+	for i := start; i < end; i++ {
+		item := e.filteredItems[i]
+		isSelected := i == e.selectedIndex
+		lines = append(lines, e.renderItem(item, width, isSelected))
+	}
+
+	// Pad remaining lines
+	for len(lines) < totalHeight {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+
+	return lines
+}
+
+// renderUnfocusedContent renders a simplified view when panel is not focused
+func (e *EnvironmentPanel) renderUnfocusedContent(width, totalHeight int) []string {
+	lines := make([]string, 0, totalHeight)
+
+	// Find current workspace
+	var currentItem *envListItem
+	for i := range e.filteredItems {
+		if e.filteredItems[i].env.IsCurrent {
+			currentItem = &e.filteredItems[i]
+			break
+		}
+	}
+
+	if currentItem != nil {
+		// Show current workspace without selection highlighting
+		lines = append(lines, e.renderItem(*currentItem, width, false))
+	} else if len(e.filteredItems) > 0 {
+		// No current marked, show first item
+		lines = append(lines, e.renderItem(e.filteredItems[0], width, false))
+	} else {
+		// Empty state
+		lines = append(lines, e.padLine(e.styles.Dimmed.Render("No workspaces"), width))
+	}
+
+	// Pad remaining lines
+	for len(lines) < totalHeight {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+
+	return lines
+}
+
+// renderItem renders a single environment item
+func (e *EnvironmentPanel) renderItem(item envListItem, width int, isSelected bool) string {
+	// Current marker
+	marker := " "
+	if item.env.IsCurrent {
+		marker = "*"
+	}
+
+	// Build the base text
+	label := item.label
+	if label == "" {
+		label = "(no name)"
+	}
+
+	// Build path info (show relative or short path)
+	pathInfo := ""
+	if item.env.Path != "" {
+		pathInfo = e.formatPath(item.env.Path)
+	}
+
+	// Calculate available width for content (after marker)
+	markerWidth := 2 // marker + space
+	availableWidth := max(1, width-markerWidth)
+
+	// Build the display: "name · path" or just "name"
+	var displayText string
+	if pathInfo != "" && availableWidth > 20 {
+		separator := " · "
+		sepWidth := runewidth.StringWidth(separator)
+		pathWidth := runewidth.StringWidth(pathInfo)
+
+		// Calculate max label width
+		maxLabelWidth := availableWidth - sepWidth - pathWidth
+		if maxLabelWidth < 8 {
+			// Not enough room for path, just show label
+			displayText = runewidth.Truncate(label, availableWidth, "…")
+		} else {
+			// Truncate label if needed, show with path
+			truncLabel := label
+			if runewidth.StringWidth(label) > maxLabelWidth {
+				truncLabel = runewidth.Truncate(label, maxLabelWidth, "…")
+			}
+			displayText = truncLabel + separator + pathInfo
+		}
+	} else {
+		// No room for path, just show label
+		displayText = runewidth.Truncate(label, availableWidth, "…")
+	}
+
+	// Truncate the entire display if it still exceeds available width
+	if runewidth.StringWidth(displayText) > availableWidth {
+		displayText = runewidth.Truncate(displayText, availableWidth, "…")
+	}
+
+	// Build full line: marker + display (no padding yet)
+	line := marker + " " + displayText
+
+	// Apply styling
+	if isSelected {
+		bg := e.styles.SelectedLineBackground
+		// Style the content first
+		styled := e.styles.LineItemText.Background(bg).Bold(true).Render(line)
+		// Then pad with background color to fill width
+		return padStyledWithBg(styled, width, bg)
+	}
+
+	// Non-selected: just pad with spaces
+	return padToWidth(line, width)
+}
+
+// padStyledWithBg pads a styled string to width with background color
+func padStyledWithBg(styled string, width int, bg lipgloss.AdaptiveColor) string {
+	return PadLineWithBg(styled, width, bg)
+}
+
+// padToWidth pads a plain string to width with spaces
+func padToWidth(line string, width int) string {
+	return PadLine(line, width)
+}
+
+// formatPath returns a short display version of the path
+func (e *EnvironmentPanel) formatPath(path string) string {
+	// Show just the last 2 path components for brevity
+	parts := strings.Split(filepath.Clean(path), string(filepath.Separator))
+	if len(parts) > 2 {
+		return filepath.Join(parts[len(parts)-2:]...)
+	}
+	return path
+}
+
+// padLine pads a line to the given width
+func (e *EnvironmentPanel) padLine(line string, width int) string {
+	return padToWidth(line, width)
+}
+
+// buildFooterText builds the footer text
+func (e *EnvironmentPanel) buildFooterText() string {
+	if len(e.filteredItems) == 0 {
 		return ""
 	}
-	if runewidth.StringWidth(text) <= maxWidth {
-		return text
-	}
-	return runewidth.Truncate(text, maxWidth, "...")
+	return FormatItemCount(e.selectedIndex+1, len(e.filteredItems))
 }
 
-func appendLines(lines []string, block string) []string {
-	if block == "" {
-		return append(lines, "")
+// formatEnvAge formats a time as a relative age string
+func formatEnvAge(t time.Time) string {
+	delta := time.Since(t)
+	if delta < time.Minute {
+		return "now"
 	}
-	return append(lines, strings.Split(block, "\n")...)
+	if delta < time.Hour {
+		return fmt.Sprintf("%dm", int(delta.Minutes()))
+	}
+	if delta < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(delta.Hours()))
+	}
+	if delta < 7*24*time.Hour {
+		return fmt.Sprintf("%dd", int(delta.Hours()/24))
+	}
+	return t.Format("Jan 2")
 }

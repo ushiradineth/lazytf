@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,14 +10,40 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
-// StateListContent renders the terraform state list as a tab content.
+// StateResourceItem implements ListPanelItem for state resources.
+type StateResourceItem struct {
+	resource terraform.StateResource
+}
+
+// Render renders the state resource item.
+func (s StateResourceItem) Render(st *styles.Styles, width int, selected bool) string {
+	line := s.resource.Address
+	maxWidth := max(10, width-2) // Account for prefix "> " or "  "
+	if len(line) > maxWidth {
+		line = line[:maxWidth-3] + "..."
+	}
+
+	// Pad line to width for consistent selection highlighting
+	fullLine := "  " + line
+	if selected {
+		fullLine = "> " + line
+	}
+	lineWidth := lipgloss.Width(fullLine)
+	if lineWidth < width {
+		fullLine = fullLine + strings.Repeat(" ", width-lineWidth)
+	}
+
+	if selected {
+		return st.Selected.MaxWidth(width).Render(fullLine)
+	}
+	return st.ListItem.MaxWidth(width).Render(fullLine)
+}
+
+// StateListContent renders the terraform state list using ListPanel.
 type StateListContent struct {
+	listPanel *ListPanel
 	styles    *styles.Styles
 	resources []terraform.StateResource
-	selected  int
-	width     int
-	height    int
-	offset    int
 	loading   bool
 	errorMsg  string
 
@@ -28,25 +53,44 @@ type StateListContent struct {
 
 // NewStateListContent creates a new state list content.
 func NewStateListContent(s *styles.Styles) *StateListContent {
+	if s == nil {
+		s = styles.DefaultStyles()
+	}
+	panel := NewListPanel("[2]", s)
+	panel.SetTabs([]string{"State"})
 	return &StateListContent{
-		styles:  s,
-		loading: false,
+		listPanel: panel,
+		styles:    s,
+		loading:   false,
 	}
 }
 
 // SetSize updates the layout size.
 func (s *StateListContent) SetSize(width, height int) {
-	s.width = width
-	s.height = height
+	s.listPanel.SetSize(width, height)
+}
+
+// SetFocused sets the focus state.
+func (s *StateListContent) SetFocused(focused bool) {
+	s.listPanel.SetFocused(focused)
+}
+
+// IsFocused returns whether the panel is focused.
+func (s *StateListContent) IsFocused() bool {
+	return s.listPanel.IsFocused()
 }
 
 // SetResources sets the list of resources.
 func (s *StateListContent) SetResources(resources []terraform.StateResource) {
 	s.resources = resources
-	s.selected = 0
-	s.offset = 0
 	s.loading = false
 	s.errorMsg = ""
+
+	items := make([]ListPanelItem, len(resources))
+	for i, res := range resources {
+		items[i] = StateResourceItem{resource: res}
+	}
+	s.listPanel.SetItems(items)
 }
 
 // SetLoading sets the loading state.
@@ -62,39 +106,21 @@ func (s *StateListContent) SetError(err string) {
 
 // GetSelected returns the currently selected resource.
 func (s *StateListContent) GetSelected() *terraform.StateResource {
-	if len(s.resources) == 0 || s.selected < 0 || s.selected >= len(s.resources) {
-		return nil
+	idx := s.listPanel.GetSelectedIndex()
+	if idx >= 0 && idx < len(s.resources) {
+		return &s.resources[idx]
 	}
-	return &s.resources[s.selected]
+	return nil
 }
 
 // MoveUp moves the selection up.
 func (s *StateListContent) MoveUp() {
-	if s.selected > 0 {
-		s.selected--
-		if s.selected < s.offset {
-			s.offset = s.selected
-		}
-	}
+	s.listPanel.MoveUp()
 }
 
 // MoveDown moves the selection down.
 func (s *StateListContent) MoveDown() {
-	if s.selected < len(s.resources)-1 {
-		s.selected++
-		visibleRows := s.visibleRows()
-		if s.selected >= s.offset+visibleRows {
-			s.offset = s.selected - visibleRows + 1
-		}
-	}
-}
-
-func (s *StateListContent) visibleRows() int {
-	rows := s.height
-	if rows < 1 {
-		rows = 1
-	}
-	return rows
+	s.listPanel.MoveDown()
 }
 
 // HandleKey handles key events.
@@ -116,11 +142,14 @@ func (s *StateListContent) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 }
 
 // View renders the state list content.
+// NOTE: This renders just the content lines, NOT a full panel with frame.
+// The caller is responsible for wrapping in a PanelFrame if needed.
 func (s *StateListContent) View() string {
 	if s.styles == nil {
 		return ""
 	}
 
+	// Handle special states
 	if s.loading {
 		return s.styles.Dimmed.Render("Loading state...")
 	}
@@ -133,51 +162,22 @@ func (s *StateListContent) View() string {
 		return s.styles.Dimmed.Render("No resources in state. Press 'r' to refresh.")
 	}
 
-	var lines []string
-	visibleRows := s.visibleRows()
-	end := s.offset + visibleRows
-	if end > len(s.resources) {
-		end = len(s.resources)
-	}
-
-	for i := s.offset; i < end; i++ {
-		res := s.resources[i]
-		line := res.Address
-		maxWidth := s.width - 4
-		if maxWidth < 10 {
-			maxWidth = 10
-		}
-		if len(line) > maxWidth {
-			line = line[:maxWidth-3] + "..."
-		}
-		if i == s.selected {
-			line = s.styles.Selected.Width(s.width - 2).Render("> " + line)
-		} else {
-			line = s.styles.ListItem.Width(s.width - 2).Render("  " + line)
-		}
-		lines = append(lines, line)
-	}
-
-	// Pad if needed
-	for len(lines) < visibleRows {
-		lines = append(lines, strings.Repeat(" ", s.width))
-	}
-
-	// Add count info at bottom if we have resources
-	if len(s.resources) > 0 {
-		countInfo := fmt.Sprintf("%d/%d", s.selected+1, len(s.resources))
-		if len(lines) > 0 {
-			// Replace last line with count info
-			lastIdx := len(lines) - 1
-			lines[lastIdx] = lipgloss.NewStyle().
-				Foreground(s.styles.Theme.DimmedColor).
-				Align(lipgloss.Right).
-				Width(s.width).
-				Render(countInfo)
-		}
-	}
-
+	// Get content lines from list panel and join them
+	lines := s.listPanel.RenderContentLines(s.listPanel.width, s.listPanel.height)
 	return strings.Join(lines, "\n")
+}
+
+// GetScrollInfo returns scroll information for external scrollbar rendering.
+func (s *StateListContent) GetScrollInfo(height int) (scrollPos, thumbSize float64, hasScrollbar bool) {
+	return s.listPanel.GetScrollInfo(height)
+}
+
+// GetFooterText returns the footer text for the panel.
+func (s *StateListContent) GetFooterText() string {
+	if len(s.resources) == 0 {
+		return ""
+	}
+	return FormatItemCount(s.listPanel.GetSelectedIndex()+1, len(s.resources))
 }
 
 // ResourceCount returns the number of resources.
@@ -188,8 +188,7 @@ func (s *StateListContent) ResourceCount() int {
 // Clear clears the resources.
 func (s *StateListContent) Clear() {
 	s.resources = nil
-	s.selected = 0
-	s.offset = 0
 	s.loading = false
 	s.errorMsg = ""
+	s.listPanel.SetItems(nil)
 }

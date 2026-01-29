@@ -176,7 +176,7 @@ func (t *TabbedPanel) View() string {
 
 	// Build title with tabs
 	titleText := t.buildTitleWithTabs(titleStyle)
-	titleRendered := titleStyle.Render(" " + titleText + " ")
+	titleRendered := titleStyle.Render(titleText)
 
 	lines := strings.Split(panel, "\n")
 	if len(lines) > 0 && t.width > 4 {

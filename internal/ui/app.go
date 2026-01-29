@@ -563,7 +563,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if handled, panelCmd := m.environmentPanel.HandleKey(msg); handled {
 				return m, panelCmd
 			}
-			return m, nil
+			// Don't return early - allow navigation keys (2, 3, etc.) to be processed below
 		}
 
 		if m.inputCaptured() {
@@ -1007,44 +1007,68 @@ func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
 	}
 
 	// Determine which content to show based on active tab
-	var content string
 	if m.resourcesActiveTab == 0 {
 		// Resources tab - use the resource list's view but we'll modify the title
 		// ResourceList already renders with border, so use full dimensions
 		m.resourceList.SetSize(width, height)
-		content = m.resourceList.View()
+		content := m.resourceList.View()
 		// The resource list already renders with border and title, so return it with modified title
 		return m.addTabsToPanel(content, width, []string{"Resources", "State"}, m.resourcesActiveTab)
 	}
 
-	// State tab
+	// State tab - use PanelFrame properly
 	if m.stateListContent == nil {
 		m.stateListContent = components.NewStateListContent(m.styles)
 		m.stateListContent.OnSelect = func(address string) tea.Cmd {
 			return m.beginStateShow(address)
 		}
 	}
-	// Content area is panel size minus borders (2 for border)
-	m.stateListContent.SetSize(width-2, height-2)
-	stateView := m.stateListContent.View()
 
-	// Wrap in panel border
 	focused := m.panelManager != nil && m.panelManager.GetFocusedPanel() == PanelResources
-	borderStyle := m.styles.Border
-	if focused {
-		borderStyle = m.styles.FocusedBorder
+	m.stateListContent.SetFocused(focused)
+
+	// Content area is panel size minus borders (2 for border)
+	contentWidth := width - 2
+	contentHeight := height - 2
+	m.stateListContent.SetSize(contentWidth, contentHeight)
+
+	// Get scroll info for the frame
+	scrollPos, thumbSize, hasScrollbar := m.stateListContent.GetScrollInfo(contentHeight)
+
+	// Build tab title for the frame
+	var tabParts []string
+	tabParts = append(tabParts, "Resources")
+	tabParts = append(tabParts, "State")
+
+	// Create and configure the frame
+	frame := components.NewPanelFrame(m.styles)
+	frame.SetSize(width, height)
+	frame.SetConfig(components.PanelFrameConfig{
+		PanelID:       "[2]",
+		Tabs:          tabParts,
+		ActiveTab:     1, // State tab is active
+		Focused:       focused,
+		FooterText:    m.stateListContent.GetFooterText(),
+		ShowScrollbar: hasScrollbar,
+		ScrollPos:     scrollPos,
+		ThumbSize:     thumbSize,
+	})
+
+	// Get content lines from StateListContent
+	stateView := m.stateListContent.View()
+	contentLines := strings.Split(stateView, "\n")
+
+	// Pad content lines to fill panel
+	result := make([]string, contentHeight)
+	for i := range contentHeight {
+		if i < len(contentLines) {
+			result[i] = components.PadLine(contentLines[i], frame.ContentWidth())
+		} else {
+			result[i] = strings.Repeat(" ", frame.ContentWidth())
+		}
 	}
 
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(width - 2).
-		Height(height - 2).
-		Render(stateView)
-
-	return m.addTabsToPanel(panel, width, []string{"Resources", "State"}, m.resourcesActiveTab)
+	return frame.RenderWithContent(result)
 }
 
 // addTabsToPanel adds tab indicators to the first line of a panel
@@ -1061,17 +1085,19 @@ func (m *Model) addTabsToPanel(panel string, width int, tabs []string, activeTab
 		titleStyle = m.styles.FocusedPanelTitle
 	}
 
+	// Build title: [2] ActiveTab - InactiveTab
+	// Active tab gets title color (blue when focused), inactive tabs are white
 	var tabParts []string
-	tabParts = append(tabParts, "[2]")
 	for i, tab := range tabs {
 		if i == activeTab {
-			tabParts = append(tabParts, "["+tab+"]")
+			// Active tab uses title style (blue when focused)
+			tabParts = append(tabParts, titleStyle.Render(tab))
 		} else {
-			tabParts = append(tabParts, m.styles.Dimmed.Render(tab))
+			// Inactive tabs are white (plain text)
+			tabParts = append(tabParts, tab)
 		}
 	}
-	tabTitle := strings.Join(tabParts, " ")
-	titleRendered := titleStyle.Render(" " + tabTitle + " ")
+	titleRendered := titleStyle.Render("[2]") + " " + strings.Join(tabParts, " - ")
 
 	// Try to replace the title in the first line
 	firstLine := lines[0]

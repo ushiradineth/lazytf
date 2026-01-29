@@ -165,7 +165,7 @@ func (t *Toast) Overlay(baseView string) string {
 		// Build the new line using ANSI-aware functions:
 		// [left part][toast line][right part]
 		left := ansi.Truncate(baseLine, startCol, "")
-		right := ansiCutLeft(baseLine, startCol+toastWidth)
+		right := ANSICutLeft(baseLine, startCol+toastWidth)
 
 		baseLines[row] = left + toastLine + right
 	}

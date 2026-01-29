@@ -20,6 +20,7 @@ import (
 // ResourceList displays a list of resources.
 type ResourceList struct {
 	viewport       viewport.Model
+	frame          *PanelFrame
 	resources      []terraform.ResourceChange
 	selectedIndex  int
 	diffEngine     *diff.Engine
@@ -51,6 +52,7 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 
 	return &ResourceList{
 		viewport:      vp,
+		frame:         NewPanelFrame(s),
 		resources:     []terraform.ResourceChange{},
 		selectedIndex: 0,
 		diffEngine:    diff.NewEngine(),
@@ -70,6 +72,7 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 func (r *ResourceList) SetSize(width, height int) {
 	r.width = width
 	r.height = height
+	r.frame.SetSize(width, height)
 	// Viewport dimensions are content area (minus borders)
 	r.viewport.Width = width - 2
 	r.viewport.Height = height - 2
@@ -204,14 +207,6 @@ func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 
 // View renders the resource list
 func (r *ResourceList) View() string {
-	// Determine border style based on focus
-	borderStyle := r.styles.Border
-	titleStyle := r.styles.PanelTitle
-	if r.focused {
-		borderStyle = r.styles.FocusedBorder
-		titleStyle = r.styles.FocusedPanelTitle
-	}
-
 	// Build content with summary header
 	var contentParts []string
 
@@ -232,30 +227,56 @@ func (r *ResourceList) View() string {
 
 	content := strings.Join(contentParts, "\n")
 
-	// Build panel with border
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(r.width - 2).
-		Height(r.height - 2).
-		Render(content)
+	// Calculate content dimensions
+	contentHeight := max(1, r.height-2)
 
-	// Add title to border
-	titleText := "[2] Resources"
+	// Build title with filter indicators
+	titleText := "Resources"
 	indicatorText := r.renderFilterIndicators()
-	titleContent := alignTitle(titleText, indicatorText, r.width-4)
-	titleRendered := titleStyle.Render(" " + titleContent + " ")
+	if indicatorText != "" {
+		titleText = titleText + " " + indicatorText
+	}
 
-	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 && r.width > 4 {
-		if line, ok := RenderPanelTitleLine(r.width, borderStyle, titleRendered); ok {
-			lines[0] = line
+	// Configure frame with scrollbar info
+	scrollPos, thumbSize := CalculateScrollParams(r.viewport.YOffset, r.viewport.Height, len(r.visibleItems))
+	r.frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[2]",
+		Tabs:          []string{titleText},
+		ActiveTab:     0,
+		Focused:       r.focused,
+		FooterText:    r.buildFooterText(),
+		ShowScrollbar: len(r.visibleItems) > contentHeight,
+		ScrollPos:     scrollPos,
+		ThumbSize:     thumbSize,
+	})
+
+	// Split content into lines
+	contentLines := strings.Split(content, "\n")
+
+	// Pad content lines to fill panel
+	result := make([]string, contentHeight)
+	for i := range contentHeight {
+		if i < len(contentLines) {
+			result[i] = r.padLineToWidth(contentLines[i], r.frame.ContentWidth())
+		} else {
+			result[i] = strings.Repeat(" ", r.frame.ContentWidth())
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return r.frame.RenderWithContent(result)
+}
+
+// buildFooterText builds the footer text with item count.
+func (r *ResourceList) buildFooterText() string {
+	if len(r.visibleItems) == 0 {
+		return ""
+	}
+	return FormatItemCount(r.selectedIndex+1, len(r.visibleItems))
+}
+
+// padLineToWidth pads a line to the given width.
+func (r *ResourceList) padLineToWidth(line string, width int) string {
+	return PadLine(line, width)
 }
 
 // renderSummaryHeader renders the plan summary counts: +5 ~3 -2 ±1
@@ -296,19 +317,6 @@ func (r *ResourceList) filterIndicator(action terraform.ActionType, label string
 		return text
 	}
 	return r.styles.Dimmed.Render(text)
-}
-
-func alignTitle(left, right string, width int) string {
-	if width <= 0 || right == "" {
-		return left
-	}
-	leftWidth := lipgloss.Width(left)
-	rightWidth := lipgloss.Width(right)
-	gap := width - leftWidth - rightWidth
-	if gap < 1 {
-		gap = 1
-	}
-	return left + strings.Repeat(" ", gap) + right
 }
 
 // getFilteredResources returns resources that pass the current filter
@@ -372,19 +380,10 @@ func (r *ResourceList) adjustViewportOffset() {
 		return
 	}
 
-	maxOffset := len(r.visibleItems) - r.viewport.Height
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := max(0, len(r.visibleItems)-r.viewport.Height)
 
-	anchorTop := 2
-	if r.viewport.Height-1 < anchorTop {
-		anchorTop = r.viewport.Height - 1
-	}
-	anchorBottom := r.viewport.Height - 3
-	if anchorBottom < anchorTop {
-		anchorBottom = anchorTop
-	}
+	anchorTop := min(2, r.viewport.Height-1)
+	anchorBottom := max(r.viewport.Height-3, anchorTop)
 
 	switch {
 	case r.lastMove > 0:
@@ -417,19 +416,13 @@ func (r *ResourceList) renderVisibleItems() string {
 		return ""
 	}
 
-	start := r.viewport.YOffset
-	if start < 0 {
-		start = 0
-	}
+	start := max(0, r.viewport.YOffset)
 	if start >= len(r.visibleItems) {
 		start = len(r.visibleItems) - 1
 	}
 	end := len(r.visibleItems)
 	if r.viewport.Height > 0 {
-		end = start + r.viewport.Height
-		if end > len(r.visibleItems) {
-			end = len(r.visibleItems)
-		}
+		end = min(start+r.viewport.Height, len(r.visibleItems))
 	}
 
 	var content strings.Builder
