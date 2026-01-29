@@ -280,6 +280,9 @@ func (m *Model) applyEnvironmentSelection(option environment.Environment) error 
 		return fmt.Errorf("unsupported environment strategy: %s", option.Strategy)
 	}
 
+	// Save the environment preference for next startup
+	m.saveEnvironmentPreference(option)
+
 	m.setPlan(nil)
 	m.planFilePath = ""
 	m.planRunFlags = nil
@@ -290,4 +293,23 @@ func (m *Model) applyEnvironmentSelection(option environment.Environment) error 
 		m.operationState.InitializeFromPlan(nil)
 	}
 	return nil
+}
+
+func (m *Model) saveEnvironmentPreference(option environment.Environment) {
+	if !m.executionMode {
+		return
+	}
+	workDir := m.envWorkDir
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	absWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return
+	}
+	pref := environment.Preference{
+		Strategy:    option.Strategy,
+		Environment: envSelectionValue(option),
+	}
+	_ = environment.SavePreference(absWorkDir, pref)
 }
