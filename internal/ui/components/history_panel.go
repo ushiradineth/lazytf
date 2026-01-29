@@ -153,6 +153,14 @@ func (h *HistoryPanel) IsFocused() bool {
 	return h.listPanel.IsFocused()
 }
 
+// SetStyles updates the panel styles.
+func (h *HistoryPanel) SetStyles(s *styles.Styles) {
+	h.listPanel.styles = s
+	if h.listPanel.frame != nil {
+		h.listPanel.frame.SetStyles(s)
+	}
+}
+
 // GetSelectedIndex returns the currently selected index.
 func (h *HistoryPanel) GetSelectedIndex() int {
 	return h.listPanel.GetSelectedIndex()

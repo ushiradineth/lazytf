@@ -24,6 +24,11 @@ func NewConfigView(s *styles.Styles) *ConfigView {
 	return &ConfigView{styles: s}
 }
 
+// SetStyles updates the component styles.
+func (v *ConfigView) SetStyles(s *styles.Styles) {
+	v.styles = s
+}
+
 // SetSize updates the layout size.
 func (v *ConfigView) SetSize(width, height int) {
 	v.width = width

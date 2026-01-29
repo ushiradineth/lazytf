@@ -58,8 +58,6 @@ func (m *Model) inputCaptured() bool {
 
 func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch m.execView {
-	case viewPlanConfirm:
-		return m.handlePlanConfirmKey(msg)
 	case viewPlanOutput, viewApplyOutput:
 		return m.handleLegacyOutputKey(msg)
 	case viewCommandLog:
@@ -70,24 +68,6 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return m.handleStateShowKey(msg)
 	default:
 		return m.handleMainExecutionKey(msg)
-	}
-}
-
-func (m *Model) handlePlanConfirmKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	switch msg.String() {
-	case "q":
-		m.quitting = true
-		return true, tea.Quit
-	case "y", "Y":
-		return true, m.beginApply()
-	case "n", "N", consts.KeyEsc:
-		m.execView = viewMain
-		return true, nil
-	case consts.KeyCtrlC:
-		m.cancelExecution()
-		return true, nil
-	default:
-		return false, nil
 	}
 }
 
@@ -252,10 +232,7 @@ func (m *Model) handleApplyKey() (bool, tea.Cmd) {
 		}
 		return true, nil
 	}
-	if m.planView != nil {
-		m.planView.SetSummary(m.planSummary())
-	}
-	m.execView = viewPlanConfirm
+	m.showConfirmApplyModal()
 	return true, nil
 }
 

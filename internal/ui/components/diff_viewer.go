@@ -34,6 +34,11 @@ func (d *DiffViewer) SetSize(width, height int) {
 	d.height = height
 }
 
+// SetStyles updates the component styles.
+func (d *DiffViewer) SetStyles(s *styles.Styles) {
+	d.styles = s
+}
+
 // View renders the diff viewer content.
 func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 	if resource == nil {

@@ -82,6 +82,14 @@ func (e *EnvironmentPanel) IsFocused() bool {
 	return e.focused
 }
 
+// SetStyles updates the component styles.
+func (e *EnvironmentPanel) SetStyles(s *styles.Styles) {
+	e.styles = s
+	if e.frame != nil {
+		e.frame.SetStyles(s)
+	}
+}
+
 // SelectorActive reports whether filtering is active.
 // For compatibility - the panel is always in "selector" mode now.
 func (e *EnvironmentPanel) SelectorActive() bool {

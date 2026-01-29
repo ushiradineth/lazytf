@@ -138,7 +138,7 @@ func run(cmd *cobra.Command, args []string) error {
 	return runReadOnlyMode(&cfg, args)
 }
 
-func runExecutionMode(cfg *config.Config, overrideFlags []string) error {
+func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
 	flags, err := prepareExecutionFlags(cfg, overrideFlags)
 	if err != nil {
 		return err
@@ -170,6 +170,7 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string) error {
 		HistoryLogger:  historyLogger,
 		HistoryEnabled: cfg.History.Enabled,
 		Config:         cfg,
+		ConfigManager:  configManager,
 	}, appStyles)
 	return programRunner(model)
 }

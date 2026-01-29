@@ -26,6 +26,11 @@ func NewStateShowView(s *styles.Styles) *StateShowView {
 	}
 }
 
+// SetStyles updates the component styles.
+func (v *StateShowView) SetStyles(s *styles.Styles) {
+	v.styles = s
+}
+
 // SetSize updates the layout size.
 func (v *StateShowView) SetSize(width, height int) {
 	v.width = width

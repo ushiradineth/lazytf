@@ -51,6 +51,11 @@ func (f *PanelFrame) SetConfig(config PanelFrameConfig) {
 	f.config = config
 }
 
+// SetStyles updates the frame styles.
+func (f *PanelFrame) SetStyles(s *styles.Styles) {
+	f.styles = s
+}
+
 // ContentWidth returns the width available for content (excluding borders and scrollbar).
 func (f *PanelFrame) ContentWidth() int {
 	w := f.width - 2 // left and right border

@@ -89,8 +89,14 @@ type Model struct {
 	envOptions         []environment.Environment
 
 	// Overlay components
-	toast     *components.Toast
-	helpModal *components.Modal
+	toast      *components.Toast
+	helpModal  *components.Modal
+	themeModal *components.Modal
+
+	// Theme switching
+	configManager    *config.Manager
+	previewThemeName string
+	originalStyles   *styles.Styles
 
 	// Panel system
 	panelManager     *PanelManager
@@ -120,6 +126,8 @@ const (
 	ModalNone ModalState = iota
 	ModalHelp
 	ModalSettings
+	ModalConfirmApply
+	ModalTheme
 )
 
 type environmentDetector interface {
@@ -150,6 +158,7 @@ type ExecutionConfig struct {
 	HistoryLogger  *history.Logger
 	HistoryEnabled bool
 	Config         *config.Config
+	ConfigManager  *config.Manager
 }
 
 // NewModel creates a new application model.
@@ -176,6 +185,7 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	toast := components.NewToast(appStyles)
 	toast.SetPosition(components.ToastTopLeft)
 	helpModal := components.NewModal(appStyles)
+	themeModal := components.NewModal(appStyles)
 
 	m := &Model{
 		plan:          plan,
@@ -193,8 +203,9 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		configView:    views.NewConfigView(appStyles),
 
 		// Overlay components
-		toast:     toast,
-		helpModal: helpModal,
+		toast:      toast,
+		helpModal:  helpModal,
+		themeModal: themeModal,
 
 		// Panel system
 		panelManager:     panelManager,
@@ -270,6 +281,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	// Register history panel with panel manager
 	m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
 	m.config = cfg.Config
+	m.configManager = cfg.ConfigManager
 	m.configView = views.NewConfigView(m.styles)
 	if m.configView != nil {
 		m.configView.SetConfig(m.config)
@@ -552,6 +564,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if handled, cmd := m.handleModalHelpKey(msg); handled {
 		return m, cmd
 	}
+	if handled, cmd := m.handleModalThemeKey(msg); handled {
+		return m, cmd
+	}
+	if handled, cmd := m.handleModalConfirmApplyKey(msg); handled {
+		return m, cmd
+	}
 	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
 		return m, cmd
 	}
@@ -632,6 +650,29 @@ func (m *Model) handleModalHelpKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 }
 
+func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.modalState != ModalConfirmApply {
+		return false, nil
+	}
+	switch msg.String() {
+	case "q":
+		m.quitting = true
+		return true, tea.Quit
+	case "y", "Y":
+		m.modalState = ModalNone
+		return true, m.beginApply()
+	case "n", "N", consts.KeyEsc:
+		m.modalState = ModalNone
+		return true, nil
+	case consts.KeyCtrlC:
+		m.cancelExecution()
+		m.modalState = ModalNone
+		return true, nil
+	default:
+		return true, nil
+	}
+}
+
 func (m *Model) handleEnvironmentPanelKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.panelManager == nil || m.environmentPanel == nil || !m.environmentPanel.SelectorActive() {
 		return false, nil
@@ -663,6 +704,8 @@ func (m *Model) handleMainViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ",":
 		m.toggleSettingsModal()
 		return m, nil
+	case "T":
+		return m.toggleThemeModal()
 	case "c":
 		m.toggleActionFilter(terraform.ActionCreate, &m.filterCreate)
 	case "t":
@@ -700,6 +743,26 @@ func (m *Model) toggleSettingsModal() {
 		return
 	}
 	m.modalState = ModalSettings
+}
+
+func (m *Model) showConfirmApplyModal() {
+	if m.helpModal == nil {
+		return
+	}
+
+	// Build the confirmation message with plan summary
+	summary := m.planSummary()
+	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
+
+	actions := []components.ModalAction{
+		{Key: "y", Label: "Yes, apply"},
+		{Key: "n", Label: "No, cancel"},
+	}
+
+	m.helpModal.SetTitle("Confirm Apply")
+	m.helpModal.SetConfirm(message, actions)
+	m.helpModal.Show()
+	m.modalState = ModalConfirmApply
 }
 
 func (m *Model) toggleActionFilter(action terraform.ActionType, value *bool) {
@@ -827,7 +890,21 @@ func (m *Model) handlePanelNavigation(msg tea.KeyMsg) (tea.Cmd, bool) {
 
 	if handled, navCmd := m.panelManager.HandleNavigation(msg); handled {
 		m.updateLayout()
-		m.historyFocused = m.panelManager.GetFocusedPanel() == PanelHistory
+		wasHistoryFocused := m.historyFocused
+		focusedPanel := m.panelManager.GetFocusedPanel()
+		m.historyFocused = focusedPanel == PanelHistory
+
+		// When history panel gains focus, show the selected history detail
+		if m.historyFocused && !wasHistoryFocused {
+			historyCmd := m.showSelectedHistoryDetail()
+			return tea.Batch(navCmd, historyCmd), true
+		}
+
+		// When resources panel gains focus, switch back to diff mode
+		if focusedPanel == PanelResources && wasHistoryFocused && m.mainArea != nil {
+			m.mainArea.SetMode(ModeDiff)
+		}
+
 		return tea.Batch(navCmd), true
 	}
 
@@ -904,10 +981,6 @@ func (m *Model) viewExecutionOverride() string {
 		return ""
 	}
 	switch m.execView {
-	case viewPlanConfirm:
-		if m.planView != nil {
-			return m.planView.View()
-		}
 	case viewCommandLog:
 		return m.renderFullScreenCommandLog()
 	case viewStateList:
@@ -918,7 +991,7 @@ func (m *Model) viewExecutionOverride() string {
 		if m.stateShowView != nil {
 			return m.stateShowView.View()
 		}
-	case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics:
+	case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics, viewPlanConfirm:
 		return ""
 	}
 	return ""
@@ -927,6 +1000,12 @@ func (m *Model) viewExecutionOverride() string {
 func (m *Model) applyViewOverlays(view string) string {
 	if m.modalState == ModalHelp && m.helpModal != nil {
 		view = m.helpModal.Overlay(view)
+	}
+	if m.modalState == ModalConfirmApply && m.helpModal != nil {
+		view = m.helpModal.Overlay(view)
+	}
+	if m.modalState == ModalTheme && m.themeModal != nil {
+		view = m.themeModal.Overlay(view)
 	}
 	if m.toast != nil && m.toast.IsVisible() {
 		view = m.toast.Overlay(view)

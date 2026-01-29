@@ -74,6 +74,11 @@ func (d *DiagnosticsPanel) SetShowRaw(_ bool) {
 	// Intentionally empty - show raw flag is not used
 }
 
+// SetStyles updates the panel styles.
+func (d *DiagnosticsPanel) SetStyles(s *styles.Styles) {
+	d.styles = s
+}
+
 // AppendSessionLog adds a new command log entry to the session history.
 func (d *DiagnosticsPanel) AppendSessionLog(command, output string) {
 	entry := SessionLogEntry{

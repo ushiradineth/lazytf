@@ -73,6 +73,14 @@ func (l *ListPanel) IsFocused() bool {
 	return l.focused
 }
 
+// SetStyles updates the component styles.
+func (l *ListPanel) SetStyles(s *styles.Styles) {
+	l.styles = s
+	if l.frame != nil {
+		l.frame.SetStyles(s)
+	}
+}
+
 // SetTabs sets the tab names for the panel.
 func (l *ListPanel) SetTabs(tabs []string) {
 	l.tabs = tabs

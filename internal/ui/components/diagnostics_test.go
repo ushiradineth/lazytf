@@ -159,3 +159,15 @@ func TestWrapTextZeroWidth(t *testing.T) {
 		t.Errorf("Expected unchanged text for negative width, got %q", result)
 	}
 }
+
+func TestDiagnosticsPanelSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewDiagnosticsPanel(s)
+
+	newStyles := styles.DefaultStyles()
+	panel.SetStyles(newStyles)
+
+	if panel.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}

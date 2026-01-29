@@ -72,6 +72,11 @@ func (t *Toast) SetDuration(d time.Duration) {
 	t.duration = d
 }
 
+// SetStyles updates the component styles.
+func (t *Toast) SetStyles(s *styles.Styles) {
+	t.styles = s
+}
+
 // Show displays a toast with the given message and level.
 // Returns a command that will clear the toast after the duration.
 func (t *Toast) Show(message string, level ToastLevel) tea.Cmd {

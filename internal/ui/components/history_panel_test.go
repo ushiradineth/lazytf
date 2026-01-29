@@ -404,3 +404,13 @@ func TestHistoryItemRenderCanceled(t *testing.T) {
 		t.Error("expected cancel status in rendered output")
 	}
 }
+
+func TestHistoryPanelSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewHistoryPanel(s)
+
+	newStyles := styles.DefaultStyles()
+	panel.SetStyles(newStyles)
+
+	// Should not panic
+}

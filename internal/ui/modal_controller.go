@@ -117,6 +117,7 @@ func helpSections(executionMode bool) []helpSection {
 			rows: []helpRow{
 				{keys: "1 then e", desc: "select environment"},
 				{keys: ",", desc: "open settings"},
+				{keys: "T", desc: "change theme"},
 				{keys: "?", desc: "toggle keybinds"},
 				{keys: "q or ctrl+c", desc: "quit"},
 			},
@@ -226,11 +227,13 @@ func (m *Model) updateThemeModalContent() {
 
 	currentTheme := m.styles.Theme.Name
 	var items []components.HelpItem
+	currentIndex := 0
 
-	for _, themeName := range availableThemes {
+	for i, themeName := range availableThemes {
 		displayName := themeDisplayName(themeName)
 		if themeName == currentTheme {
 			displayName += " (current)"
+			currentIndex = i
 		}
 		items = append(items, components.HelpItem{
 			Key:         displayName,
@@ -239,13 +242,13 @@ func (m *Model) updateThemeModalContent() {
 		})
 	}
 
-	// Add footer
+	// Add footer hints (as headers so they're not selectable)
 	items = append(items, components.HelpItem{Key: "", IsHeader: true})
-	items = append(items, components.HelpItem{Key: "enter", Description: "select theme", IsHeader: false})
-	items = append(items, components.HelpItem{Key: "esc", Description: "cancel", IsHeader: false})
+	items = append(items, components.HelpItem{Key: "enter: select  esc: cancel", IsHeader: true})
 
 	m.themeModal.SetTitle("Select Theme")
 	m.themeModal.SetItems(items)
+	m.themeModal.SetSelectedIndex(currentIndex)
 	m.themeModal.SetSize(m.width, m.height)
 	m.themeModal.Show()
 }

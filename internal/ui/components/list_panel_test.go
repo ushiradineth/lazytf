@@ -509,6 +509,19 @@ func TestIntToString(t *testing.T) {
 	}
 }
 
+func TestListPanel_SetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewListPanel("[2]", s)
+
+	newStyles := styles.DefaultStyles()
+	panel.SetStyles(newStyles)
+
+	// Panel should not panic and styles should be updated
+	if panel.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
 func TestListPanel_ViewWithLongFooter(t *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewListPanel("[2]", s)

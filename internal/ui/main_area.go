@@ -94,6 +94,20 @@ func (m *MainArea) IsFocused() bool {
 	return m.focused
 }
 
+// SetStyles updates the component styles.
+func (m *MainArea) SetStyles(s *styles.Styles) {
+	m.styles = s
+	if m.frame != nil {
+		m.frame.SetStyles(s)
+	}
+	if m.diffViewer != nil {
+		m.diffViewer.SetStyles(s)
+	}
+	if m.historyView != nil {
+		m.historyView.SetStyles(s)
+	}
+}
+
 // SetMode switches the display mode.
 func (m *MainArea) SetMode(mode MainAreaMode) {
 	m.mode = mode

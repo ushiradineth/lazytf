@@ -36,6 +36,11 @@ func (v *PlanView) SetSummary(summary string) {
 	v.summary = summary
 }
 
+// SetStyles updates the view styles.
+func (v *PlanView) SetStyles(s *styles.Styles) {
+	v.styles = s
+}
+
 // View renders the confirmation dialog.
 func (v *PlanView) View() string {
 	if v.styles == nil {

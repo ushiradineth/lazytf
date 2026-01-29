@@ -81,6 +81,14 @@ func (s *StateListContent) IsFocused() bool {
 	return s.listPanel.IsFocused()
 }
 
+// SetStyles updates the component styles.
+func (s *StateListContent) SetStyles(st *styles.Styles) {
+	s.styles = st
+	if s.listPanel != nil {
+		s.listPanel.SetStyles(st)
+	}
+}
+
 // SetResources sets the list of resources.
 func (s *StateListContent) SetResources(resources []terraform.StateResource) {
 	s.resources = resources

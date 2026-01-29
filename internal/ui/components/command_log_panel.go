@@ -92,6 +92,17 @@ func (c *CommandLogPanel) SetShowRaw(show bool) {
 	}
 }
 
+// SetStyles updates the panel styles.
+func (c *CommandLogPanel) SetStyles(s *styles.Styles) {
+	c.styles = s
+	if c.diagnosticsPanel != nil {
+		c.diagnosticsPanel.SetStyles(s)
+	}
+	if c.frame != nil {
+		c.frame.SetStyles(s)
+	}
+}
+
 // Update handles Bubble Tea messages (implements Panel interface).
 func (c *CommandLogPanel) Update(msg tea.Msg) (any, tea.Cmd) {
 	if c.diagnosticsPanel == nil {

@@ -67,6 +67,11 @@ func NewApplyView(s *styles.Styles) *ApplyView {
 	}
 }
 
+// SetStyles updates the component styles.
+func (v *ApplyView) SetStyles(s *styles.Styles) {
+	v.styles = s
+}
+
 // SetSize updates the layout size.
 func (v *ApplyView) SetSize(width, height int) {
 	v.width = width

@@ -50,6 +50,11 @@ func (v *HistoryView) SetContent(content string) {
 	v.viewport.GotoTop()
 }
 
+// SetStyles updates the view styles.
+func (v *HistoryView) SetStyles(s *styles.Styles) {
+	v.styles = s
+}
+
 // Update handles viewport messages.
 func (v *HistoryView) Update(msg tea.Msg) (*HistoryView, tea.Cmd) {
 	var cmd tea.Cmd
