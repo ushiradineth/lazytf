@@ -357,13 +357,15 @@ func TestPlanConfirmApplySuccessFlow(t *testing.T) {
 		cmd()
 	}
 
-	// In the new layout, we stay in viewMain and main area switches back to diff mode
+	// In the new layout, we stay in viewMain and main area stays in logs mode
+	// to show apply output (not switching immediately to diff)
 	m.handleApplyComplete(ApplyCompleteMsg{Success: true, Result: &terraform.ExecutionResult{}})
 	if m.execView != viewMain {
 		t.Fatalf("expected to stay in main view after apply, got %d", m.execView)
 	}
-	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
-		t.Fatalf("expected main area to switch back to diff mode after apply")
+	// Apply completes should keep logs visible, not switch to diff
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeLogs {
+		t.Fatalf("expected main area to stay in logs mode after apply, got %d", m.mainArea.GetMode())
 	}
 }
 

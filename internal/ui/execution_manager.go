@@ -594,11 +594,6 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.cancelFunc = nil
 	m.outputChan = nil
 
-	// Switch MainArea back to diff mode when plan completes
-	if m.mainArea != nil {
-		m.mainArea.SetMode(ModeDiff)
-	}
-
 	// Log to session history
 	if m.commandLogPanel != nil {
 		m.commandLogPanel.AppendSessionLog("terraform plan", msg.Output)
@@ -647,6 +642,12 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplySuccess)
 	}
+
+	// Only switch to diff mode if there are actual changes, otherwise stay on logs
+	if m.mainArea != nil && m.hasChanges() {
+		m.mainArea.SetMode(ModeDiff)
+	}
+
 	m.updateExecutionViewForStreaming()
 	cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
 	return m, cmd
@@ -669,10 +670,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.cancelFunc = nil
 	m.outputChan = nil
 
-	// Switch MainArea back to diff mode when apply completes
-	if m.mainArea != nil {
-		m.mainArea.SetMode(ModeDiff)
-	}
+	// Keep MainArea in logs mode to show apply output (don't switch to diff)
 
 	// Log to session history
 	output := ""
@@ -1077,4 +1075,16 @@ func (m *Model) planSummary() string {
 		lines = append(lines, fmt.Sprintf("± %d to replace", replace))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// hasChanges returns true if the current plan has any resources that will be modified
+func (m *Model) hasChanges() bool {
+	if m.plan == nil {
+		return false
+	}
+	create := m.countResourcesByAction(terraform.ActionCreate)
+	update := m.countResourcesByAction(terraform.ActionUpdate)
+	deleteCount := m.countResourcesByAction(terraform.ActionDelete)
+	replace := m.countResourcesByAction(terraform.ActionReplace)
+	return create+update+deleteCount+replace > 0
 }
