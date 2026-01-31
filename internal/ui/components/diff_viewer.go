@@ -150,16 +150,16 @@ func (d *DiffViewer) renderInlineChange(item diff.MinimalDiff, change *terraform
 
 	switch item.Action {
 	case diff.DiffAdd:
-		style = d.styles.DiffAdd
+		style = styles.TfDiffAdd
 		line = fmt.Sprintf("%s %s: %s", symbol, path, formatSingleLineValue(item.NewValue))
 	case diff.DiffRemove:
-		style = d.styles.DiffRemove
+		style = styles.TfDiffRemove
 		line = fmt.Sprintf("%s %s: %s", symbol, path, formatSingleLineValue(item.OldValue))
 	case diff.DiffChange:
-		style = d.styles.DiffChange
+		style = styles.TfDiffChange
 		line = fmt.Sprintf("%s %s: %s → %s", symbol, path, formatSingleLineValue(item.OldValue), formatSingleLineValue(item.NewValue))
 	default:
-		style = d.styles.Dimmed
+		style = styles.TfDimmed
 		line = "? " + path
 	}
 
@@ -180,7 +180,7 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 	if d.width > 0 {
 		header = padLine(header, d.width)
 	}
-	header = d.styles.DiffChange.Render(header)
+	header = styles.TfDiffChange.Render(header)
 	if marker != "" {
 		header = header + d.styles.Comment.Render("  "+marker)
 	}
@@ -199,13 +199,13 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 		}
 		switch prefix {
 		case "-":
-			output = append(output, d.styles.DiffRemove.Render(line))
+			output = append(output, styles.TfDiffRemove.Render(line))
 		case "+":
-			output = append(output, d.styles.DiffAdd.Render(line))
+			output = append(output, styles.TfDiffAdd.Render(line))
 		case ".":
-			output = append(output, d.styles.Dimmed.Render(line))
+			output = append(output, styles.TfDimmed.Render(line))
 		default:
-			output = append(output, d.styles.Dimmed.Render(line))
+			output = append(output, styles.TfDimmed.Render(line))
 		}
 	}
 	return output
@@ -220,16 +220,16 @@ func (d *DiffViewer) renderDiffRow(columns []int, item diff.MinimalDiff, change 
 	switch item.Action {
 	case diff.DiffAdd:
 		after = formatSingleLineValue(item.NewValue)
-		return d.renderRow(columns, d.styles.DiffAdd, symbol, path, before, after)
+		return d.renderRow(columns, styles.TfDiffAdd, symbol, path, before, after)
 	case diff.DiffRemove:
 		before = formatSingleLineValue(item.OldValue)
-		return d.renderRow(columns, d.styles.DiffRemove, symbol, path, before, after)
+		return d.renderRow(columns, styles.TfDiffRemove, symbol, path, before, after)
 	case diff.DiffChange:
 		before = formatSingleLineValue(item.OldValue)
 		after = formatSingleLineValue(item.NewValue)
-		return d.renderRow(columns, d.styles.DiffChange, symbol, path, before, after)
+		return d.renderRow(columns, styles.TfDiffChange, symbol, path, before, after)
 	default:
-		return d.renderRow(columns, d.styles.Dimmed, symbol, path, before, after)
+		return d.renderRow(columns, styles.TfDimmed, symbol, path, before, after)
 	}
 }
 

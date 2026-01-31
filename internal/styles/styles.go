@@ -4,6 +4,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Terraform CLI diff colors - fixed colors that match terraform's actual output.
+// These are NOT affected by user themes to ensure consistency with terraform CLI.
+var (
+	// TfDiffAdd is muted green like terraform uses for additions (+).
+	TfDiffAdd = lipgloss.NewStyle().Foreground(lipgloss.Color("#98C379"))
+	// TfDiffRemove is muted red/salmon like terraform uses for deletions (-).
+	TfDiffRemove = lipgloss.NewStyle().Foreground(lipgloss.Color("#E06C75"))
+	// TfDiffChange is yellow/orange like terraform uses for changes (~).
+	TfDiffChange = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5C07B"))
+	// TfDimmed is gray for null values and separators.
+	TfDimmed = lipgloss.NewStyle().Foreground(lipgloss.Color("#5C6370"))
+)
+
 // Theme defines the color scheme for the TUI.
 type Theme struct {
 	Name            string

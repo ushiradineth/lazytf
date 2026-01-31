@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
 	"github.com/ushiradineth/lazytf/internal/utils"
@@ -57,16 +58,16 @@ func (m *Model) resourceSummaryText() string {
 
 	var parts []string
 	if create > 0 {
-		parts = append(parts, m.styles.Create.Render(fmt.Sprintf("+%d", create)))
+		parts = append(parts, styles.TfDiffAdd.Render(fmt.Sprintf("+%d", create)))
 	}
 	if update > 0 {
-		parts = append(parts, m.styles.Update.Render(fmt.Sprintf("~%d", update)))
+		parts = append(parts, styles.TfDiffChange.Render(fmt.Sprintf("~%d", update)))
 	}
 	if deleteCount > 0 {
-		parts = append(parts, m.styles.Delete.Render(fmt.Sprintf("-%d", deleteCount)))
+		parts = append(parts, styles.TfDiffRemove.Render(fmt.Sprintf("-%d", deleteCount)))
 	}
 	if replace > 0 {
-		parts = append(parts, m.styles.Replace.Render(fmt.Sprintf("±%d", replace)))
+		parts = append(parts, styles.TfDiffChange.Render(fmt.Sprintf("±%d", replace)))
 	}
 
 	return fmt.Sprintf("%d changes (%s)", total, strings.Join(parts, " "))

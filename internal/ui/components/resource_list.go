@@ -303,16 +303,16 @@ func (r *ResourceList) padLineToWidth(line string, width int) string {
 func (r *ResourceList) renderSummaryHeader() string {
 	parts := []string{}
 	if r.summaryCreate > 0 {
-		parts = append(parts, r.styles.Create.Render(fmt.Sprintf("+%d", r.summaryCreate)))
+		parts = append(parts, styles.TfDiffAdd.Render(fmt.Sprintf("+%d", r.summaryCreate)))
 	}
 	if r.summaryUpdate > 0 {
-		parts = append(parts, r.styles.Update.Render(fmt.Sprintf("~%d", r.summaryUpdate)))
+		parts = append(parts, styles.TfDiffChange.Render(fmt.Sprintf("~%d", r.summaryUpdate)))
 	}
 	if r.summaryDelete > 0 {
-		parts = append(parts, r.styles.Delete.Render(fmt.Sprintf("-%d", r.summaryDelete)))
+		parts = append(parts, styles.TfDiffRemove.Render(fmt.Sprintf("-%d", r.summaryDelete)))
 	}
 	if r.summaryReplace > 0 {
-		parts = append(parts, r.styles.Replace.Render(fmt.Sprintf("±%d", r.summaryReplace)))
+		parts = append(parts, styles.TfDiffChange.Render(fmt.Sprintf("±%d", r.summaryReplace)))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -717,13 +717,13 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 
 	switch d.Action {
 	case diff.DiffAdd:
-		style = r.styles.DiffAdd
+		style = styles.TfDiffAdd
 		line = fmt.Sprintf("  %s %s: %v", symbol, path, formatValue(d.NewValue))
 	case diff.DiffRemove:
-		style = r.styles.DiffRemove
+		style = styles.TfDiffRemove
 		line = fmt.Sprintf("  %s %s: %v", symbol, path, formatValue(d.OldValue))
 	case diff.DiffChange:
-		style = r.styles.DiffChange
+		style = styles.TfDiffChange
 		if oldStr, okOld := d.OldValue.(string); okOld {
 			if newStr, okNew := d.NewValue.(string); okNew && strings.Contains(oldStr, "\n") && strings.Contains(newStr, "\n") {
 				if multi := formatMultilineStringDiff(path, oldStr, newStr); multi != "" {
@@ -733,7 +733,7 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 		}
 		line = fmt.Sprintf("  %s %s: %v → %v", symbol, path, formatValue(d.OldValue), formatValue(d.NewValue))
 	default:
-		style = r.styles.Dimmed
+		style = styles.TfDimmed
 		line = "  ? " + path
 	}
 
@@ -744,18 +744,19 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 }
 
 // getActionStyle returns the appropriate style for an action type.
+// Uses terraform's fixed CLI colors for consistency.
 func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Style {
 	switch action {
 	case terraform.ActionCreate:
-		return r.styles.Create
+		return styles.TfDiffAdd
 	case terraform.ActionUpdate:
-		return r.styles.Update
+		return styles.TfDiffChange
 	case terraform.ActionDelete:
-		return r.styles.Delete
+		return styles.TfDiffRemove
 	case terraform.ActionReplace:
-		return r.styles.Replace
+		return styles.TfDiffChange
 	default:
-		return r.styles.NoChange
+		return styles.TfDimmed
 	}
 }
 
@@ -1096,14 +1097,14 @@ func (r *ResourceList) renderMultilineDiff(block string) string {
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimLeft(line, " ")
-		style := r.styles.Dimmed
+		style := styles.TfDimmed
 		switch {
 		case strings.HasPrefix(trimmed, "~ "):
-			style = r.styles.DiffChange
+			style = styles.TfDiffChange
 		case strings.HasPrefix(trimmed, "- "):
-			style = r.styles.DiffRemove
+			style = styles.TfDiffRemove
 		case strings.HasPrefix(trimmed, "+ "):
-			style = r.styles.DiffAdd
+			style = styles.TfDiffAdd
 		}
 
 		if r.width > 0 {
