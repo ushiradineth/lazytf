@@ -23,6 +23,8 @@ type DiagnosticsPanel struct {
 	height      int
 	// Session log history - stores all command outputs for the session
 	sessionLogs []SessionLogEntry
+	// tip is the random tip shown when the panel is empty (selected once at creation)
+	tip string
 }
 
 // SessionLogEntry represents a single command log entry in the session.
@@ -38,6 +40,7 @@ func NewDiagnosticsPanel(styles *styles.Styles) *DiagnosticsPanel {
 	return &DiagnosticsPanel{
 		viewport: viewport.New(0, 0),
 		styles:   styles,
+		tip:      GetRandomTip(),
 	}
 }
 
@@ -129,7 +132,11 @@ func (d *DiagnosticsPanel) updateViewport() {
 
 	sections := buildSessionSections(d.styles, d.sessionLogs, d.width)
 	sections = append(sections, buildDiagnosticSections(d.styles, d.diagnostics)...)
-	sections = append(sections, buildFallbackSection(d.styles, d.logText, d.width)...)
+
+	// Only show fallback section (tips or raw log) if there's no other content
+	if len(sections) == 0 {
+		sections = buildFallbackSection(d.styles, d.logText, d.tip, d.width)
+	}
 
 	d.viewport.SetContent(strings.TrimRight(strings.Join(sections, "\n"), "\n"))
 }
@@ -194,15 +201,28 @@ func splitDiagnostics(diagnostics []terraform.Diagnostic) ([]terraform.Diagnosti
 	return errors, warnings
 }
 
-func buildFallbackSection(styles *styles.Styles, logText string, width int) []string {
+func buildFallbackSection(styles *styles.Styles, logText, tip string, width int) []string {
 	if strings.TrimSpace(logText) == "" {
-		return []string{styles.Dimmed.Render("No logs available.")}
+		return buildEmptyStateTips(styles, tip, width)
 	}
 	content := logText
 	if width > 0 {
 		content = wrapText(content, width)
 	}
 	return []string{content}
+}
+
+func buildEmptyStateTips(styles *styles.Styles, tip string, width int) []string {
+	hint := "You can hide/focus this panel by pressing 'L'"
+	tipLine := "Tip: " + tip
+
+	// Wrap text if width is specified
+	if width > 0 {
+		hint = wrapText(hint, width)
+		tipLine = wrapText(tipLine, width)
+	}
+
+	return []string{styles.Dimmed.Render(hint), "", styles.Dimmed.Render(tipLine)}
 }
 
 func wrapText(text string, width int) string {

@@ -32,7 +32,7 @@ func TestCommandLogPanel_EmptyState(t *testing.T) {
 	result.
 		AssertNotEmpty(t).
 		AssertHasBorder(t).
-		AssertContains(t, "No logs")
+		AssertContains(t, "Tip:")
 }
 
 func TestCommandLogPanel_WithLogText(t *testing.T) {
