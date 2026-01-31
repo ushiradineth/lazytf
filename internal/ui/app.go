@@ -17,6 +17,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
@@ -95,15 +96,18 @@ type Model struct {
 	settingsModal *components.Modal
 
 	// Theme switching
-	configManager    *config.Manager
 	previewThemeName string
 	originalStyles   *styles.Styles
 
 	// Panel system
-	panelManager     *PanelManager
-	environmentPanel *components.EnvironmentPanel
-	mainArea         *MainArea
-	commandLogPanel  *components.CommandLogPanel
+	panelManager        *PanelManager
+	environmentPanel    *components.EnvironmentPanel
+	mainArea            *MainArea
+	commandLogPanel     *components.CommandLogPanel
+	resourcesController *ResourcesPanelController
+
+	// Keybind registry
+	keybindRegistry *keybinds.Registry
 }
 
 type executionView int
@@ -189,6 +193,14 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	themeModal := components.NewModal(appStyles)
 	settingsModal := components.NewModal(appStyles)
 
+	// Initialize resources panel controller
+	resourcesController := NewResourcesPanelController(resourceList)
+
+	// Initialize keybind registry (non-execution mode by default)
+	kbRegistry := keybinds.NewRegistry()
+	keybinds.RegisterDefaults(kbRegistry, false)
+	keybinds.RegisterWorkspacePanelBindings(kbRegistry)
+
 	m := &Model{
 		plan:          plan,
 		resourceList:  resourceList,
@@ -211,10 +223,14 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		settingsModal: settingsModal,
 
 		// Panel system
-		panelManager:     panelManager,
-		environmentPanel: environmentPanel,
-		mainArea:         mainArea,
-		commandLogPanel:  commandLogPanel,
+		panelManager:        panelManager,
+		environmentPanel:    environmentPanel,
+		mainArea:            mainArea,
+		commandLogPanel:     commandLogPanel,
+		resourcesController: resourcesController,
+
+		// Keybind registry
+		keybindRegistry: kbRegistry,
 	}
 
 	// Register panels with manager
@@ -235,6 +251,9 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	// Initialize focus on the default panel (Resources)
 	panelManager.SetFocus(PanelResources)
 
+	// Register keybind handlers
+	m.registerKeybindHandlers()
+
 	return m
 }
 
@@ -250,6 +269,11 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	if m.panelManager != nil {
 		m.panelManager.SetExecutionMode(true)
 	}
+	// Re-initialize keybind registry with execution mode
+	m.keybindRegistry = keybinds.NewRegistry()
+	keybinds.RegisterDefaults(m.keybindRegistry, true)
+	keybinds.RegisterWorkspacePanelBindings(m.keybindRegistry)
+	m.registerKeybindHandlers()
 	m.executor = cfg.Executor
 	m.autoPlan = cfg.AutoPlan
 	m.planFlags = append([]string{}, cfg.Flags...)
@@ -278,13 +302,17 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 		return m.beginStateShow(address)
 	}
 
+	// Connect state list content to resources controller
+	if m.resourcesController != nil {
+		m.resourcesController.SetStateListContent(m.stateListContent)
+	}
+
 	m.historyPanel = components.NewHistoryPanel(m.styles)
 	m.historyHeight = 6
 	m.showHistory = false
 	// Register history panel with panel manager
 	m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
 	m.config = cfg.Config
-	m.configManager = cfg.ConfigManager
 	m.configView = views.NewConfigView(m.styles)
 	if m.configView != nil {
 		m.configView.SetConfig(m.config)
@@ -399,9 +427,85 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case ErrorMsg:
 		model := m.handleErrorMsg(msg)
 		return model, nil, true
+
+	// Action request messages from panels
+	case RequestPlanMsg:
+		return m, m.beginPlan(), true
+	case RequestApplyMsg:
+		return m.handleRequestApply()
+	case RequestRefreshMsg:
+		return m, m.beginRefresh(), true
+	case RequestValidateMsg:
+		return m, m.beginValidate(), true
+	case RequestFormatMsg:
+		return m, m.beginFormat(), true
+	case ToggleFilterMsg:
+		m.handleToggleFilter(msg.Action)
+		return m, nil, true
+	case ToggleStatusMsg:
+		m.resourceList.SetShowStatus(!m.resourceList.ShowStatus())
+		return m, nil, true
+	case ToggleAllGroupsMsg:
+		m.resourceList.ToggleAllGroups()
+		return m, nil, true
+	case StateListStartMsg:
+		return m, m.beginStateList(), true
+	case SwitchResourcesTabMsg:
+		return m.handleSwitchResourcesTab(msg.Direction)
+
 	default:
 		return nil, nil, false
 	}
+}
+
+// handleRequestApply handles the RequestApplyMsg by showing confirmation modal.
+func (m *Model) handleRequestApply() (tea.Model, tea.Cmd, bool) {
+	if m.plan == nil {
+		if m.toast != nil {
+			return m, m.toast.ShowError("No plan loaded; run terraform plan first"), true
+		}
+		return m, nil, true
+	}
+	m.showConfirmApplyModal()
+	return m, nil, true
+}
+
+// handleSwitchResourcesTab handles switching the Resources panel tab.
+func (m *Model) handleSwitchResourcesTab(direction int) (tea.Model, tea.Cmd, bool) {
+	if !m.canSwitchResourcesTab() {
+		return m, nil, true
+	}
+	m.resourcesActiveTab = nextResourcesTab(m.resourcesActiveTab, direction)
+
+	// Sync the controller's active tab
+	if m.resourcesController != nil {
+		m.resourcesController.SetActiveTab(m.resourcesActiveTab)
+	}
+
+	cmd := m.loadStateListIfNeeded()
+	return m, cmd, true
+}
+
+// handleToggleFilter handles toggling an action filter.
+func (m *Model) handleToggleFilter(action terraform.ActionType) {
+	switch action {
+	case terraform.ActionCreate:
+		m.filterCreate = !m.filterCreate
+		m.resourceList.SetFilter(action, m.filterCreate)
+	case terraform.ActionUpdate:
+		m.filterUpdate = !m.filterUpdate
+		m.resourceList.SetFilter(action, m.filterUpdate)
+	case terraform.ActionDelete:
+		m.filterDelete = !m.filterDelete
+		m.resourceList.SetFilter(action, m.filterDelete)
+	case terraform.ActionReplace:
+		m.filterReplace = !m.filterReplace
+		m.resourceList.SetFilter(action, m.filterReplace)
+	case terraform.ActionNoOp, terraform.ActionRead:
+		// These actions don't have filters
+		return
+	}
+	m.saveFilterPreferences()
 }
 
 func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) tea.Model {
@@ -434,8 +538,20 @@ func (m *Model) handlePlanOutput(msg PlanOutputMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleApplyOutput(msg ApplyOutputMsg) (tea.Model, tea.Cmd) {
+	// Don't append if apply has already completed (prevents race condition duplicates)
+	if !m.applyRunning {
+		return m, nil
+	}
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
+	}
+	// Update resource status from apply output
+	if m.operationState != nil {
+		m.operationState.ParseApplyLine(msg.Line)
+		// Refresh resource list to show updated status
+		if m.resourceList != nil {
+			m.resourceList.Refresh()
+		}
 	}
 	cmd := m.streamApplyOutputCmd()
 	return m, cmd
@@ -579,19 +695,9 @@ func (m *Model) buildEnvironmentCommand(env environment.Environment) string {
 }
 
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// 1. Special state handlers that take priority over the keybind registry
+	// These handle text input, selector mode, and focused sub-panels
 	if handled, cmd := m.handleDiagnosticsKey(msg); handled {
-		return m, cmd
-	}
-	if handled, cmd := m.handleModalSettingsKey(msg); handled {
-		return m, cmd
-	}
-	if handled, cmd := m.handleModalHelpKey(msg); handled {
-		return m, cmd
-	}
-	if handled, cmd := m.handleModalThemeKey(msg); handled {
-		return m, cmd
-	}
-	if handled, cmd := m.handleModalConfirmApplyKey(msg); handled {
 		return m, cmd
 	}
 	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
@@ -600,18 +706,24 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.inputCaptured() {
 		return m, nil
 	}
-	if panelCmd, handled := m.handlePanelNavigation(msg); handled {
-		return m, panelCmd
-	}
-	if m.executionMode {
+
+	// 2. Handle non-main view keys (state list, command log fullscreen, etc.)
+	if m.execView != viewMain {
 		if handled, cmd := m.handleExecutionKey(msg); handled {
 			return m, cmd
 		}
-	}
-	if m.execView != viewMain {
 		return m.handleNonMainViewKey(msg)
 	}
-	return m.handleMainViewKey(msg)
+
+	// 3. Try the keybind registry for main view keys
+	if m.keybindRegistry != nil {
+		ctx := m.buildKeybindContext()
+		if cmd, handled := m.keybindRegistry.Handle(msg, ctx); handled {
+			return m, cmd
+		}
+	}
+
+	return m, nil
 }
 
 func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
@@ -629,58 +741,6 @@ func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		var cmd tea.Cmd
 		m.diagnosticsPanel, cmd = m.diagnosticsPanel.Update(msg)
 		return true, cmd
-	}
-}
-
-func (m *Model) handleModalSettingsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if m.modalState != ModalSettings {
-		return false, nil
-	}
-	switch msg.String() {
-	case "q", consts.KeyCtrlC:
-		m.quitting = true
-		return true, tea.Quit
-	case consts.KeyEsc, ",":
-		m.modalState = ModalNone
-		return true, nil
-	case "j", consts.KeyDown:
-		if m.settingsModal != nil {
-			m.settingsModal.ScrollDown()
-		}
-		return true, nil
-	case "k", "up":
-		if m.settingsModal != nil {
-			m.settingsModal.ScrollUp()
-		}
-		return true, nil
-	default:
-		return true, nil
-	}
-}
-
-func (m *Model) handleModalHelpKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if m.modalState != ModalHelp {
-		return false, nil
-	}
-	switch msg.String() {
-	case "q", consts.KeyCtrlC:
-		m.quitting = true
-		return true, tea.Quit
-	case "?", consts.KeyEsc:
-		m.modalState = ModalNone
-		return true, nil
-	case "j", consts.KeyDown:
-		if m.helpModal != nil {
-			m.helpModal.ScrollDown()
-		}
-		return true, nil
-	case "k", "up":
-		if m.helpModal != nil {
-			m.helpModal.ScrollUp()
-		}
-		return true, nil
-	default:
-		return true, nil
 	}
 }
 
@@ -727,41 +787,6 @@ func (m *Model) handleNonMainViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) handleMainViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "q", consts.KeyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
-	case consts.KeyEsc, "?":
-		m.toggleHelpModal()
-		return m, nil
-	case ",":
-		m.toggleSettingsModal()
-		return m, nil
-	case "T":
-		return m.toggleThemeModal()
-	case "c":
-		m.toggleActionFilter(terraform.ActionCreate, &m.filterCreate)
-	case "t":
-		m.resourceList.ToggleAllGroups()
-	case "u":
-		m.toggleActionFilter(terraform.ActionUpdate, &m.filterUpdate)
-	case "d":
-		m.toggleActionFilter(terraform.ActionDelete, &m.filterDelete)
-	case "r":
-		m.toggleActionFilter(terraform.ActionReplace, &m.filterReplace)
-	case "[":
-		if cmd := m.switchResourcesTab(-1); cmd != nil {
-			return m, cmd
-		}
-	case "]":
-		if cmd := m.switchResourcesTab(1); cmd != nil {
-			return m, cmd
-		}
-	}
-	return m, nil
-}
-
 func (m *Model) toggleHelpModal() {
 	if m.modalState == ModalHelp {
 		m.modalState = ModalNone
@@ -798,20 +823,6 @@ func (m *Model) showConfirmApplyModal() {
 	m.helpModal.SetConfirm(message, actions)
 	m.helpModal.Show()
 	m.modalState = ModalConfirmApply
-}
-
-func (m *Model) toggleActionFilter(action terraform.ActionType, value *bool) {
-	*value = !*value
-	m.resourceList.SetFilter(action, *value)
-	m.saveFilterPreferences()
-}
-
-func (m *Model) switchResourcesTab(direction int) tea.Cmd {
-	if !m.canSwitchResourcesTab() {
-		return nil
-	}
-	m.resourcesActiveTab = nextResourcesTab(m.resourcesActiveTab, direction)
-	return m.loadStateListIfNeeded()
 }
 
 func (m *Model) canSwitchResourcesTab() bool {
@@ -898,10 +909,6 @@ func (m *Model) initHistory(cfg ExecutionConfig) {
 	m.syncHistorySelection()
 }
 
-func (m *Model) updateHistoryDetailContent(entry history.Entry) {
-	m.updateHistoryDetailContentWithOperations(entry, nil)
-}
-
 func (m *Model) updateHistoryDetailContentWithOperations(entry history.Entry, operations []history.OperationEntry) {
 	if m.mainArea == nil {
 		return
@@ -952,7 +959,7 @@ func (m *Model) updateHistoryDetailContentWithOperations(entry history.Entry, op
 	m.mainArea.SetHistoryContent(title, content)
 }
 
-// reloadHistoryCmd returns a command to reload history entries
+// reloadHistoryCmd returns a command to reload history entries.
 func (m *Model) reloadHistoryCmd() tea.Cmd {
 	if m.historyStore == nil {
 		return nil
@@ -964,45 +971,6 @@ func (m *Model) reloadHistoryCmd() tea.Cmd {
 		}
 		return HistoryLoadedMsg{Entries: entries}
 	}
-}
-
-func (m *Model) handlePanelNavigation(msg tea.KeyMsg) (tea.Cmd, bool) {
-	if m.panelManager == nil || m.execView != viewMain {
-		return nil, false
-	}
-
-	if handled, navCmd := m.panelManager.HandleNavigation(msg); handled {
-		m.updateLayout()
-		wasHistoryFocused := m.historyFocused
-		focusedPanel := m.panelManager.GetFocusedPanel()
-		m.historyFocused = focusedPanel == PanelHistory
-
-		// When history panel gains focus, show the selected history detail
-		if m.historyFocused && !wasHistoryFocused {
-			historyCmd := m.showSelectedHistoryDetail()
-			return tea.Batch(navCmd, historyCmd), true
-		}
-
-		// When resources panel gains focus, switch back to diff mode
-		if focusedPanel == PanelResources && wasHistoryFocused && m.mainArea != nil {
-			m.mainArea.SetMode(ModeDiff)
-		}
-
-		return tea.Batch(navCmd), true
-	}
-
-	focusedPanel := m.panelManager.GetFocusedPanel()
-	if focusedPanel == PanelCommandLog && msg.String() == consts.KeyEnter {
-		m.execView = viewCommandLog
-		return nil, true
-	}
-
-	if panel, ok := m.panelManager.GetPanel(focusedPanel); ok {
-		if handled, panelCmd := panel.HandleKey(msg); handled {
-			return panelCmd, true
-		}
-	}
-	return nil, false
 }
 
 func (m *Model) handleStateTabKey(msg tea.Msg) (tea.Cmd, bool) {

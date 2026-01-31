@@ -259,10 +259,8 @@ func (m *MainArea) View() string {
 	// Set footer text based on mode
 	var footerText string
 	switch m.mode {
-	case ModeDiff, ModeLogs:
+	case ModeDiff, ModeLogs, ModeHistoryDetail:
 		footerText = ""
-	case ModeHistoryDetail:
-		footerText = "esc: back"
 	}
 
 	// Split content into lines for frame rendering

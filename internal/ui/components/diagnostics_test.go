@@ -84,14 +84,14 @@ func TestDiagnosticsPanelUpdate(_ *testing.T) {
 	_, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 }
 
-func TestDiagnosticsPanelSetParsedText(t *testing.T) {
+func TestDiagnosticsPanelSetParsedText(_ *testing.T) {
 	panel := NewDiagnosticsPanel(styles.DefaultStyles())
 	// SetParsedText is a no-op, just make sure it doesn't panic
 	panel.SetParsedText("some parsed text")
 	panel.SetParsedText("")
 }
 
-func TestDiagnosticsPanelSetShowRaw(t *testing.T) {
+func TestDiagnosticsPanelSetShowRaw(_ *testing.T) {
 	panel := NewDiagnosticsPanel(styles.DefaultStyles())
 	// SetShowRaw is a no-op, just make sure it doesn't panic
 	panel.SetShowRaw(true)
@@ -121,7 +121,7 @@ func TestDiagnosticsPanelViewNil(t *testing.T) {
 	}
 }
 
-func TestDiagnosticsPanelViewNoSize(t *testing.T) {
+func TestDiagnosticsPanelViewNoSize(_ *testing.T) {
 	panel := NewDiagnosticsPanel(styles.DefaultStyles())
 	panel.SetLogText("some log content")
 	// Without SetSize, width/height are 0 so we get viewport content directly

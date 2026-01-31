@@ -396,6 +396,7 @@ func splitFlags(flags string) []string {
 	return args
 }
 
+//nolint:unparam // target kept as parameter for flexibility
 func stripFlag(flags []string, target string) []string {
 	if len(flags) == 0 {
 		return flags

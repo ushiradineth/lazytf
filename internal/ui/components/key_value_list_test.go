@@ -59,13 +59,12 @@ func TestRenderKeyValueRowZeroWidth(t *testing.T) {
 	}
 }
 
-func TestRenderKeyValueRowTruncateLabel(t *testing.T) {
+func TestRenderKeyValueRowTruncateLabel(_ *testing.T) {
 	row := KeyValueRow{Label: "VeryLongLabelName: ", Value: "Value"}
 	result := renderKeyValueRow(10, row)
 	// Label is 19 chars but width is 10, so it should be truncated
-	if len(result) > 10 {
-		// result may contain ANSI codes, so just check it's reasonable
-	}
+	// Result may contain ANSI codes, so just check it's reasonable
+	_ = result
 }
 
 func TestRenderKeyValueRowTruncateValue(t *testing.T) {

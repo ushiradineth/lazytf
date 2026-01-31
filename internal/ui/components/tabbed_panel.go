@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
@@ -27,17 +26,20 @@ type TabbedPanel struct {
 	tabs        []Tab
 	activeIndex int
 	styles      *styles.Styles
-	width       int
-	height      int
+	frame       *PanelFrame
 	focused     bool
 	panelID     string // For display purposes like "[2]"
 }
 
 // NewTabbedPanel creates a new tabbed panel.
 func NewTabbedPanel(panelID string, s *styles.Styles) *TabbedPanel {
+	if s == nil {
+		s = styles.DefaultStyles()
+	}
 	return &TabbedPanel{
 		tabs:    make([]Tab, 0),
 		styles:  s,
+		frame:   NewPanelFrame(s),
 		panelID: panelID,
 	}
 }
@@ -83,8 +85,7 @@ func (t *TabbedPanel) PrevTab() {
 
 // SetSize updates the panel dimensions.
 func (t *TabbedPanel) SetSize(width, height int) {
-	t.width = width
-	t.height = height
+	t.frame.SetSize(width, height)
 	// Update content sizes (account for border)
 	contentWidth := width - 2
 	contentHeight := height - 2
@@ -109,6 +110,14 @@ func (t *TabbedPanel) SetFocused(focused bool) {
 // IsFocused returns whether the panel is focused.
 func (t *TabbedPanel) IsFocused() bool {
 	return t.focused
+}
+
+// SetStyles updates the component styles.
+func (t *TabbedPanel) SetStyles(s *styles.Styles) {
+	t.styles = s
+	if t.frame != nil {
+		t.frame.SetStyles(s)
+	}
 }
 
 // HandleKey handles key events.
@@ -148,14 +157,6 @@ func (t *TabbedPanel) View() string {
 		return ""
 	}
 
-	// Determine border style based on focus
-	borderStyle := t.styles.Border
-	titleStyle := t.styles.PanelTitle
-	if t.focused {
-		borderStyle = t.styles.FocusedBorder
-		titleStyle = t.styles.FocusedPanelTitle
-	}
-
 	// Get active content
 	var content string
 	if t.activeIndex >= 0 && t.activeIndex < len(t.tabs) {
@@ -164,54 +165,38 @@ func (t *TabbedPanel) View() string {
 		}
 	}
 
-	// Build panel with border
-	panel := borderStyle.
-		BorderTop(true).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		Width(t.width - 2).
-		Height(t.height - 2).
-		Render(content)
-
-	// Build title with tabs
-	titleText := t.buildTitleWithTabs(titleStyle)
-	titleRendered := titleStyle.Render(titleText)
-
-	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 && t.width > 4 {
-		if line, ok := RenderPanelTitleLine(t.width, borderStyle, titleRendered); ok {
-			lines[0] = line
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// buildTitleWithTabs builds the title string with tab indicators.
-func (t *TabbedPanel) buildTitleWithTabs(_ lipgloss.Style) string {
-	if len(t.tabs) <= 1 {
-		// Single tab, just show the panel ID and tab name
-		name := ""
-		if len(t.tabs) == 1 {
-			name = t.tabs[0].Name
-		}
-		return t.panelID + " " + name
-	}
-
-	// Multiple tabs - show tab bar
-	var parts []string
-	parts = append(parts, t.panelID)
-
+	// Build tab names array for frame
+	tabNames := make([]string, len(t.tabs))
 	for i, tab := range t.tabs {
-		if i == t.activeIndex {
-			parts = append(parts, "["+tab.Name+"]")
+		tabNames[i] = tab.Name
+	}
+
+	// Configure frame
+	t.frame.SetConfig(PanelFrameConfig{
+		PanelID:       t.panelID,
+		Tabs:          tabNames,
+		ActiveTab:     t.activeIndex,
+		Focused:       t.focused,
+		FooterText:    "",
+		ShowScrollbar: false,
+	})
+
+	// Split content into lines for frame
+	contentHeight := t.frame.ContentHeight()
+	contentWidth := t.frame.ContentWidth()
+	contentLines := strings.Split(content, "\n")
+
+	// Pad content lines to fill panel
+	result := make([]string, contentHeight)
+	for i := range contentHeight {
+		if i < len(contentLines) {
+			result[i] = PadLine(contentLines[i], contentWidth)
 		} else {
-			parts = append(parts, t.styles.Dimmed.Render(tab.Name))
+			result[i] = strings.Repeat(" ", contentWidth)
 		}
 	}
 
-	return strings.Join(parts, " ")
+	return t.frame.RenderWithContent(result)
 }
 
 // GetContent returns the content for a specific tab index.

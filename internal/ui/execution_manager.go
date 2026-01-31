@@ -115,6 +115,11 @@ func (m *Model) beginApply() tea.Cmd {
 		m.updateLayout()
 	}
 
+	// Clear command log content - it will be populated when apply completes
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetParsedText("")
+	}
+
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Applying changes...")
@@ -206,12 +211,12 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	}
 
 	// Log to session history
-	output := ""
+	var refreshOutput string
 	if msg.Result != nil {
-		output = msg.Result.Output
+		refreshOutput = msg.Result.Output
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("Refreshed", "terraform apply -refresh-only", output)
+		m.commandLogPanel.AppendSessionLog("Refreshed", "terraform apply -refresh-only", refreshOutput)
 	}
 
 	if msg.Error != nil || !msg.Success {
@@ -410,16 +415,16 @@ func (m *Model) beginFormat() tea.Cmd {
 
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
 	// Log to session history
-	output := ""
+	var formatOutput string
 	if msg.Error != nil {
-		output = msg.Error.Error()
+		formatOutput = msg.Error.Error()
 	} else if len(msg.ChangedFiles) == 0 {
-		output = "No files changed"
+		formatOutput = "No files changed"
 	} else {
-		output = fmt.Sprintf("Formatted %d file(s):\n%s", len(msg.ChangedFiles), strings.Join(msg.ChangedFiles, "\n"))
+		formatOutput = fmt.Sprintf("Formatted %d file(s):\n%s", len(msg.ChangedFiles), strings.Join(msg.ChangedFiles, "\n"))
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("Formatted", "terraform fmt -recursive", output)
+		m.commandLogPanel.AppendSessionLog("Formatted", "terraform fmt -recursive", formatOutput)
 	}
 
 	if msg.Error != nil {
@@ -489,18 +494,18 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	}
 
 	// Log to session history
-	output := ""
+	var stateListOutput string
 	if msg.Error != nil {
-		output = msg.Error.Error()
+		stateListOutput = msg.Error.Error()
 	} else {
 		addresses := make([]string, len(msg.Resources))
 		for i, r := range msg.Resources {
 			addresses[i] = r.Address
 		}
-		output = fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+		stateListOutput = fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("State listed", "terraform state list", output)
+		m.commandLogPanel.AppendSessionLog("State listed", "terraform state list", stateListOutput)
 	}
 
 	if msg.Error != nil {
@@ -698,6 +703,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
+	// Show status column during apply
+	if m.resourceList != nil {
+		m.resourceList.SetShowStatus(true)
+	}
 	return m.handleOperationStart(
 		msg.Error,
 		&m.applyRunning,
@@ -714,6 +723,8 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.cancelFunc = nil
 	m.outputChan = nil
 
+	// Keep status column visible after apply - user can see final state
+
 	// Keep MainArea in logs mode to show apply output (don't switch to diff)
 
 	// Log to session history
@@ -729,8 +740,12 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		return m.handleApplyFailure(msg)
 	}
 
+	// Set full output to applyView so [0] Operation Logs shows everything
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplySuccess)
+		if msg.Result != nil && msg.Result.Output != "" {
+			m.applyView.SetOutput(msg.Result.Output)
+		}
 	}
 	summary := m.planSummary()
 	// Route logs to command log panel
@@ -745,13 +760,6 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		m.commandLogPanel.SetParsedText(parsed)
 	} else if m.diagnosticsPanel != nil {
 		m.diagnosticsPanel.SetParsedText(parsed)
-	}
-	if m.applyView != nil && msg.Result != nil {
-		parsed := utils.FormatLogOutput(msg.Result.Output)
-		if strings.TrimSpace(parsed) == "" {
-			parsed = strings.TrimSpace(msg.Result.Output)
-		}
-		m.applyView.SetOutput(parsed)
 	}
 	// Stay in main view with panel layout
 	m.setPlan(&terraform.Plan{Resources: nil})
@@ -824,10 +832,11 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 }
 
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
+	// Set full output to applyView so [0] Operation Logs shows everything
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplyFailed)
-		if msg.Error != nil {
-			m.applyView.AppendLine(fmt.Sprintf("Apply failed: %v", msg.Error))
+		if msg.Result != nil && msg.Result.Output != "" {
+			m.applyView.SetOutput(msg.Result.Output)
 		}
 	}
 	// Route logs to command log panel.
@@ -838,6 +847,16 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		} else if m.diagnosticsPanel != nil {
 			m.diagnosticsPanel.SetLogText(msg.Result.Output)
 			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+		}
+		// Parse the full output for status updates - some lines (like Error:) may not
+		// have been streamed but are in the final result
+		if m.operationState != nil {
+			for _, line := range strings.Split(msg.Result.Output, "\n") {
+				m.operationState.ParseApplyLine(line)
+			}
+			if m.resourceList != nil {
+				m.resourceList.Refresh()
+			}
 		}
 	}
 	output := ""
@@ -1032,6 +1051,10 @@ func (m *Model) waitApplyCompleteCmd(result *terraform.ExecutionResult) tea.Cmd 
 
 func (m *Model) setPlan(plan *terraform.Plan) {
 	m.plan = plan
+	// Hide status column when loading a new plan
+	if m.resourceList != nil {
+		m.resourceList.SetShowStatus(false)
+	}
 	if plan == nil {
 		m.resourceList.SetResources(nil)
 		return
@@ -1150,7 +1173,7 @@ func (m *Model) planSummaryVerbose() string {
 	return strings.Join(lines, "\n")
 }
 
-// hasChanges returns true if the current plan has any resources that will be modified
+// hasChanges returns true if the current plan has any resources that will be modified.
 func (m *Model) hasChanges() bool {
 	if m.plan == nil {
 		return false

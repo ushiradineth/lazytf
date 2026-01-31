@@ -405,7 +405,7 @@ func TestHistoryItemRenderCanceled(t *testing.T) {
 	}
 }
 
-func TestHistoryPanelSetStyles(t *testing.T) {
+func TestHistoryPanelSetStyles(_ *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewHistoryPanel(s)
 

@@ -164,7 +164,7 @@ func (d *DiffViewer) renderInlineChange(item diff.MinimalDiff, change *terraform
 	}
 
 	if d.width > 0 {
-		line = padLine(line, d.width)
+		line = PadLine(line, d.width)
 	}
 	if markerStyled != "" {
 		return style.Render(strings.TrimRight(line, " ")) + markerStyled
@@ -178,7 +178,7 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 	marker := replaceMarker(item.Path, change)
 	header := fmt.Sprintf("%s %s", symbol, path)
 	if d.width > 0 {
-		header = padLine(header, d.width)
+		header = PadLine(header, d.width)
 	}
 	header = styles.TfDiffChange.Render(header)
 	if marker != "" {
@@ -195,7 +195,7 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 		prefix := linePrefix(line)
 		line = "  " + line
 		if d.width > 0 {
-			line = padLine(line, d.width)
+			line = PadLine(line, d.width)
 		}
 		switch prefix {
 		case "-":
@@ -211,8 +211,8 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 	return output
 }
 
-func (d *DiffViewer) renderDiffRow(columns []int, item diff.MinimalDiff, change *terraform.Change) string {
-	path := formatPathForDisplay(item.Path) + replaceMarker(item.Path, change)
+func (d *DiffViewer) renderDiffRow(columns []int, item diff.MinimalDiff) string {
+	path := formatPathForDisplay(item.Path)
 	symbol := item.Action.GetActionSymbol()
 
 	before := ""

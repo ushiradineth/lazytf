@@ -378,9 +378,7 @@ func (m *Modal) renderConfirmBox(maxWidth int) string {
 
 	// Add message lines
 	if m.confirmMessage != "" {
-		for _, line := range strings.Split(m.confirmMessage, "\n") {
-			lines = append(lines, line)
-		}
+		lines = append(lines, strings.Split(m.confirmMessage, "\n")...)
 		lines = append(lines, "")
 	}
 

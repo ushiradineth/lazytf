@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -547,7 +548,7 @@ func TestGetByIDNotFound(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent ID")
 	}
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
@@ -569,7 +570,7 @@ func TestGetOperationByIDNotFound(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent ID")
 	}
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }

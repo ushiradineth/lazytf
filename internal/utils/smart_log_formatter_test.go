@@ -41,8 +41,8 @@ null_resource.example: Creation complete after 1s [id=123]`,
 			expected: 1, // Consecutive progress lines stay together
 		},
 		{
-			name: "apply complete",
-			input: `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`,
+			name:     "apply complete",
+			input:    `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`,
 			expected: 1,
 		},
 	}

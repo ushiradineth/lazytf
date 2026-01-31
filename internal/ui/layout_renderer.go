@@ -10,6 +10,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
@@ -74,29 +75,12 @@ func (m *Model) resourceSummaryText() string {
 }
 
 func (m *Model) statusHelpText() string {
-	base := "q: quit | ,: settings | ?: keybinds"
-	if m.panelManager == nil {
-		return base
+	if m.keybindRegistry == nil {
+		return "?: keybinds | q: quit"
 	}
-	if m.environmentPanel != nil && m.environmentPanel.SelectorActive() {
-		return "type: filter | enter: select | esc: back | " + base
-	}
-	switch m.panelManager.GetFocusedPanel() {
-	case PanelWorkspace:
-		return "e: select environment | " + base
-	case PanelResources:
-		parts := []string{}
-		if m.executionMode {
-			parts = append(parts, "p: plan", "a: apply", "ctrl+c: cancel")
-		}
-		parts = append(parts, "enter/space: toggle", "t: toggle all", "c/u/d/r: filter")
-		parts = append(parts, base)
-		return strings.Join(parts, " | ")
-	case PanelHistory:
-		return "↑↓/jk: select | enter: view | " + base
-	default:
-		return base
-	}
+	ctx := m.buildKeybindContext()
+	opts := keybinds.DefaultHintOptions()
+	return m.keybindRegistry.ForStatusBar(ctx, opts)
 }
 
 // countResourcesByAction counts resources of a specific action type.

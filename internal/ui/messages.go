@@ -161,3 +161,37 @@ type ToggleCommandLogMsg struct{}
 type SetCommandLogVisibleMsg struct {
 	Visible bool
 }
+
+// Action request messages - sent by panels to request operations.
+// These allow panels to trigger actions without direct access to the executor.
+
+// RequestPlanMsg requests a terraform plan execution.
+type RequestPlanMsg struct{}
+
+// RequestApplyMsg requests a terraform apply execution.
+type RequestApplyMsg struct{}
+
+// RequestRefreshMsg requests a terraform refresh execution.
+type RequestRefreshMsg struct{}
+
+// RequestValidateMsg requests a terraform validate execution.
+type RequestValidateMsg struct{}
+
+// RequestFormatMsg requests a terraform fmt execution.
+type RequestFormatMsg struct{}
+
+// ToggleFilterMsg toggles an action filter.
+type ToggleFilterMsg struct {
+	Action terraform.ActionType
+}
+
+// ToggleStatusMsg toggles the status column in the resource list.
+type ToggleStatusMsg struct{}
+
+// ToggleAllGroupsMsg toggles all groups expanded/collapsed.
+type ToggleAllGroupsMsg struct{}
+
+// SwitchResourcesTabMsg switches the Resources panel tab.
+type SwitchResourcesTabMsg struct {
+	Direction int // -1 for previous, +1 for next
+}

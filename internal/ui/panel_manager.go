@@ -60,7 +60,7 @@ func (pm *PanelManager) SetFocus(id PanelID) tea.Cmd {
 
 	// Focus new panel
 	pm.focusedPanel = id
-	if newPanel, ok := pm.panels[id]; ok {
+	if newPanel, ok := pm.panels[id]; ok && newPanel != nil {
 		newPanel.SetFocused(true)
 	}
 

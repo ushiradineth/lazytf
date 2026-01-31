@@ -41,17 +41,17 @@ type LogMetadata struct {
 
 // Regular expressions for detecting section types.
 var (
-	providerInfoPattern    = regexp.MustCompile(`(?i)^Terraform (used|has created|performed)`)
-	refreshPattern         = regexp.MustCompile(`(?i)^(Refreshing|Acquiring) (state|lock)`)
-	legendPattern          = regexp.MustCompile(`^\s*[+~-]\s+(create|destroy|update|replace|read)`)
-	resourceChangePattern  = regexp.MustCompile(`^\s*#\s+\S+`)
-	planSummaryPattern     = regexp.MustCompile(`^Plan:\s+\d+\s+to\s+(add|create)`)
-	noChangesPattern       = regexp.MustCompile(`^No changes`)
-	applyProgressPattern   = regexp.MustCompile(`(?i)^\S+:\s+(Creating|Modifying|Destroying|Still (creating|modifying|destroying))`)
-	applyCompletePattern   = regexp.MustCompile(`^Apply complete!`)
-	savedPlanPattern        = regexp.MustCompile(`^Saved the plan to:`)
-	creationCompletePattern = regexp.MustCompile(`(?i):\s+Creation complete`)
-	destructionCompletePattern = regexp.MustCompile(`(?i):\s+Destruction(s)?\s+complete`)
+	providerInfoPattern          = regexp.MustCompile(`(?i)^Terraform (used|has created|performed)`)
+	refreshPattern               = regexp.MustCompile(`(?i)^(Refreshing|Acquiring) (state|lock)`)
+	legendPattern                = regexp.MustCompile(`^\s*[+~-]\s+(create|destroy|update|replace|read)`)
+	resourceChangePattern        = regexp.MustCompile(`^\s*#\s+\S+`)
+	planSummaryPattern           = regexp.MustCompile(`^Plan:\s+\d+\s+to\s+(add|create)`)
+	noChangesPattern             = regexp.MustCompile(`^No changes`)
+	applyProgressPattern         = regexp.MustCompile(`(?i)^\S+:\s+(Creating|Modifying|Destroying|Still (creating|modifying|destroying))`)
+	applyCompletePattern         = regexp.MustCompile(`^Apply complete!`)
+	savedPlanPattern             = regexp.MustCompile(`^Saved the plan to:`)
+	creationCompletePattern      = regexp.MustCompile(`(?i):\s+Creation complete`)
+	destructionCompletePattern   = regexp.MustCompile(`(?i):\s+Destruction(s)?\s+complete`)
 	modificationsCompletePattern = regexp.MustCompile(`(?i):\s+Modifications?\s+complete`)
 )
 

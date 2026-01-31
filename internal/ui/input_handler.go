@@ -1,61 +1,18 @@
 package ui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
-// KeyMap defines the key bindings.
-type KeyMap struct {
-	Up        key.Binding
-	Down      key.Binding
-	Expand    key.Binding
-	ToggleAll key.Binding
-	Filter    key.Binding
-	Quit      key.Binding
-	Keybinds  key.Binding
-}
-
-// DefaultKeyMap returns the default key bindings.
-func DefaultKeyMap() KeyMap {
-	return KeyMap{
-		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "move up"),
-		),
-		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "move down"),
-		),
-		Expand: key.NewBinding(
-			key.WithKeys("enter", " "),
-			key.WithHelp("enter/space", "toggle group"),
-		),
-		ToggleAll: key.NewBinding(
-			key.WithKeys("t"),
-			key.WithHelp("t", "toggle all groups"),
-		),
-		Filter: key.NewBinding(
-			key.WithKeys("c", "u", "d", "r"),
-			key.WithHelp("c/u/d/r", "toggle filters"),
-		),
-		Quit: key.NewBinding(
-			key.WithKeys("q", consts.KeyCtrlC),
-			key.WithHelp("q", "quit"),
-		),
-		Keybinds: key.NewBinding(
-			key.WithKeys("?"),
-			key.WithHelp("?", "toggle keybinds"),
-		),
-	}
-}
-
 func (m *Model) inputCaptured() bool {
 	return false
 }
 
+// handleExecutionKey handles keys for non-main execution views.
+// Returns (handled, cmd) - only returns handled=true for non-main views.
+// Note: For main view (viewMain), keys are delegated to panels via handleKeyMsg.
 func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch m.execView {
 	case viewPlanOutput, viewApplyOutput:
@@ -67,7 +24,8 @@ func (m *Model) handleExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case viewStateShow:
 		return m.handleStateShowKey(msg)
 	default:
-		return m.handleMainExecutionKey(msg)
+		// viewMain - not handled here, delegate to panels
+		return false, nil
 	}
 }
 
@@ -153,85 +111,7 @@ func (m *Model) handleStateShowKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 }
 
-func (m *Model) handleMainExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	key := msg.String()
-	if handled, cmd := m.handleExecutionActionKey(key); handled {
-		return true, cmd
-	}
-	if handled, cmd := m.handleExecutionToggleKey(key); handled {
-		return true, cmd
-	}
-	if handled, cmd := m.handleExecutionNavKey(key); handled {
-		return true, cmd
-	}
-	if m.historyFocused {
-		if handled, cmd := m.handleHistoryKeys(key); handled {
-			return true, cmd
-		}
-	}
-	return false, nil
-}
-
-func (m *Model) handleExecutionActionKey(key string) (bool, tea.Cmd) {
-	switch key {
-	case "p":
-		return true, m.beginPlan()
-	case "f":
-		return true, m.beginRefresh()
-	case "v":
-		return true, m.beginValidate()
-	case "F":
-		return true, m.beginFormat()
-	case "a":
-		return m.handleApplyKey()
-	default:
-		return false, nil
-	}
-}
-
-func (m *Model) handleExecutionToggleKey(key string) (bool, tea.Cmd) {
-	switch key {
-	case "h":
-		return m.handleHistoryToggle()
-	case "s":
-		m.resourceList.SetShowStatus(!m.resourceList.ShowStatus())
-		return true, nil
-	case "D":
-		return m.focusCommandLog()
-	default:
-		return false, nil
-	}
-}
-
-func (m *Model) handleExecutionNavKey(key string) (bool, tea.Cmd) {
-	switch key {
-	case "tab":
-		return m.handleTabKey(), nil
-	case consts.KeyCtrlC:
-		return m.handleCtrlCKey(), nil
-	case consts.KeyEsc:
-		return m.handleEscKey(), nil
-	}
-	return false, nil
-}
-
-func (m *Model) handleTabKey() bool {
-	if m.showHistory && len(m.historyEntries) > 0 {
-		m.historyFocused = !m.historyFocused
-		m.syncHistorySelection()
-		return true
-	}
-	return false
-}
-
-func (m *Model) handleCtrlCKey() bool {
-	if m.planRunning || m.applyRunning || m.refreshRunning {
-		m.cancelExecution()
-		return true
-	}
-	return false
-}
-
+// handleEscKey handles escape key for exiting history detail mode.
 func (m *Model) handleEscKey() bool {
 	if m.mainArea == nil {
 		return false
@@ -244,34 +124,14 @@ func (m *Model) handleEscKey() bool {
 	return false
 }
 
-func (m *Model) handleApplyKey() (bool, tea.Cmd) {
-	if m.plan == nil {
-		if m.toast != nil {
-			return true, m.toast.ShowError("No plan loaded; run terraform plan first")
-		}
-		return true, nil
-	}
-	m.showConfirmApplyModal()
-	return true, nil
-}
-
-func (m *Model) handleHistoryToggle() (bool, tea.Cmd) {
-	m.showHistory = !m.showHistory
-	if !m.showHistory {
-		m.historyFocused = false
-	}
-	m.updateLayout()
-	return true, nil
-}
-
-func (m *Model) focusCommandLog() (bool, tea.Cmd) {
+func (m *Model) focusCommandLog() tea.Cmd {
 	if m.panelManager == nil {
-		return true, nil
+		return nil
 	}
 	if m.panelManager.IsCommandLogVisible() {
-		return true, m.panelManager.SetFocus(PanelCommandLog)
+		return m.panelManager.SetFocus(PanelCommandLog)
 	}
 	m.panelManager.SetCommandLogVisible(true)
 	m.updateLayout()
-	return true, m.panelManager.SetFocus(PanelCommandLog)
+	return m.panelManager.SetFocus(PanelCommandLog)
 }

@@ -146,7 +146,7 @@ func TestRenderDiffRowIncludesValues(t *testing.T) {
 		NewValue: "value",
 		Action:   diff.DiffAdd,
 	}
-	out := viewer.renderDiffRow(columns, item, nil)
+	out := viewer.renderDiffRow(columns, item)
 	out = stripANSIDiffViewer(out)
 	if !strings.Contains(out, "name") || !strings.Contains(out, "value") {
 		t.Fatalf("expected path and value in output, got %q", out)
@@ -682,7 +682,7 @@ func TestRenderDiffRowRemove(t *testing.T) {
 		OldValue: "oldvalue",
 		Action:   diff.DiffRemove,
 	}
-	out := viewer.renderDiffRow(columns, item, nil)
+	out := viewer.renderDiffRow(columns, item)
 	out = stripANSIDiffViewer(out)
 	if !strings.Contains(out, "name") {
 		t.Errorf("expected path in output, got %q", out)
@@ -790,7 +790,7 @@ func TestRenderDiffRowDefaultCase(t *testing.T) {
 		Path:   []string{"field"},
 		Action: diff.DiffAction("unknown"), // Unknown action
 	}
-	out := viewer.renderDiffRow(columns, item, nil)
+	out := viewer.renderDiffRow(columns, item)
 	if out == "" {
 		t.Error("expected non-empty output for unknown action")
 	}
@@ -951,7 +951,7 @@ func TestRenderDiffRowChange(t *testing.T) {
 		NewValue: "new",
 		Action:   diff.DiffChange,
 	}
-	out := viewer.renderDiffRow(columns, item, nil)
+	out := viewer.renderDiffRow(columns, item)
 	out = stripANSIDiffViewer(out)
 	if !strings.Contains(out, "old") || !strings.Contains(out, "new") {
 		t.Errorf("expected old and new values in output, got %q", out)

@@ -378,7 +378,7 @@ func TestEnvironmentPanelSelectorActive(t *testing.T) {
 	}
 }
 
-func TestEnvironmentPanelSetWarnings(t *testing.T) {
+func TestEnvironmentPanelSetWarnings(_ *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewEnvironmentPanel(s)
 
@@ -403,7 +403,7 @@ func TestEnvironmentPanelFiltering(t *testing.T) {
 	}
 }
 
-func TestEnvironmentPanelActivateSelector(t *testing.T) {
+func TestEnvironmentPanelActivateSelector(_ *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewEnvironmentPanel(s)
 

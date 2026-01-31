@@ -635,6 +635,7 @@ func TestExecutorStateShow(t *testing.T) {
 	}
 }
 
+//nolint:dupword // shell script has repeated 'fi' keywords
 func writeFakeTerraformExtended(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "terraform")

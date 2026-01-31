@@ -385,6 +385,24 @@ func (e *EnvironmentPanel) selectedEnvironment() *environment.Environment {
 	return nil
 }
 
+// GetSelectedIndex returns the currently selected item index (implements SelectablePanel).
+func (e *EnvironmentPanel) GetSelectedIndex() int {
+	return e.selectedIndex
+}
+
+// SetSelectedIndex sets the selected item index (implements SelectablePanel).
+func (e *EnvironmentPanel) SetSelectedIndex(index int) {
+	if index >= 0 && index < len(e.filteredItems) {
+		e.selectedIndex = index
+		e.adjustScrollOffset()
+	}
+}
+
+// ItemCount returns the total number of filtered items (implements SelectablePanel).
+func (e *EnvironmentPanel) ItemCount() int {
+	return len(e.filteredItems)
+}
+
 // moveUp moves selection up.
 func (e *EnvironmentPanel) moveUp() {
 	if e.selectedIndex > 0 {
@@ -435,9 +453,9 @@ func (e *EnvironmentPanel) adjustScrollOffset() {
 		return
 	}
 
-	// Anchor positions for smooth scrolling
-	anchorTop := min(1, itemsHeight-1)
-	anchorBottom := max(itemsHeight-2, anchorTop)
+	// Anchor positions for smooth scrolling (consistent with ResourceList)
+	anchorTop := min(2, itemsHeight-1)
+	anchorBottom := max(itemsHeight-3, anchorTop)
 	e.scrollOffset = adjustScrollOffset(
 		e.scrollOffset,
 		e.selectedIndex,
@@ -492,7 +510,7 @@ func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
 
 	for i := start; i < end; i++ {
 		item := e.filteredItems[i]
-		isSelected := i == e.selectedIndex
+		isSelected := e.focused && i == e.selectedIndex
 		lines = append(lines, e.renderItem(item, width, isSelected))
 	}
 

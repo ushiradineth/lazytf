@@ -7,144 +7,35 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
 )
 
 // Modal-related methods for Model
 
-type helpRow struct {
-	keys string
-	desc string
-}
-
-type helpSection struct {
-	title string
-	rows  []helpRow
-}
-
 func (m *Model) updateHelpModalContent() {
 	if m.helpModal == nil {
 		return
 	}
 
-	sections := helpSections(m.executionMode)
-	items := helpItems(sections)
+	// Get help items from the keybind registry
+	kbItems := m.keybindRegistry.ForHelpModal(m.executionMode)
+
+	// Convert keybinds.HelpItem to components.HelpItem
+	items := make([]components.HelpItem, len(kbItems)+1)
+	for i, kbItem := range kbItems {
+		items[i] = components.HelpItem{
+			Key:         kbItem.Key,
+			Description: kbItem.Description,
+			IsHeader:    kbItem.IsHeader,
+		}
+	}
 	// Add footer item
-	items = append(items, components.HelpItem{Key: "esc", Description: "close", IsHeader: false})
+	items[len(kbItems)] = components.HelpItem{Key: "esc", Description: "close", IsHeader: false}
 
 	m.helpModal.SetTitle("Keybinds")
 	m.helpModal.SetItems(items)
 	m.helpModal.Show()
-}
-
-// helpItems converts help sections to HelpItem slice for item selection mode.
-func helpItems(sections []helpSection) []components.HelpItem {
-	// Calculate total items: headers + rows + blank lines between sections
-	totalItems := 0
-	for _, section := range sections {
-		totalItems += 1 + len(section.rows) // header + rows
-	}
-	totalItems += len(sections) - 1 // blank lines between sections
-
-	items := make([]components.HelpItem, 0, totalItems)
-	for i, section := range sections {
-		// Add section header
-		items = append(items, components.HelpItem{
-			Key:      section.title,
-			IsHeader: true,
-		})
-		// Add section rows
-		for _, row := range section.rows {
-			items = append(items, components.HelpItem{
-				Key:         row.keys,
-				Description: row.desc,
-				IsHeader:    false,
-			})
-		}
-		// Add empty line between sections (except last)
-		if i < len(sections)-1 {
-			items = append(items, components.HelpItem{
-				Key:      "",
-				IsHeader: true, // Use header style for blank lines (no selection)
-			})
-		}
-	}
-	return items
-}
-
-func helpSections(executionMode bool) []helpSection {
-	sections := []helpSection{
-		{
-			title: "Panel Navigation",
-			rows: []helpRow{
-				{keys: "1", desc: "focus workspace panel"},
-				{keys: "2", desc: "focus resource list"},
-				{keys: "3", desc: "focus history"},
-				{keys: "0", desc: "focus main area"},
-				{keys: "4", desc: "focus command log (enter for full screen)"},
-				{keys: "tab", desc: "cycle panels"},
-				{keys: "L", desc: "toggle command log"},
-			},
-		},
-		{
-			title: "Navigation",
-			rows: []helpRow{
-				{keys: "↑/↓ or j/k", desc: "move selection"},
-				{keys: "enter/space", desc: "toggle group"},
-				{keys: "t", desc: "toggle all groups"},
-			},
-		},
-		{
-			title: "Filters",
-			rows: []helpRow{
-				{keys: "c", desc: "toggle create"},
-				{keys: "u", desc: "toggle update"},
-				{keys: "d", desc: "toggle delete"},
-				{keys: "r", desc: "toggle replace"},
-			},
-		},
-		{
-			title: "Search",
-			rows: []helpRow{
-				{keys: "/", desc: "focus search"},
-				{keys: "esc", desc: "clear search"},
-			},
-		},
-		{
-			title: "General",
-			rows: []helpRow{
-				{keys: "1 then e", desc: "select environment"},
-				{keys: ",", desc: "open settings"},
-				{keys: "T", desc: "change theme"},
-				{keys: "?", desc: "toggle keybinds"},
-				{keys: "q or ctrl+c", desc: "quit"},
-			},
-		},
-	}
-
-	if executionMode {
-		sections = append(sections, helpSection{
-			title: "Execution",
-			rows: []helpRow{
-				{keys: "p", desc: "run terraform plan"},
-				{keys: "f", desc: "refresh state"},
-				{keys: "v", desc: "validate configuration"},
-				{keys: "F", desc: "format code (fmt)"},
-				{keys: "a", desc: "confirm apply"},
-				{keys: "h", desc: "toggle history panel"},
-				{keys: "tab", desc: "focus history panel"},
-				{keys: "ctrl+c", desc: "cancel running command"},
-				{keys: "s", desc: "toggle status column"},
-				{keys: "C", desc: "toggle compact progress view"},
-				{keys: "D", desc: "focus logs panel"},
-				{keys: "[/]", desc: "switch tabs in panel"},
-			},
-		})
-	}
-
-	return sections
 }
 
 func (m *Model) updateSettingsModalContent() {
@@ -155,10 +46,9 @@ func (m *Model) updateSettingsModalContent() {
 	var items []components.HelpItem
 
 	if m.config == nil {
-		items = make([]components.HelpItem, 0, 3)
+		items = make([]components.HelpItem, 0, 2)
 		items = append(items, components.HelpItem{Key: "No configuration loaded.", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "esc: back", IsHeader: true})
 	} else {
 		cfg := m.config
 		items = make([]components.HelpItem, 0, 24)
@@ -242,7 +132,7 @@ func themeDisplayName(name string) string {
 }
 
 // toggleThemeModal toggles the theme selection modal.
-func (m *Model) toggleThemeModal() (tea.Model, tea.Cmd) {
+func (m *Model) toggleThemeModal() tea.Cmd {
 	if m.modalState == ModalTheme {
 		// Restore original styles if closing without selection
 		if m.originalStyles != nil {
@@ -251,14 +141,14 @@ func (m *Model) toggleThemeModal() (tea.Model, tea.Cmd) {
 			m.previewThemeName = ""
 		}
 		m.modalState = ModalNone
-		return m, nil
+		return nil
 	}
 	m.modalState = ModalTheme
 	// Save current styles for potential revert
 	m.originalStyles = m.styles
 	m.previewThemeName = m.styles.Theme.Name
 	m.updateThemeModalContent()
-	return m, nil
+	return nil
 }
 
 // updateThemeModalContent populates the theme modal with available themes.
@@ -295,44 +185,6 @@ func (m *Model) updateThemeModalContent() {
 	m.themeModal.Show()
 }
 
-// handleModalThemeKey handles key events when the theme modal is active.
-func (m *Model) handleModalThemeKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if m.modalState != ModalTheme {
-		return false, nil
-	}
-
-	switch msg.String() {
-	case "q", consts.KeyCtrlC:
-		m.quitting = true
-		return true, tea.Quit
-	case consts.KeyEsc, "T":
-		// Cancel and restore original styles
-		if m.originalStyles != nil {
-			m.applyStyles(m.originalStyles)
-			m.originalStyles = nil
-			m.previewThemeName = ""
-		}
-		m.modalState = ModalNone
-		return true, nil
-	case "j", consts.KeyDown:
-		if m.themeModal != nil {
-			m.themeModal.ScrollDown()
-			m.previewSelectedTheme()
-		}
-		return true, nil
-	case "k", "up":
-		if m.themeModal != nil {
-			m.themeModal.ScrollUp()
-			m.previewSelectedTheme()
-		}
-		return true, nil
-	case consts.KeyEnter, " ":
-		return true, m.confirmThemeSelection()
-	default:
-		return true, nil
-	}
-}
-
 // previewSelectedTheme applies the currently selected theme as a preview.
 func (m *Model) previewSelectedTheme() {
 	if m.themeModal == nil {
@@ -358,48 +210,6 @@ func (m *Model) previewSelectedTheme() {
 	m.previewThemeName = themeName
 	newStyles := styles.NewStyles(theme)
 	m.applyStyles(newStyles)
-}
-
-// confirmThemeSelection confirms the selected theme and persists it.
-func (m *Model) confirmThemeSelection() tea.Cmd {
-	if m.themeModal == nil {
-		return nil
-	}
-
-	selectedIdx := m.themeModal.GetSelectedIndex()
-	if selectedIdx < 0 || selectedIdx >= len(availableThemes) {
-		return nil
-	}
-
-	themeName := availableThemes[selectedIdx]
-	theme, err := styles.ResolveTheme(themeName)
-	if err != nil {
-		return m.toastError("Failed to apply theme: " + err.Error())
-	}
-
-	// Apply the theme
-	newStyles := styles.NewStyles(theme)
-	m.applyStyles(newStyles)
-
-	// Persist to config
-	if m.config != nil {
-		m.config.Theme.Name = themeName
-		if m.configManager != nil {
-			if err := m.configManager.Save(*m.config); err != nil {
-				m.modalState = ModalNone
-				m.originalStyles = nil
-				m.previewThemeName = ""
-				return m.toastError("Theme applied but failed to save: " + err.Error())
-			}
-		}
-	}
-
-	// Clear modal state
-	m.modalState = ModalNone
-	m.originalStyles = nil
-	m.previewThemeName = ""
-
-	return m.toastSuccess("Theme changed to " + themeDisplayName(themeName))
 }
 
 // applyStyles updates all components with new styles.

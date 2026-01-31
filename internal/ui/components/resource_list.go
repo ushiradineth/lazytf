@@ -476,7 +476,7 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 	// Get action style and icon
 	actionIcon := resource.Action.GetActionIcon()
 	actionStyle := r.getActionStyle(resource.Action)
-	statusBadge, elapsed := r.getStatusDisplay(*resource)
+	statusBadge, opStatus, elapsed := r.getStatusDisplay(*resource)
 
 	// Calculate change count
 	changeCount := r.diffEngine.CountChanges(resource)
@@ -500,7 +500,7 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 
 	selectedBg := r.styles.SelectedLineBackground
 	iconStyle := actionStyle
-	statusStyle := r.styles.LineItemText
+	statusStyle := r.getStatusStyle(opStatus)
 	addressStyle := r.styles.LineItemText
 	suffixStyle := r.styles.LineItemText
 	spaceStyle := lipgloss.NewStyle()
@@ -533,10 +533,10 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 	}
 	if isSelected {
 		if contentWidth > 0 {
-			headerLine = padAfterStyledWithBackground(headerLine, contentWidth, selectedBg)
+			headerLine = PadLineWithBg(headerLine, contentWidth, selectedBg)
 		}
 	} else if contentWidth > 0 {
-		headerLine = padAfterStyled(headerLine, contentWidth)
+		headerLine = PadLine(headerLine, contentWidth)
 	}
 	output.WriteString(headerLine)
 
@@ -738,7 +738,7 @@ func (r *ResourceList) renderDiff(d diff.MinimalDiff) string {
 	}
 
 	if r.width > 0 {
-		line = padLine(line, r.width)
+		line = PadLine(line, r.width)
 	}
 	return style.Render(line)
 }
@@ -760,13 +760,13 @@ func (r *ResourceList) getActionStyle(action terraform.ActionType) lipgloss.Styl
 	}
 }
 
-func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (string, string) {
+func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (string, terraform.OperationStatus, string) {
 	if !r.showStatus || r.operationState == nil {
-		return "", ""
+		return "", "", ""
 	}
 	op := r.operationState.GetResourceStatus(resource.Address)
 	if op == nil {
-		return "[ ]", ""
+		return "[ ]", "", ""
 	}
 
 	var badge string
@@ -791,7 +791,23 @@ func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (stri
 	if elapsed > 0 {
 		elapsedText = formatShortDuration(elapsed)
 	}
-	return badge, elapsedText
+	return badge, op.Status, elapsedText
+}
+
+// getStatusStyle returns the appropriate style for a status.
+func (r *ResourceList) getStatusStyle(status terraform.OperationStatus) lipgloss.Style {
+	switch status {
+	case terraform.StatusPending:
+		return styles.TfDimmed
+	case terraform.StatusInProgress:
+		return styles.TfDiffChange // yellow
+	case terraform.StatusComplete:
+		return styles.TfDiffAdd // green
+	case terraform.StatusErrored:
+		return styles.TfDiffRemove // red
+	default:
+		return styles.TfDimmed
+	}
 }
 
 func formatShortDuration(d time.Duration) string {
@@ -816,6 +832,24 @@ func (r *ResourceList) GetSelectedResource() *terraform.ResourceChange {
 		}
 	}
 	return nil
+}
+
+// GetSelectedIndex returns the currently selected item index (implements SelectablePanel).
+func (r *ResourceList) GetSelectedIndex() int {
+	return r.selectedIndex
+}
+
+// SetSelectedIndex sets the selected item index (implements SelectablePanel).
+func (r *ResourceList) SetSelectedIndex(index int) {
+	if index >= 0 && index < len(r.visibleItems) {
+		r.selectedIndex = index
+		r.updateViewport()
+	}
+}
+
+// ItemCount returns the total number of visible items (implements SelectablePanel).
+func (r *ResourceList) ItemCount() int {
+	return len(r.visibleItems)
 }
 
 type itemKind int
@@ -980,14 +1014,14 @@ func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded
 		selectedBg := r.styles.SelectedLineBackground
 		line = r.styles.LineItemText.Background(selectedBg).Bold(true).Render(line)
 		if contentWidth > 0 {
-			line = padAfterStyledWithBackground(line, contentWidth, selectedBg)
+			line = PadLineWithBg(line, contentWidth, selectedBg)
 		}
 		return line
 	}
 
 	line = r.styles.Dimmed.Bold(true).Render(line)
 	if contentWidth > 0 {
-		line = padAfterStyled(line, contentWidth)
+		line = PadLine(line, contentWidth)
 	}
 	return line
 }
@@ -1072,26 +1106,6 @@ func fuzzyMatch(query, candidate string) bool {
 	return false
 }
 
-func padLine(line string, width int) string {
-	if width <= 0 {
-		return line
-	}
-	truncated := runewidth.Truncate(line, width, "...")
-	pad := width - runewidth.StringWidth(truncated)
-	if pad <= 0 {
-		return truncated
-	}
-	return truncated + strings.Repeat(" ", pad)
-}
-
-func padMultiline(text string, width int) string {
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		lines[i] = padLine(line, width)
-	}
-	return strings.Join(lines, "\n")
-}
-
 func (r *ResourceList) renderMultilineDiff(block string) string {
 	lines := strings.Split(block, "\n")
 	out := make([]string, 0, len(lines))
@@ -1108,32 +1122,9 @@ func (r *ResourceList) renderMultilineDiff(block string) string {
 		}
 
 		if r.width > 0 {
-			line = padLine(line, r.width)
+			line = PadLine(line, r.width)
 		}
 		out = append(out, style.Render(line))
 	}
 	return strings.Join(out, "\n")
-}
-
-func padAfterStyled(styled string, width int) string {
-	if width <= 0 {
-		return styled
-	}
-	visible := lipgloss.Width(styled)
-	if visible >= width {
-		return styled
-	}
-	return styled + strings.Repeat(" ", width-visible)
-}
-
-func padAfterStyledWithBackground(styled string, width int, bg lipgloss.AdaptiveColor) string {
-	if width <= 0 {
-		return styled
-	}
-	visible := lipgloss.Width(styled)
-	if visible >= width {
-		return styled
-	}
-	padding := strings.Repeat(" ", width-visible)
-	return styled + lipgloss.NewStyle().Background(bg).Render(padding)
 }

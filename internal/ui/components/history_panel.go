@@ -264,9 +264,15 @@ func (h *HistoryPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 }
 
 // HandleKey handles key events (implements Panel interface).
-func (h *HistoryPanel) HandleKey(_ tea.KeyMsg) (handled bool, cmd tea.Cmd) {
-	// History panel doesn't handle keys directly in panel mode
-	// Navigation is handled by the app
+func (h *HistoryPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		h.listPanel.MoveDown()
+		return true, nil
+	case "k", "up":
+		h.listPanel.MoveUp()
+		return true, nil
+	}
 	return false, nil
 }
 

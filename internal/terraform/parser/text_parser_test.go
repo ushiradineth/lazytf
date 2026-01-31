@@ -297,3 +297,34 @@ func TestTextParserParseStreamMatchesParse(t *testing.T) {
 		t.Fatalf("expected same address")
 	}
 }
+
+func TestTextParserTaintedResource(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # null_resource.error_resource is tainted, so must be replaced
+-/+ resource "null_resource" "error_resource" {
+      ~ id       = "123" -> (known after apply)
+        # (1 unchanged attribute hidden)
+    }
+
+Plan: 1 to add, 0 to change, 1 to destroy.
+`
+
+	parser := NewTextParser()
+	plan, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+
+	// The address should be just "null_resource.error_resource", not "null_resource.error_resource is tainted, so"
+	expectedAddress := "null_resource.error_resource"
+	if plan.Resources[0].Address != expectedAddress {
+		t.Fatalf("expected address %q, got %q", expectedAddress, plan.Resources[0].Address)
+	}
+	if plan.Resources[0].Action != terraform.ActionReplace {
+		t.Fatalf("expected replace action, got %s", plan.Resources[0].Action)
+	}
+}

@@ -347,7 +347,14 @@ func parseHeaderLine(line string) (string, terraform.ActionType, bool) {
 
 	for _, action := range actions {
 		if idx := strings.Index(content, action.suffix); idx != -1 {
-			address := strings.TrimSpace(content[:idx])
+			addressPart := strings.TrimSpace(content[:idx])
+			if addressPart == "" {
+				return "", terraform.ActionNoOp, false
+			}
+			// Extract just the resource address (first space-separated token)
+			// This handles cases like "null_resource.foo is tainted, so must be replaced"
+			// where we only want "null_resource.foo"
+			address := extractResourceAddress(addressPart)
 			if address == "" {
 				return "", terraform.ActionNoOp, false
 			}
@@ -356,6 +363,18 @@ func parseHeaderLine(line string) (string, terraform.ActionType, bool) {
 	}
 
 	return "", terraform.ActionNoOp, false
+}
+
+// extractResourceAddress extracts the resource address from a string that may
+// contain additional descriptive text. Resource addresses are continuous strings
+// without spaces (e.g., "module.foo.aws_instance.bar[0]").
+func extractResourceAddress(s string) string {
+	// The address is the first space-separated token
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 func parseActionPrefix(line string) (string, string) {

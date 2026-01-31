@@ -1,6 +1,8 @@
 package terraform
 
 import (
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -94,6 +96,11 @@ func (s *OperationState) StartResource(address string, action ActionType) {
 		s.resources[address] = op
 		s.totalResources++
 	}
+	// Don't reset status if resource has already errored
+	// (Complete can transition back to InProgress for replace operations)
+	if op.Status == StatusErrored {
+		return
+	}
 	op.Action = action
 	op.Status = StatusInProgress
 	op.StartTime = time.Now()
@@ -117,6 +124,10 @@ func (s *OperationState) CompleteResource(address, idValue string) {
 		op = &ResourceOperation{Address: address}
 		s.resources[address] = op
 		s.totalResources++
+	}
+	// Don't overwrite errored status
+	if op.Status == StatusErrored {
+		return
 	}
 	wasDone := op.Status == StatusComplete || op.Status == StatusErrored
 	op.Status = StatusComplete
@@ -211,4 +222,102 @@ func (s *OperationState) GetDiagnostics() []Diagnostic {
 	out := make([]Diagnostic, len(s.diagnostics))
 	copy(out, s.diagnostics)
 	return out
+}
+
+// Patterns for parsing terraform apply output.
+var (
+	// resourceStartPattern matches lines like "null_resource.example: Creating...".
+	resourceStartPattern = regexp.MustCompile(`^(\S+): (Creating|Destroying|Modifying|Reading|Refreshing)\.\.\.`)
+	// resourceCompletePattern matches lines like "null_resource.example: Creation complete after 0s [id=123]".
+	resourceCompletePattern = regexp.MustCompile(`^(\S+): (Creation|Destruction|Modifications|Read) complete`)
+	// idPattern matches id value in brackets: [id=123].
+	idPattern = regexp.MustCompile(`\[id=([^\]]*)\]`)
+	// ansiPattern matches ANSI escape sequences.
+	ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHF]`)
+)
+
+// ParseApplyLine parses a line of terraform apply output and updates state.
+func (s *OperationState) ParseApplyLine(line string) {
+	if s == nil {
+		return
+	}
+
+	// Strip ANSI escape codes
+	line = ansiPattern.ReplaceAllString(line, "")
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	// Check for resource start
+	if matches := resourceStartPattern.FindStringSubmatch(line); matches != nil {
+		address := matches[1]
+		actionStr := matches[2]
+		action := parseActionFromVerb(actionStr)
+		s.StartResource(address, action)
+		return
+	}
+
+	// Check for resource complete
+	if matches := resourceCompletePattern.FindStringSubmatch(line); matches != nil {
+		address := matches[1]
+		idValue := ""
+		// Extract id from [id=...] if present
+		if idMatches := idPattern.FindStringSubmatch(line); idMatches != nil {
+			idValue = idMatches[1]
+		}
+		s.CompleteResource(address, idValue)
+		return
+	}
+
+	// Check for error - either "Error:" or "Apply failed:"
+	// Use Contains because error messages may have leading box drawing characters (│)
+	if strings.Contains(line, "Error:") || strings.HasPrefix(line, "Apply failed:") {
+		s.markLastInProgressAsErrored()
+		return
+	}
+
+	// "Still creating..." lines don't change state, resource is already in progress
+}
+
+// markLastInProgressAsErrored marks the current in-progress resource as errored.
+func (s *OperationState) markLastInProgressAsErrored() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find any in-progress resource and mark it as errored
+	for _, op := range s.resources {
+		if op.Status == StatusInProgress {
+			op.Status = StatusErrored
+			op.EndTime = time.Now()
+			if !op.StartTime.IsZero() {
+				op.ElapsedTime = op.EndTime.Sub(op.StartTime)
+			}
+			s.completed++
+			if s.currentAddress == op.Address {
+				s.currentAddress = ""
+				s.currentAction = ActionNoOp
+			}
+			return
+		}
+	}
+}
+
+// parseActionFromVerb converts terraform output verbs to ActionType.
+func parseActionFromVerb(verb string) ActionType {
+	switch strings.ToLower(verb) {
+	case "creating":
+		return ActionCreate
+	case "destroying":
+		return ActionDelete
+	case "modifying":
+		return ActionUpdate
+	case "reading", "refreshing":
+		return ActionRead
+	default:
+		return ActionNoOp
+	}
 }

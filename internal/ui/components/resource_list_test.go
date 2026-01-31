@@ -164,9 +164,12 @@ func TestResourceListStatusDisplayAndDuration(t *testing.T) {
 	r.SetShowStatus(true)
 
 	resource := terraform.ResourceChange{Address: "aws_instance.web", Action: terraform.ActionCreate}
-	status, elapsed := r.getStatusDisplay(resource)
+	status, opStatus, elapsed := r.getStatusDisplay(resource)
 	if status == "" {
 		t.Fatalf("expected status badge")
+	}
+	if opStatus != terraform.StatusComplete {
+		t.Fatalf("expected complete status, got %v", opStatus)
 	}
 	if elapsed == "" {
 		t.Fatalf("expected elapsed text")
@@ -174,7 +177,7 @@ func TestResourceListStatusDisplayAndDuration(t *testing.T) {
 	if formatShortDuration(500*time.Millisecond) == "" {
 		t.Fatalf("expected short duration format")
 	}
-	if padAfterStyledWithBackground("x", 3, r.styles.SelectedLineBackground) == "" {
+	if PadLineWithBg("x", 3, r.styles.SelectedLineBackground) == "" {
 		t.Fatalf("expected padded line")
 	}
 }
@@ -920,19 +923,6 @@ func TestFirstResourceIndex(t *testing.T) {
 	}
 	if idx := r.firstResourceIndex(); idx != 1 {
 		t.Fatalf("expected first resource index 1, got %d", idx)
-	}
-}
-
-func TestPadMultilinePadsEachLine(t *testing.T) {
-	out := padMultiline("a\nbb", 4)
-	lines := strings.Split(out, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected two lines, got %#v", lines)
-	}
-	for _, line := range lines {
-		if len(line) != 4 {
-			t.Fatalf("expected padded line width 4, got %q", line)
-		}
 	}
 }
 

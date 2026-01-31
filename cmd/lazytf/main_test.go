@@ -1019,6 +1019,7 @@ func TestBuildExecutorWithOptions(t *testing.T) {
 	tfDir := t.TempDir()
 	tfPath := filepath.Join(tfDir, "terraform")
 	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
 	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}
@@ -1080,6 +1081,7 @@ func TestRunWithProjectOverride(t *testing.T) {
 	tfDir := t.TempDir()
 	tfPath := filepath.Join(tfDir, "terraform")
 	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
 	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write terraform script: %v", err)
 	}

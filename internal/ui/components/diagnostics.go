@@ -54,6 +54,7 @@ func (d *DiagnosticsPanel) SetSize(width, height int) {
 func (d *DiagnosticsPanel) SetDiagnostics(items []terraform.Diagnostic) {
 	d.diagnostics = append([]terraform.Diagnostic{}, items...)
 	d.updateViewport()
+	d.viewport.GotoBottom()
 }
 
 // SetLogText sets raw log output to show when no diagnostics are available.
