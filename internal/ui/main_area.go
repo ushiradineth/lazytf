@@ -19,7 +19,7 @@ type MainAreaMode int
 const (
 	ModeDiff          MainAreaMode = iota // Show diff viewer
 	ModeLogs                              // Show operation logs
-	ModeHistoryDetail                     // Show history detail
+	ModeHistoryDetail                     // Show history detail (formatted logs)
 )
 
 // MainArea is a wrapper component that switches between diff view and logs.
@@ -240,7 +240,7 @@ func (m *MainArea) View() string {
 		}
 
 	case ModeHistoryDetail:
-		// Show history detail
+		// Show history detail (formatted logs)
 		if m.historyView != nil {
 			historyTitle := m.historyView.GetTitle()
 			if historyTitle != "" {
@@ -256,6 +256,15 @@ func (m *MainArea) View() string {
 		tabs = []string{title}
 	}
 
+	// Set footer text based on mode
+	var footerText string
+	switch m.mode {
+	case ModeDiff, ModeLogs:
+		footerText = ""
+	case ModeHistoryDetail:
+		footerText = "esc: back"
+	}
+
 	// Split content into lines for frame rendering
 	contentLines := strings.Split(content, "\n")
 	contentHeight := max(1, m.height-2)
@@ -266,7 +275,7 @@ func (m *MainArea) View() string {
 		Tabs:          tabs,
 		ActiveTab:     0,
 		Focused:       m.focused,
-		FooterText:    "",
+		FooterText:    footerText,
 		ShowScrollbar: len(contentLines) > contentHeight,
 		ScrollPos:     0, // Content providers handle their own scrolling
 		ThumbSize:     m.calculateThumbSize(contentHeight, len(contentLines)),

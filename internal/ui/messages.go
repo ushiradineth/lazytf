@@ -131,10 +131,11 @@ type HistoryLoadedMsg struct {
 	Error   error
 }
 
-// HistoryDetailMsg delivers a single entry with output text.
+// HistoryDetailMsg delivers a single entry with output text and related operations.
 type HistoryDetailMsg struct {
-	Entry history.Entry
-	Error error
+	Entry      history.Entry
+	Operations []history.OperationEntry
+	Error      error
 }
 
 // ClearToastMsg clears transient notifications.

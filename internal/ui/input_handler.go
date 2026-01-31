@@ -161,8 +161,8 @@ func (m *Model) handleMainExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if handled, cmd := m.handleExecutionToggleKey(key); handled {
 		return true, cmd
 	}
-	if handled := m.handleExecutionNavKey(key); handled {
-		return true, nil
+	if handled, cmd := m.handleExecutionNavKey(key); handled {
+		return true, cmd
 	}
 	if m.historyFocused {
 		if handled, cmd := m.handleHistoryKeys(key); handled {
@@ -203,24 +203,43 @@ func (m *Model) handleExecutionToggleKey(key string) (bool, tea.Cmd) {
 	}
 }
 
-func (m *Model) handleExecutionNavKey(key string) bool {
+func (m *Model) handleExecutionNavKey(key string) (bool, tea.Cmd) {
 	switch key {
 	case "tab":
-		if m.showHistory && len(m.historyEntries) > 0 {
-			m.historyFocused = !m.historyFocused
-			m.syncHistorySelection()
-			return true
-		}
+		return m.handleTabKey(), nil
 	case consts.KeyCtrlC:
-		if m.planRunning || m.applyRunning || m.refreshRunning {
-			m.cancelExecution()
-			return true
-		}
+		return m.handleCtrlCKey(), nil
 	case consts.KeyEsc:
-		if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
-			m.mainArea.ExitHistoryDetail()
-			return true
-		}
+		return m.handleEscKey(), nil
+	}
+	return false, nil
+}
+
+func (m *Model) handleTabKey() bool {
+	if m.showHistory && len(m.historyEntries) > 0 {
+		m.historyFocused = !m.historyFocused
+		m.syncHistorySelection()
+		return true
+	}
+	return false
+}
+
+func (m *Model) handleCtrlCKey() bool {
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		m.cancelExecution()
+		return true
+	}
+	return false
+}
+
+func (m *Model) handleEscKey() bool {
+	if m.mainArea == nil {
+		return false
+	}
+	mode := m.mainArea.GetMode()
+	if mode == ModeHistoryDetail {
+		m.mainArea.ExitHistoryDetail()
+		return true
 	}
 	return false
 }

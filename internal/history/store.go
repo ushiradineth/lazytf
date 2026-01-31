@@ -437,6 +437,27 @@ func (s *Store) GetByID(id int64) (Entry, error) {
 	return entry, nil
 }
 
+// GetOperationsForApply returns plan+apply operations related to an apply entry.
+// It queries operations within a time window of the entry's execution.
+func (s *Store) GetOperationsForApply(entry Entry) ([]OperationEntry, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+
+	// Time window: 1 hour before entry started to 5 minutes after finished
+	windowStart := entry.StartedAt.Add(-1 * time.Hour)
+	windowEnd := entry.FinishedAt.Add(5 * time.Minute)
+
+	filter := OperationFilter{
+		After:       windowStart,
+		Before:      windowEnd,
+		Environment: entry.Environment,
+		Limit:       10,
+	}
+
+	return s.QueryOperations(filter)
+}
+
 // GetOperationByID returns an operation entry by ID.
 func (s *Store) GetOperationByID(id int64) (OperationEntry, error) {
 	var entry OperationEntry

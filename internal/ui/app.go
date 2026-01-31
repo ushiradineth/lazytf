@@ -467,8 +467,9 @@ func (m *Model) handleHistoryDetail(msg HistoryDetailMsg) (tea.Model, tea.Cmd) {
 		cmd := m.toastError(fmt.Sprintf("History error: %v", msg.Error))
 		return m, cmd
 	}
+
 	m.historyDetail = &msg.Entry
-	m.updateHistoryDetailContent(msg.Entry)
+	m.updateHistoryDetailContentWithOperations(msg.Entry, msg.Operations)
 	return m, nil
 }
 
@@ -878,6 +879,10 @@ func (m *Model) initHistory(cfg ExecutionConfig) {
 }
 
 func (m *Model) updateHistoryDetailContent(entry history.Entry) {
+	m.updateHistoryDetailContentWithOperations(entry, nil)
+}
+
+func (m *Model) updateHistoryDetailContentWithOperations(entry history.Entry, operations []history.OperationEntry) {
 	if m.mainArea == nil {
 		return
 	}
@@ -885,16 +890,60 @@ func (m *Model) updateHistoryDetailContent(entry history.Entry) {
 	if entry.WorkDir != "" {
 		title = "Apply details - " + entry.WorkDir
 	}
-	content := strings.TrimRight(entry.Output, "\n")
-	if content == "" {
-		content = "No stored output for this apply."
-	} else {
-		parsed := utils.FormatLogOutput(content)
-		if strings.TrimSpace(parsed) != "" {
-			content = parsed
+
+	// Build metadata for header
+	metadata := &utils.LogMetadata{
+		Status:      entry.Status,
+		StartedAt:   entry.StartedAt,
+		FinishedAt:  entry.FinishedAt,
+		Duration:    entry.Duration,
+		Environment: entry.Environment,
+		WorkDir:     entry.WorkDir,
+	}
+
+	// Extract plan and apply outputs from operations
+	var planOutput, applyOutput string
+	for _, op := range operations {
+		switch op.Action {
+		case "plan":
+			if planOutput == "" {
+				planOutput = op.Output
+			}
+		case "apply":
+			if applyOutput == "" {
+				applyOutput = op.Output
+			}
 		}
 	}
+
+	// Fall back to entry output if no operation outputs
+	if applyOutput == "" && planOutput == "" {
+		applyOutput = strings.TrimRight(entry.Output, "\n")
+	}
+
+	// Format combined output
+	var content string
+	if planOutput == "" && applyOutput == "" {
+		content = "No stored output for this apply."
+	} else {
+		content = utils.FormatCombinedOutput(metadata, planOutput, applyOutput, 60)
+	}
+
 	m.mainArea.SetHistoryContent(title, content)
+}
+
+// reloadHistoryCmd returns a command to reload history entries
+func (m *Model) reloadHistoryCmd() tea.Cmd {
+	if m.historyStore == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		entries, err := m.loadHistoryEntries()
+		if err != nil {
+			return HistoryLoadedMsg{Error: err}
+		}
+		return HistoryLoadedMsg{Entries: entries}
+	}
 }
 
 func (m *Model) handlePanelNavigation(msg tea.KeyMsg) (tea.Cmd, bool) {

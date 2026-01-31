@@ -714,10 +714,14 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planFilePath = ""
 	m.planRunFlags = nil
 	m.updateExecutionViewForStreaming()
-	return m, tea.Batch(
-		m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil),
-		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil),
-	)
+
+	// Build commands - recordHistoryCmd will record and reload entries
+	// Always add explicit reload as safety measure to ensure UI is updated
+	recordCmd := m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil)
+	operationCmd := m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil)
+	reloadCmd := m.reloadHistoryCmd()
+
+	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
 }
 
 func (m *Model) handleOperationStart(
@@ -810,10 +814,14 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		opErr = errors.New("apply failed")
 	}
 	m.updateExecutionViewForStreaming()
-	return m, tea.Batch(
-		m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error),
-		m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr),
-	)
+
+	// Build commands - recordHistoryCmd will record and reload entries
+	// Always add explicit reload as safety measure to ensure UI is updated
+	recordCmd := m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error)
+	operationCmd := m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr)
+	reloadCmd := m.reloadHistoryCmd()
+
+	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
 }
 
 func (m *Model) showFormattedFiles(changedFiles []string) {

@@ -83,10 +83,12 @@ func (m *Model) loadHistoryEntries() ([]history.Entry, error) {
 	if m.historyStore == nil {
 		return nil, nil
 	}
+	// Large limit - the panel is scrollable so no practical need to restrict
+	const maxEntries = 1000
 	if m.envCurrent == "" {
-		return m.historyStore.ListRecent(5)
+		return m.historyStore.ListRecent(maxEntries)
 	}
-	return m.historyStore.ListRecentForEnvironment(m.envCurrent, 5)
+	return m.historyStore.ListRecentForEnvironment(m.envCurrent, maxEntries)
 }
 
 func (m *Model) loadHistoryDetailCmd(id int64) tea.Cmd {
@@ -98,7 +100,17 @@ func (m *Model) loadHistoryDetailCmd(id int64) tea.Cmd {
 		if err != nil {
 			return HistoryDetailMsg{Error: err}
 		}
-		return HistoryDetailMsg{Entry: entry}
+
+		// Fetch related operations (plan + apply) within time window
+		var operations []history.OperationEntry
+		if ops, opsErr := m.historyStore.GetOperationsForApply(entry); opsErr == nil {
+			operations = ops
+		}
+
+		return HistoryDetailMsg{
+			Entry:      entry,
+			Operations: operations,
+		}
 	}
 }
 
@@ -131,15 +143,25 @@ func (m *Model) handleHistoryKeys(key string) (bool, tea.Cmd) {
 			m.historySelected++
 		}
 	case "enter":
-		// Enter also loads the detail (same as scroll, for compatibility)
+		// Enter loads the detail and focuses the main area for scrolling
 		m.syncHistorySelection()
-		return true, m.showSelectedHistoryDetail()
+		loadCmd := m.showSelectedHistoryDetail()
+		focusCmd := m.focusMainPanel()
+		return true, tea.Batch(loadCmd, focusCmd)
 	default:
 		return false, nil
 	}
 	m.syncHistorySelection()
 	// Show history detail in main area on scroll
 	return true, m.showSelectedHistoryDetail()
+}
+
+// focusMainPanel switches focus to the main panel.
+func (m *Model) focusMainPanel() tea.Cmd {
+	if m.panelManager == nil {
+		return nil
+	}
+	return m.panelManager.SetFocus(PanelMain)
 }
 
 // showSelectedHistoryDetail loads and shows the currently selected history item in the main area.

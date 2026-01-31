@@ -171,6 +171,99 @@ func TestStoreRecordAndQueryOperation(t *testing.T) {
 	}
 }
 
+func TestStoreGetOperationsForApply(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	// Create apply entry with specific time window
+	applyStarted := time.Now().Add(-10 * time.Minute).UTC()
+	applyFinished := time.Now().Add(-5 * time.Minute).UTC()
+	applyEntry := Entry{
+		StartedAt:   applyStarted,
+		FinishedAt:  applyFinished,
+		Duration:    5 * time.Minute,
+		Status:      StatusSuccess,
+		Summary:     "Applied",
+		Environment: "test-env",
+	}
+	if err := store.RecordApply(applyEntry); err != nil {
+		t.Fatalf("record apply: %v", err)
+	}
+
+	// Create plan operation within time window
+	planOp := OperationEntry{
+		StartedAt:   applyStarted.Add(-30 * time.Minute),
+		FinishedAt:  applyStarted.Add(-25 * time.Minute),
+		Duration:    5 * time.Minute,
+		Action:      "plan",
+		Environment: "test-env",
+		Output:      "Plan: 1 to add",
+	}
+	if err := store.RecordOperation(planOp); err != nil {
+		t.Fatalf("record plan operation: %v", err)
+	}
+
+	// Create apply operation within time window
+	applyOp := OperationEntry{
+		StartedAt:   applyStarted,
+		FinishedAt:  applyFinished,
+		Duration:    5 * time.Minute,
+		Action:      "apply",
+		Environment: "test-env",
+		Output:      "Apply complete!",
+	}
+	if err := store.RecordOperation(applyOp); err != nil {
+		t.Fatalf("record apply operation: %v", err)
+	}
+
+	// Query operations for the apply entry
+	operations, err := store.GetOperationsForApply(applyEntry)
+	if err != nil {
+		t.Fatalf("get operations for apply: %v", err)
+	}
+
+	if len(operations) != 2 {
+		t.Fatalf("expected 2 operations, got %d", len(operations))
+	}
+
+	// Verify we got both plan and apply operations
+	foundPlan := false
+	foundApply := false
+	for _, op := range operations {
+		switch op.Action {
+		case "plan":
+			foundPlan = true
+		case "apply":
+			foundApply = true
+		}
+	}
+	if !foundPlan {
+		t.Error("expected to find plan operation")
+	}
+	if !foundApply {
+		t.Error("expected to find apply operation")
+	}
+}
+
+func TestStoreGetOperationsForApplyNilStore(t *testing.T) {
+	var store *Store
+	operations, err := store.GetOperationsForApply(Entry{})
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if operations != nil {
+		t.Errorf("expected nil operations, got %v", operations)
+	}
+}
+
 func TestStoreListRecentForEnvironment(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := Open(path)
