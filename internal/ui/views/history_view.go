@@ -78,7 +78,7 @@ func (v *HistoryView) colorizeLine(line string) string {
 
 	// Section separators (from smart formatter).
 	if strings.Contains(trimmed, "────") {
-		return styles.TfDimmed.Render(line)
+		return v.styles.Dimmed.Render(line)
 	}
 
 	// Find leading whitespace to preserve indentation.
@@ -87,18 +87,18 @@ func (v *HistoryView) colorizeLine(line string) string {
 	// Diff lines - color only the prefix symbol, not the whole line.
 	switch {
 	case strings.HasPrefix(trimmed, "-/+"):
-		return leadingSpace + styles.TfDiffChange.Render("-/+") + trimmed[3:]
+		return leadingSpace + v.styles.DiffChange.Render("-/+") + trimmed[3:]
 	case strings.HasPrefix(trimmed, "+"):
-		return leadingSpace + styles.TfDiffAdd.Render("+") + trimmed[1:]
+		return leadingSpace + v.styles.DiffAdd.Render("+") + trimmed[1:]
 	case strings.HasPrefix(trimmed, "-"):
 		rest := trimmed[1:]
 		// Color "-> null" suffix if present.
 		if strings.HasSuffix(rest, "-> null") {
-			rest = rest[:len(rest)-7] + styles.TfDimmed.Render("-> null")
+			rest = rest[:len(rest)-7] + v.styles.Dimmed.Render("-> null")
 		}
-		return leadingSpace + styles.TfDiffRemove.Render("-") + rest
+		return leadingSpace + v.styles.DiffRemove.Render("-") + rest
 	case strings.HasPrefix(trimmed, "~"):
-		return leadingSpace + styles.TfDiffChange.Render("~") + trimmed[1:]
+		return leadingSpace + v.styles.DiffChange.Render("~") + trimmed[1:]
 	}
 
 	// Everything else stays default color.

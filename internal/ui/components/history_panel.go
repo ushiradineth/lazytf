@@ -33,7 +33,7 @@ func (h HistoryItem) Render(s *styles.Styles, width int, selected bool) string {
 	}
 
 	statusText := historyStatusText(s, h.entry.Status, statusPlain)
-	coloredDesc := colorizeSummary(desc)
+	coloredDesc := colorizeSummary(s, desc)
 	line := historyLine(when, statusText, dur, coloredDesc)
 	return PadLine(line, width)
 }
@@ -92,10 +92,10 @@ func historyDescription(entry history.Entry) string {
 
 // colorizeSummary converts summary text to compact colored format.
 // Handles both old verbose format ("+ 1 to create ~ 0 to update") and new compact format ("+1 ~0 -2").
-func colorizeSummary(summary string) string {
+func colorizeSummary(s *styles.Styles, summary string) string {
 	// Check if it's the old verbose format
 	if strings.Contains(summary, " to ") {
-		return convertVerboseToCompact(summary)
+		return convertVerboseToCompact(s, summary)
 	}
 
 	// Handle compact format "+1 ~0 -2 ±1"
@@ -104,11 +104,11 @@ func colorizeSummary(summary string) string {
 	for _, part := range parts {
 		switch {
 		case strings.HasPrefix(part, "+"):
-			result = append(result, styles.TfDiffAdd.Render(part))
+			result = append(result, s.DiffAdd.Render(part))
 		case strings.HasPrefix(part, "-"):
-			result = append(result, styles.TfDiffRemove.Render(part))
+			result = append(result, s.DiffRemove.Render(part))
 		case strings.HasPrefix(part, "~"), strings.HasPrefix(part, "±"):
-			result = append(result, styles.TfDiffChange.Render(part))
+			result = append(result, s.DiffChange.Render(part))
 		default:
 			result = append(result, part)
 		}
@@ -117,7 +117,7 @@ func colorizeSummary(summary string) string {
 }
 
 // convertVerboseToCompact converts "+ 1 to create ~ 0 to update - 2 to destroy ± 1 to replace" to colored "+1 ~0 -2 ±1".
-func convertVerboseToCompact(summary string) string {
+func convertVerboseToCompact(s *styles.Styles, summary string) string {
 	var result []string
 
 	// Parse patterns like "+ 1 to create", "~ 0 to update", "- 2 to destroy", "± 1 to replace"
@@ -146,11 +146,11 @@ func convertVerboseToCompact(summary string) string {
 				text := p.symbol + num
 				switch p.color {
 				case "add":
-					result = append(result, styles.TfDiffAdd.Render(text))
+					result = append(result, s.DiffAdd.Render(text))
 				case "remove":
-					result = append(result, styles.TfDiffRemove.Render(text))
+					result = append(result, s.DiffRemove.Render(text))
 				case "change":
-					result = append(result, styles.TfDiffChange.Render(text))
+					result = append(result, s.DiffChange.Render(text))
 				}
 			}
 		}

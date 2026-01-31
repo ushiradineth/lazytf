@@ -5,26 +5,19 @@ import (
 )
 
 // Terraform CLI diff colors - fixed colors that match terraform's actual output.
-// These are NOT affected by user themes to ensure consistency with terraform CLI.
-var (
-	// TfDiffAdd is muted green like terraform uses for additions (+).
-	TfDiffAdd = lipgloss.NewStyle().Foreground(lipgloss.Color("#98C379"))
-	// TfDiffRemove is muted red/salmon like terraform uses for deletions (-).
-	TfDiffRemove = lipgloss.NewStyle().Foreground(lipgloss.Color("#E06C75"))
-	// TfDiffChange is yellow/orange like terraform uses for changes (~).
-	TfDiffChange = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5C07B"))
-	// TfDimmed is gray for null values and separators.
-	TfDimmed = lipgloss.NewStyle().Foreground(lipgloss.Color("#5C6370"))
+// These are unexported to ensure all styling goes through the Styles struct.
+const (
+	colorAdd    = lipgloss.Color("#98C379") // muted green for additions (+)
+	colorRemove = lipgloss.Color("#E06C75") // muted red/salmon for deletions (-)
+	colorChange = lipgloss.Color("#E5C07B") // yellow/orange for changes (~)
+	colorDimmed = lipgloss.Color("#5C6370") // gray for null values and separators
 )
 
 // Theme defines the color scheme for the TUI.
+// Note: Action colors (create/update/delete) are fixed to Terraform CLI colors
+// and not configurable via themes.
 type Theme struct {
 	Name            string
-	CreateColor     lipgloss.AdaptiveColor
-	UpdateColor     lipgloss.AdaptiveColor
-	DeleteColor     lipgloss.AdaptiveColor
-	ReplaceColor    lipgloss.AdaptiveColor
-	NoChangeColor   lipgloss.AdaptiveColor
 	BackgroundColor lipgloss.AdaptiveColor
 	ForegroundColor lipgloss.AdaptiveColor
 	BorderColor     lipgloss.AdaptiveColor
@@ -39,15 +32,10 @@ func adaptive(light, dark string) lipgloss.AdaptiveColor {
 
 func newTheme(
 	name string,
-	create, update, deleteColor, replace, noChange, background, foreground, border, selected, dimmed, highlight lipgloss.AdaptiveColor,
+	background, foreground, border, selected, dimmed, highlight lipgloss.AdaptiveColor,
 ) Theme {
 	return Theme{
 		Name:            name,
-		CreateColor:     create,
-		UpdateColor:     update,
-		DeleteColor:     deleteColor,
-		ReplaceColor:    replace,
-		NoChangeColor:   noChange,
 		BackgroundColor: background,
 		ForegroundColor: foreground,
 		BorderColor:     border,
@@ -62,81 +50,56 @@ var (
 	// DefaultTheme is a clean, minimal theme.
 	DefaultTheme = newTheme(
 		"default",
-		adaptive("#00AF00", "#00D700"),
-		adaptive("#FF8700", "#FFAF00"),
-		adaptive("#D70000", "#FF5F5F"),
-		adaptive("#B200B2", "#D75FD7"),
-		adaptive("#767676", "#9E9E9E"),
-		adaptive("#FFFFFF", "#1C1C1C"),
-		adaptive("#262626", "#E4E4E4"),
-		adaptive("#BCBCBC", "#4E4E4E"),
-		adaptive("#5F87D7", "#87AFFF"),
-		adaptive("#9E9E9E", "#767676"),
-		adaptive("#D7FF00", "#FFFF87"),
+		adaptive("#FFFFFF", "#1C1C1C"), // background
+		adaptive("#262626", "#E4E4E4"), // foreground
+		adaptive("#BCBCBC", "#4E4E4E"), // border
+		adaptive("#5F87D7", "#87AFFF"), // selected
+		adaptive("#9E9E9E", "#767676"), // dimmed
+		adaptive("#D7FF00", "#FFFF87"), // highlight
 	)
 
 	// TerraformCloudTheme mimics the Terraform Cloud UI.
 	TerraformCloudTheme = newTheme(
 		"terraform-cloud",
-		adaptive("#00CA72", "#00CA72"),
-		adaptive("#FFA500", "#FFA500"),
-		adaptive("#E03A3E", "#E03A3E"),
-		adaptive("#C026D3", "#C026D3"),
-		adaptive("#8A8A8A", "#8A8A8A"),
-		adaptive("#FAFAFA", "#1A1B26"),
-		adaptive("#1A1B26", "#F8F8F2"),
-		adaptive("#D1D5DA", "#30313C"),
-		adaptive("#5F5FFF", "#7070FF"),
-		adaptive("#9E9E9E", "#6E6E6E"),
-		adaptive("#FFFACD", "#4A4A2A"),
+		adaptive("#FAFAFA", "#1A1B26"), // background
+		adaptive("#1A1B26", "#F8F8F2"), // foreground
+		adaptive("#D1D5DA", "#30313C"), // border
+		adaptive("#5F5FFF", "#7070FF"), // selected
+		adaptive("#9E9E9E", "#6E6E6E"), // dimmed
+		adaptive("#FFFACD", "#4A4A2A"), // highlight
 	)
 
 	// MonokaiTheme is inspired by the Monokai palette.
 	MonokaiTheme = newTheme(
 		"monokai",
-		adaptive("#A6E22E", "#A6E22E"),
-		adaptive("#FD971F", "#FD971F"),
-		adaptive("#F92672", "#F92672"),
-		adaptive("#AE81FF", "#AE81FF"),
-		adaptive("#75715E", "#75715E"),
-		adaptive("#F2F2F2", "#272822"),
-		adaptive("#272822", "#F8F8F2"),
-		adaptive("#BDBDBD", "#3E3D32"),
-		adaptive("#66D9EF", "#66D9EF"),
-		adaptive("#9E9E9E", "#75715E"),
-		adaptive("#E6DB74", "#E6DB74"),
+		adaptive("#F2F2F2", "#272822"), // background
+		adaptive("#272822", "#F8F8F2"), // foreground
+		adaptive("#BDBDBD", "#3E3D32"), // border
+		adaptive("#66D9EF", "#66D9EF"), // selected
+		adaptive("#9E9E9E", "#75715E"), // dimmed
+		adaptive("#E6DB74", "#E6DB74"), // highlight
 	)
 
 	// NordTheme is based on the Nord color palette.
 	NordTheme = newTheme(
 		"nord",
-		adaptive("#5E81AC", "#81A1C1"),
-		adaptive("#D08770", "#D08770"),
-		adaptive("#BF616A", "#BF616A"),
-		adaptive("#B48EAD", "#B48EAD"),
-		adaptive("#7A7A7A", "#6E7A88"),
-		adaptive("#ECEFF4", "#2E3440"),
-		adaptive("#2E3440", "#ECEFF4"),
-		adaptive("#D8DEE9", "#4C566A"),
-		adaptive("#88C0D0", "#88C0D0"),
-		adaptive("#8C92A0", "#7A8699"),
-		adaptive("#EBCB8B", "#EBCB8B"),
+		adaptive("#ECEFF4", "#2E3440"), // background
+		adaptive("#2E3440", "#ECEFF4"), // foreground
+		adaptive("#D8DEE9", "#4C566A"), // border
+		adaptive("#88C0D0", "#88C0D0"), // selected
+		adaptive("#8C92A0", "#7A8699"), // dimmed
+		adaptive("#EBCB8B", "#EBCB8B"), // highlight
 	)
 
 	// GitHubDarkTheme mimics GitHub's dark UI.
 	GitHubDarkTheme = newTheme(
 		"github-dark",
-		adaptive("#2DA44E", "#2DA44E"),
-		adaptive("#D29922", "#D29922"),
-		adaptive("#F85149", "#F85149"),
-		adaptive("#A371F7", "#A371F7"),
-		adaptive("#6E7781", "#6E7781"),
-		adaptive("#FFFFFF", "#0D1117"),
-		adaptive("#24292F", "#C9D1D9"),
-		adaptive("#D0D7DE", "#30363D"),
-		adaptive("#0969DA", "#1F6FEB"),
-		adaptive("#57606A", "#8B949E"),
-		adaptive("#D2A8FF", "#D2A8FF"),
+		adaptive("#FFFFFF", "#0D1117"), // background
+		adaptive("#24292F", "#C9D1D9"), // foreground
+		adaptive("#D0D7DE", "#30363D"), // border
+		adaptive("#0969DA", "#1F6FEB"), // selected
+		adaptive("#57606A", "#8B949E"), // dimmed
+		adaptive("#D2A8FF", "#D2A8FF"), // highlight
 	)
 )
 
@@ -177,6 +140,11 @@ type Styles struct {
 	ListItem          lipgloss.Style
 	Bold              lipgloss.Style
 	Help              lipgloss.Style
+
+	// Terraform CLI colors (for borders and other non-style uses)
+	AddColor    lipgloss.Color
+	RemoveColor lipgloss.Color
+	ChangeColor lipgloss.Color
 }
 
 // NewStyles creates a new set of styles based on a theme.
@@ -202,25 +170,17 @@ func NewStyles(theme Theme) *Styles {
 	return s
 }
 
-func applyActionStyles(s *Styles, theme Theme) {
-	s.Create = lipgloss.NewStyle().
-		Foreground(theme.CreateColor).
-		Bold(true)
+func applyActionStyles(s *Styles, _ Theme) {
+	s.Create = lipgloss.NewStyle().Foreground(colorAdd).Bold(true)
+	s.Update = lipgloss.NewStyle().Foreground(colorChange).Bold(true)
+	s.Delete = lipgloss.NewStyle().Foreground(colorRemove).Bold(true)
+	s.Replace = lipgloss.NewStyle().Foreground(colorChange).Bold(true)
+	s.NoChange = lipgloss.NewStyle().Foreground(colorDimmed)
 
-	s.Update = lipgloss.NewStyle().
-		Foreground(theme.UpdateColor).
-		Bold(true)
-
-	s.Delete = lipgloss.NewStyle().
-		Foreground(theme.DeleteColor).
-		Bold(true)
-
-	s.Replace = lipgloss.NewStyle().
-		Foreground(theme.ReplaceColor).
-		Bold(true)
-
-	s.NoChange = lipgloss.NewStyle().
-		Foreground(theme.NoChangeColor)
+	// Expose colors for non-style uses (e.g., borders)
+	s.AddColor = colorAdd
+	s.RemoveColor = colorRemove
+	s.ChangeColor = colorChange
 }
 
 func applyResourceStyles(s *Styles, theme Theme) {
@@ -258,8 +218,7 @@ func applyFilterStyles(s *Styles, theme Theme) {
 
 func applyStatusStyles(s *Styles, theme Theme) {
 	s.StatusBar = lipgloss.NewStyle().
-		Foreground(theme.ForegroundColor).
-		Padding(0, 1)
+		Foreground(theme.ForegroundColor)
 }
 
 func applySearchStyles(s *Styles, theme Theme) {
@@ -275,18 +234,11 @@ func applyBorderStyles(s *Styles, theme Theme) {
 		BorderForeground(theme.BorderColor)
 }
 
-func applyDiffStyles(s *Styles, theme Theme) {
-	s.DiffAdd = lipgloss.NewStyle().
-		Foreground(theme.CreateColor)
-
-	s.DiffRemove = lipgloss.NewStyle().
-		Foreground(theme.DeleteColor)
-
-	s.DiffChange = lipgloss.NewStyle().
-		Foreground(theme.UpdateColor)
-
-	s.Comment = lipgloss.NewStyle().
-		Foreground(theme.DeleteColor)
+func applyDiffStyles(s *Styles, _ Theme) {
+	s.DiffAdd = lipgloss.NewStyle().Foreground(colorAdd)
+	s.DiffRemove = lipgloss.NewStyle().Foreground(colorRemove)
+	s.DiffChange = lipgloss.NewStyle().Foreground(colorChange)
+	s.Comment = lipgloss.NewStyle().Foreground(colorRemove)
 }
 
 func applyHighlightStyles(s *Styles, theme Theme) {
@@ -322,9 +274,8 @@ func applyListStyles(s *Styles) {
 	s.SelectedLineBackground = lipgloss.AdaptiveColor{Light: "#B3D9FF", Dark: "#2F5D8A"}
 }
 
-func applyDimmedStyles(s *Styles, theme Theme) {
-	s.Dimmed = lipgloss.NewStyle().
-		Foreground(theme.DimmedColor)
+func applyDimmedStyles(s *Styles, _ Theme) {
+	s.Dimmed = lipgloss.NewStyle().Foreground(colorDimmed)
 }
 
 func applyPanelStyles(s *Styles, theme Theme) {

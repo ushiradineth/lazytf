@@ -14,7 +14,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/history"
-	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
@@ -1074,7 +1073,7 @@ func (m *Model) renderToast(message string, isError bool) string {
 	}
 	style := m.styles.Highlight
 	if isError {
-		style = styles.TfDiffRemove
+		style = m.styles.DiffRemove
 	}
 	content := style.Render(message)
 	box := m.styles.Border.Render(content)
@@ -1163,12 +1162,12 @@ func (m *Model) planSummaryVerbose() string {
 	replace := m.countResourcesByAction(terraform.ActionReplace)
 
 	lines := []string{
-		styles.TfDiffAdd.Render("+") + fmt.Sprintf(" %d to create", create),
-		styles.TfDiffChange.Render("~") + fmt.Sprintf(" %d to update", update),
-		styles.TfDiffRemove.Render("-") + fmt.Sprintf(" %d to destroy", deleteCount),
+		m.styles.DiffAdd.Render("+") + fmt.Sprintf(" %d to create", create),
+		m.styles.DiffChange.Render("~") + fmt.Sprintf(" %d to update", update),
+		m.styles.DiffRemove.Render("-") + fmt.Sprintf(" %d to destroy", deleteCount),
 	}
 	if replace > 0 {
-		lines = append(lines, styles.TfDiffChange.Render("±")+fmt.Sprintf(" %d to replace", replace))
+		lines = append(lines, m.styles.DiffChange.Render("±")+fmt.Sprintf(" %d to replace", replace))
 	}
 	return strings.Join(lines, "\n")
 }

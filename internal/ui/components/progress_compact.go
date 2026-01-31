@@ -97,7 +97,7 @@ func (p *ProgressCompact) renderNoProgress() string {
 
 	content := strings.Join([]string{
 		p.styles.Title.Render("Terraform error"),
-		styles.TfDiffRemove.Render("Error: " + summary),
+		p.styles.DiffRemove.Render("Error: " + summary),
 		p.styles.Dimmed.Render("Check logs or diagnostics for details."),
 	}, "\n")
 

@@ -212,20 +212,20 @@ func (v *ApplyView) renderFooter() string {
 
 	switch v.status {
 	case ApplyRunning:
-		statusDot = styles.TfDiffChange.Render("●")
+		statusDot = v.styles.DiffChange.Render("●")
 		if v.progress != "" {
 			text = "Progress: " + v.progress
 		} else {
 			text = v.statusText.running
 		}
 	case ApplySuccess:
-		statusDot = styles.TfDiffAdd.Render("●")
+		statusDot = v.styles.DiffAdd.Render("●")
 		text = v.statusText.success
 	case ApplyFailed:
-		statusDot = styles.TfDiffRemove.Render("●")
+		statusDot = v.styles.DiffRemove.Render("●")
 		text = v.statusText.failure
 	case ApplyPending:
-		statusDot = styles.TfDimmed.Render("○")
+		statusDot = v.styles.Dimmed.Render("○")
 		text = v.statusText.pending
 	}
 
