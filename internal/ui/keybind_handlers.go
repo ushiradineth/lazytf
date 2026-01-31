@@ -395,50 +395,37 @@ func (m *Model) handleActionScrollEnd(ctx *keybinds.Context) tea.Cmd {
 
 // handlePageNavigation handles page up/down navigation within panels.
 func (m *Model) handlePageNavigation(panel keybinds.PanelID, pageUp bool) tea.Cmd {
-	switch panel {
-	case keybinds.PanelMain:
-		if m.mainArea != nil {
-			keyType := tea.KeyPgDown
-			if pageUp {
-				keyType = tea.KeyPgUp
-			}
-			_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
-			return cmd
-		}
-	case keybinds.PanelCommandLog:
-		if m.commandLogPanel != nil {
-			keyType := tea.KeyPgDown
-			if pageUp {
-				keyType = tea.KeyPgUp
-			}
-			_, cmd := m.commandLogPanel.HandleKey(tea.KeyMsg{Type: keyType})
-			return cmd
-		}
+	keyType := tea.KeyPgDown
+	if pageUp {
+		keyType = tea.KeyPgUp
 	}
-	return nil
+	return m.sendKeyToPanel(panel, keyType)
 }
 
 // handleScrollEdge handles home/end navigation within panels.
 func (m *Model) handleScrollEdge(panel keybinds.PanelID, toTop bool) tea.Cmd {
+	keyType := tea.KeyEnd
+	if toTop {
+		keyType = tea.KeyHome
+	}
+	return m.sendKeyToPanel(panel, keyType)
+}
+
+// sendKeyToPanel sends a key event to the appropriate panel.
+func (m *Model) sendKeyToPanel(panel keybinds.PanelID, keyType tea.KeyType) tea.Cmd {
 	switch panel {
 	case keybinds.PanelMain:
 		if m.mainArea != nil {
-			keyType := tea.KeyEnd
-			if toTop {
-				keyType = tea.KeyHome
-			}
 			_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
 			return cmd
 		}
 	case keybinds.PanelCommandLog:
 		if m.commandLogPanel != nil {
-			keyType := tea.KeyEnd
-			if toTop {
-				keyType = tea.KeyHome
-			}
 			_, cmd := m.commandLogPanel.HandleKey(tea.KeyMsg{Type: keyType})
 			return cmd
 		}
+	default:
+		// Other panels don't support this navigation
 	}
 	return nil
 }
