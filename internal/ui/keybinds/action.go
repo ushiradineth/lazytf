@@ -55,6 +55,10 @@ const (
 const (
 	ActionMoveUp     Action = "move_up"
 	ActionMoveDown   Action = "move_down"
+	ActionPageUp     Action = "page_up"
+	ActionPageDown   Action = "page_down"
+	ActionScrollTop  Action = "scroll_top"
+	ActionScrollEnd  Action = "scroll_end"
 	ActionSelect     Action = "select"
 	ActionScrollUp   Action = "scroll_up"
 	ActionScrollDown Action = "scroll_down"

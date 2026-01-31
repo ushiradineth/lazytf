@@ -20,6 +20,11 @@ import (
 func (m *Model) renderStatusBar() string {
 	var parts []string
 
+	// Add read-only indicator for non-execution mode
+	if !m.executionMode {
+		parts = append(parts, m.styles.Dimmed.Render("read-only"))
+	}
+
 	// Add workspace/environment info if available
 	if m.executionMode && m.envCurrent != "" {
 		parts = append(parts, m.styles.Highlight.Render(m.envDisplayName()))
@@ -153,8 +158,8 @@ func enforceDimensions(view string, width, height int) string {
 func (m *Model) renderLeftColumn(layout LayoutSpec, contentHeight int) string {
 	var leftPanels []string
 
-	// Always render the workspace/environment area to fill its allocated space
-	if layout.Workspace.Height > 0 {
+	// Render workspace/environment panel only in execution mode with allocated height
+	if m.executionMode && layout.Workspace.Height > 0 {
 		workspaceView := ""
 		if m.environmentPanel != nil {
 			workspaceView = m.environmentPanel.View()
@@ -195,8 +200,8 @@ func (m *Model) renderRightColumn(layout LayoutSpec, contentHeight int) string {
 		rightPanels = append(rightPanels, enforceDimensions(m.mainArea.View(), layout.RightColumnWidth, layout.Main.Height))
 	}
 
-	// Render command log when visible
-	if m.panelManager.IsCommandLogVisible() && layout.CommandLog.Height > 0 {
+	// Render command log when visible (only in execution mode)
+	if m.executionMode && m.panelManager.IsCommandLogVisible() && layout.CommandLog.Height > 0 {
 		// Always render the command log space when it's visible to prevent layout gaps.
 		// If the panel returns empty, create empty space to fill the reserved height.
 		commandLogView := ""

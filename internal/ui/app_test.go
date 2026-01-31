@@ -903,6 +903,7 @@ func TestAppendDiagnostics(t *testing.T) {
 func TestHandleExecutionKeyToggles(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
+	m.historyEnabled = true
 	m.width = 80
 	m.height = 24
 

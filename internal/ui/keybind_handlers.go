@@ -13,6 +13,7 @@ func (m *Model) buildKeybindContext() *keybinds.Context {
 
 	// Mode state
 	ctx.ExecutionMode = m.executionMode
+	ctx.HistoryEnabled = m.historyEnabled
 	ctx.OperationRunning = m.planRunning || m.applyRunning || m.refreshRunning
 	ctx.PlanRunning = m.planRunning
 	ctx.ApplyRunning = m.applyRunning
@@ -139,6 +140,10 @@ func (m *Model) registerKeybindHandlers() {
 	// Navigation actions
 	r.RegisterHandler(keybinds.ActionMoveUp, m.handleActionMoveUp)
 	r.RegisterHandler(keybinds.ActionMoveDown, m.handleActionMoveDown)
+	r.RegisterHandler(keybinds.ActionPageUp, m.handleActionPageUp)
+	r.RegisterHandler(keybinds.ActionPageDown, m.handleActionPageDown)
+	r.RegisterHandler(keybinds.ActionScrollTop, m.handleActionScrollTop)
+	r.RegisterHandler(keybinds.ActionScrollEnd, m.handleActionScrollEnd)
 	r.RegisterHandler(keybinds.ActionSelect, m.handleActionSelect)
 	r.RegisterHandler(keybinds.ActionScrollUp, m.handleActionScrollUp)
 	r.RegisterHandler(keybinds.ActionScrollDown, m.handleActionScrollDown)
@@ -370,6 +375,72 @@ func (m *Model) handleActionMoveUp(ctx *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionMoveDown(ctx *keybinds.Context) tea.Cmd {
 	return m.handleVerticalNavigation(ctx.FocusedPanel, false)
+}
+
+func (m *Model) handleActionPageUp(ctx *keybinds.Context) tea.Cmd {
+	return m.handlePageNavigation(ctx.FocusedPanel, true)
+}
+
+func (m *Model) handleActionPageDown(ctx *keybinds.Context) tea.Cmd {
+	return m.handlePageNavigation(ctx.FocusedPanel, false)
+}
+
+func (m *Model) handleActionScrollTop(ctx *keybinds.Context) tea.Cmd {
+	return m.handleScrollEdge(ctx.FocusedPanel, true)
+}
+
+func (m *Model) handleActionScrollEnd(ctx *keybinds.Context) tea.Cmd {
+	return m.handleScrollEdge(ctx.FocusedPanel, false)
+}
+
+// handlePageNavigation handles page up/down navigation within panels.
+func (m *Model) handlePageNavigation(panel keybinds.PanelID, pageUp bool) tea.Cmd {
+	switch panel {
+	case keybinds.PanelMain:
+		if m.mainArea != nil {
+			keyType := tea.KeyPgDown
+			if pageUp {
+				keyType = tea.KeyPgUp
+			}
+			_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
+			return cmd
+		}
+	case keybinds.PanelCommandLog:
+		if m.commandLogPanel != nil {
+			keyType := tea.KeyPgDown
+			if pageUp {
+				keyType = tea.KeyPgUp
+			}
+			_, cmd := m.commandLogPanel.HandleKey(tea.KeyMsg{Type: keyType})
+			return cmd
+		}
+	}
+	return nil
+}
+
+// handleScrollEdge handles home/end navigation within panels.
+func (m *Model) handleScrollEdge(panel keybinds.PanelID, toTop bool) tea.Cmd {
+	switch panel {
+	case keybinds.PanelMain:
+		if m.mainArea != nil {
+			keyType := tea.KeyEnd
+			if toTop {
+				keyType = tea.KeyHome
+			}
+			_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
+			return cmd
+		}
+	case keybinds.PanelCommandLog:
+		if m.commandLogPanel != nil {
+			keyType := tea.KeyEnd
+			if toTop {
+				keyType = tea.KeyHome
+			}
+			_, cmd := m.commandLogPanel.HandleKey(tea.KeyMsg{Type: keyType})
+			return cmd
+		}
+	}
+	return nil
 }
 
 // handleVerticalNavigation handles up/down navigation within panels.

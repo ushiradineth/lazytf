@@ -33,11 +33,10 @@ type teaProgram interface {
 }
 
 var (
-	version             = "0.1.0"
-	planFile            string
-	mouseEnabled        bool
-	readOnlyMode        bool
-	tfFlags             string
+	version         = "0.1.0"
+	planFile        string
+	mouseEnabled    bool
+	tfFlags         string
 	workDir             string
 	envName             string
 	presetName          string
@@ -86,7 +85,6 @@ showing only changed attributes in a git-style diff format.`,
 	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan output file")
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
-	rootCmd.Flags().BoolVar(&readOnlyMode, "read-only", false, "Run in read-only mode (no terraform execution)")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
 	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
 	rootCmd.Flags().StringVar(&envName, "env", "", "Environment name to select")
@@ -127,13 +125,13 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		overrideFlags = append(overrideFlags, override.Flags...)
 	}
-	readOnlyMode = resolveReadOnlyMode(cmd, args)
 
-	if !readOnlyMode {
-		return runExecutionMode(&cfg, overrideFlags, configManager)
+	// If a plan file is provided, run in read-only mode
+	if len(args) > 0 || planFile != "" {
+		return runReadOnlyMode(&cfg, args)
 	}
 
-	return runReadOnlyMode(&cfg, args)
+	return runExecutionMode(&cfg, overrideFlags, configManager)
 }
 
 func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
@@ -170,22 +168,6 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 		ConfigManager:  configManager,
 	}, appStyles)
 	return programRunner(model)
-}
-
-func resolveReadOnlyMode(cmd *cobra.Command, args []string) bool {
-	if readOnlyMode {
-		return true
-	}
-	explicitReadOnly := flagExplicit(cmd, "read-only")
-	return (len(args) > 0 || planFile != "") && !explicitReadOnly
-}
-
-func flagExplicit(cmd *cobra.Command, name string) bool {
-	if cmd == nil {
-		return false
-	}
-	flag := cmd.Flags().Lookup(name)
-	return flag != nil && cmd.Flags().Changed(name)
 }
 
 func prepareExecutionFlags(cfg *config.Config, overrideFlags []string) ([]string, error) {
@@ -310,13 +292,10 @@ func applyPreset(cfg *config.Config, flags []string) ([]string, error) {
 func runReadOnlyMode(cfg *config.Config, args []string) error {
 	// Determine plan file path.
 	var planPath string
-	switch {
-	case len(args) > 0:
+	if len(args) > 0 {
 		planPath = args[0]
-	case planFile != "":
+	} else {
 		planPath = planFile
-	default:
-		return errors.New("no plan file specified. Usage: lazytf <plan-file> or lazytf --file <plan-file>")
 	}
 
 	// Parse the plan output.

@@ -45,11 +45,11 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode bool
-	executor      *terraform.Executor
-	applyView     *views.ApplyView
-	planView      *views.PlanView
-	planFlags     []string
+	executionMode    bool
+	executor         *terraform.Executor
+	applyView        *views.ApplyView
+	planView         *views.PlanView
+	planFlags        []string
 	applyFlags       []string
 	planRunFlags     []string
 	planRunning      bool
@@ -68,6 +68,7 @@ type Model struct {
 	historyStore       *history.Store
 	historyPanel       *components.HistoryPanel
 	historyEntries     []history.Entry
+	historyEnabled     bool
 	showHistory        bool
 	historyHeight      int
 	historySelected    int
@@ -280,7 +281,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	m.envStrategy = environment.StrategyUnknown
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
-	m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
+	m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed")
 	m.operationState = terraform.NewOperationState()
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsHeight = 8
@@ -304,11 +305,14 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 		m.resourcesController.SetStateListContent(m.stateListContent)
 	}
 
-	m.historyPanel = components.NewHistoryPanel(m.styles)
+	m.historyEnabled = cfg.HistoryEnabled
 	m.historyHeight = 6
 	m.showHistory = false
-	// Register history panel with panel manager
-	m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
+	if m.historyEnabled {
+		m.historyPanel = components.NewHistoryPanel(m.styles)
+		// Register history panel with panel manager
+		m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
+	}
 	m.config = cfg.Config
 	m.configView = views.NewConfigView(m.styles)
 	if m.configView != nil {
@@ -897,7 +901,9 @@ func (m *Model) initHistory(cfg ExecutionConfig) {
 		return
 	}
 	m.historyEntries = entries
-	m.historyPanel.SetEntries(entries)
+	if m.historyPanel != nil {
+		m.historyPanel.SetEntries(entries)
+	}
 	m.syncHistorySelection()
 }
 

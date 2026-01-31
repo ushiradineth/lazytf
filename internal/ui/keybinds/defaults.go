@@ -63,11 +63,12 @@ func registerGlobalBindings(r *Registry) {
 func registerPanelNavigationBindings(r *Registry) {
 	// Number keys for panel focus - hidden since panel titles show [1], [2], etc.
 	r.Register(Binding{
-		Keys:     []string{"1"},
-		Action:   ActionFocusWorkspace,
-		Scope:    ScopeGlobal,
-		Category: "Panel Navigation",
-		Hidden:   true,
+		Keys:      []string{"1"},
+		Action:    ActionFocusWorkspace,
+		Scope:     ScopeGlobal,
+		Category:  "Panel Navigation",
+		Condition: ConditionExecutionMode,
+		Hidden:    true,
 	})
 	r.Register(Binding{
 		Keys:     []string{"2"},
@@ -77,12 +78,14 @@ func registerPanelNavigationBindings(r *Registry) {
 		Hidden:   true,
 	})
 	r.Register(Binding{
-		Keys:      []string{"3"},
-		Action:    ActionFocusHistory,
-		Scope:     ScopeGlobal,
-		Category:  "Panel Navigation",
-		Condition: ConditionExecutionMode,
-		Hidden:    true,
+		Keys:     []string{"3"},
+		Action:   ActionFocusHistory,
+		Scope:    ScopeGlobal,
+		Category: "Panel Navigation",
+		Condition: func(ctx *Context) bool {
+			return ctx.ExecutionMode && ctx.HistoryEnabled
+		},
+		Hidden: true,
 	})
 	r.Register(Binding{
 		Keys:      []string{"4"},
@@ -153,6 +156,42 @@ func registerNavigationBindings(r *Registry) {
 		Scope:       ScopeGlobal,
 		Description: "move selection down",
 		Category:    "Navigation",
+	})
+
+	// Page Up/Down
+	r.Register(Binding{
+		Keys:        []string{"pgup"},
+		Action:      ActionPageUp,
+		Scope:       ScopeGlobal,
+		Description: "page up",
+		Category:    "Navigation",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"pgdown"},
+		Action:      ActionPageDown,
+		Scope:       ScopeGlobal,
+		Description: "page down",
+		Category:    "Navigation",
+		Hidden:      true,
+	})
+
+	// Home/End
+	r.Register(Binding{
+		Keys:        []string{"home", "g"},
+		Action:      ActionScrollTop,
+		Scope:       ScopeGlobal,
+		Description: "scroll to top",
+		Category:    "Navigation",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"end", "G"},
+		Action:      ActionScrollEnd,
+		Scope:       ScopeGlobal,
+		Description: "scroll to bottom",
+		Category:    "Navigation",
+		Hidden:      true,
 	})
 
 	// Select/Toggle
@@ -353,12 +392,14 @@ func registerExecutionBindings(r *Registry) {
 		Description: "format",
 		Category:    "Execution",
 	})
-	// History toggle (global in execution mode)
+	// History toggle (global in execution mode with history enabled)
 	r.Register(Binding{
-		Keys:        []string{"h"},
-		Action:      ActionToggleHistory,
-		Scope:       ScopeGlobal,
-		Condition:   ConditionExecutionMode,
+		Keys:  []string{"h"},
+		Action: ActionToggleHistory,
+		Scope:  ScopeGlobal,
+		Condition: func(ctx *Context) bool {
+			return ctx.ExecutionMode && ctx.HistoryEnabled
+		},
 		Description: "toggle history panel",
 		Category:    "Execution",
 	})

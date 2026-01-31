@@ -207,28 +207,29 @@ func (v *ApplyView) renderHeader() string {
 }
 
 func (v *ApplyView) renderFooter() string {
-	var footer string
+	var statusDot string
+	var text string
+
 	switch v.status {
 	case ApplyRunning:
+		statusDot = styles.TfDiffChange.Render("●")
 		if v.progress != "" {
-			footer = "Progress: " + v.progress
+			text = "Progress: " + v.progress
 		} else {
-			footer = v.statusText.running
+			text = v.statusText.running
 		}
 	case ApplySuccess:
-		footer = v.statusText.success
+		statusDot = styles.TfDiffAdd.Render("●")
+		text = v.statusText.success
 	case ApplyFailed:
-		footer = v.statusText.failure
+		statusDot = styles.TfDiffRemove.Render("●")
+		text = v.statusText.failure
 	case ApplyPending:
-		footer = v.statusText.pending
+		statusDot = styles.TfDimmed.Render("○")
+		text = v.statusText.pending
 	}
-	if v.status == ApplySuccess || v.status == ApplyFailed {
-		if footer != "" {
-			footer += " | esc: back | q: quit"
-		} else {
-			footer = "esc: back | q: quit"
-		}
-	}
+
+	footer := statusDot + " " + text
 	if v.width > 0 {
 		return v.styles.StatusBar.Width(v.width).Render(footer)
 	}

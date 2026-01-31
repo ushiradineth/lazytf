@@ -145,6 +145,10 @@ func (m *MainArea) GetHistoryView() *views.HistoryView {
 // SetSelectedResource updates the selected resource for diff view.
 func (m *MainArea) SetSelectedResource(resource *terraform.ResourceChange) {
 	m.selectedResource = resource
+	// Reset scroll position when resource changes
+	if m.diffViewer != nil {
+		m.diffViewer.ResetScroll()
+	}
 }
 
 // Update handles Bubble Tea messages (implements Panel interface).
@@ -180,14 +184,36 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 		// Apply/Plan views handle scrolling
 		if m.applyView != nil {
 			switch msg.String() {
-			case "up", "down", "pgup", "pgdown", "home", "end":
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
 				// These are typically handled by viewport inside applyView
 				_, cmd := m.Update(msg)
 				return true, cmd
 			}
 		}
 	case ModeDiff:
-		// Diff viewer is stateless, no key handling needed
+		// Diff viewer scrolling
+		if m.diffViewer != nil {
+			switch msg.String() {
+			case "up", "k":
+				m.diffViewer.ScrollUp(1)
+				return true, nil
+			case "down", "j":
+				m.diffViewer.ScrollDown(1)
+				return true, nil
+			case "pgup":
+				m.diffViewer.ScrollUp(m.height / 2)
+				return true, nil
+			case "pgdown":
+				m.diffViewer.ScrollDown(m.height / 2)
+				return true, nil
+			case "home", "g":
+				m.diffViewer.ScrollToTop()
+				return true, nil
+			case "end", "G":
+				m.diffViewer.ScrollToBottom()
+				return true, nil
+			}
+		}
 	case ModeHistoryDetail:
 		// History view handles scrolling
 		if m.historyView != nil {
@@ -306,14 +332,7 @@ func (m *MainArea) calculateThumbSize(visibleHeight, totalLines int) float64 {
 
 // padLine pads a line to the given width.
 func (m *MainArea) padLine(line string, width int) string {
-	runes := []rune(line)
-	if len(runes) >= width {
-		if len(runes) > width {
-			return string(runes[:width])
-		}
-		return line
-	}
-	return line + strings.Repeat(" ", width-len(runes))
+	return components.PadLine(line, width)
 }
 
 // GetApplyView returns the apply view (for external updates).

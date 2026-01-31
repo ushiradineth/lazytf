@@ -71,7 +71,7 @@ func (m *Model) beginPlan() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Running terraform plan...")
-		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed - press esc to return")
+		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	m.updateExecutionViewForStreaming()
@@ -123,7 +123,7 @@ func (m *Model) beginApply() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Applying changes...")
-		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed - press esc to return")
+		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	// Transition to main view from confirm view
@@ -175,7 +175,7 @@ func (m *Model) beginRefresh() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Running terraform refresh...")
-		m.applyView.SetStatusText("Running...", "Refresh complete", "Refresh failed - press esc to return")
+		m.applyView.SetStatusText("Running...", "Refresh complete", "Refresh failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	m.updateExecutionViewForStreaming()
@@ -1074,7 +1074,7 @@ func (m *Model) renderToast(message string, isError bool) string {
 	}
 	style := m.styles.Highlight
 	if isError {
-		style = m.styles.Delete
+		style = styles.TfDiffRemove
 	}
 	content := style.Render(message)
 	box := m.styles.Border.Render(content)

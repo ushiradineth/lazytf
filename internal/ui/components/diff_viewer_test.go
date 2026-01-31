@@ -81,8 +81,8 @@ func TestRenderHeaderIncludesActionLabel(t *testing.T) {
 		Action:  terraform.ActionUpdate,
 	}
 	out := viewer.renderHeader(resource, nil)
-	if !strings.Contains(out, "[update]") {
-		t.Fatalf("expected update label in header: %q", out)
+	if !strings.Contains(out, "update:") {
+		t.Fatalf("expected 'update:' label in header: %q", out)
 	}
 }
 
@@ -92,10 +92,10 @@ func TestRenderHeaderActionLabels(t *testing.T) {
 		action terraform.ActionType
 		label  string
 	}{
-		{terraform.ActionCreate, "[create]"},
-		{terraform.ActionUpdate, "[update]"},
-		{terraform.ActionDelete, "[destroy]"},
-		{terraform.ActionReplace, "[replace]"},
+		{terraform.ActionCreate, "create:"},
+		{terraform.ActionUpdate, "update:"},
+		{terraform.ActionDelete, "destroy:"},
+		{terraform.ActionReplace, "replace:"},
 	}
 
 	for _, tt := range tests {

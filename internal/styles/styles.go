@@ -259,7 +259,6 @@ func applyFilterStyles(s *Styles, theme Theme) {
 func applyStatusStyles(s *Styles, theme Theme) {
 	s.StatusBar = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
-		Background(lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#2A2A2A"}).
 		Padding(0, 1)
 }
 
@@ -308,7 +307,6 @@ func applyHelpStyles(s *Styles, theme Theme) {
 func applyTitleStyles(s *Styles, theme Theme) {
 	s.Title = lipgloss.NewStyle().
 		Foreground(theme.ForegroundColor).
-		Background(theme.BorderColor).
 		Padding(0, 1).
 		Bold(true)
 }

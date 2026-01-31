@@ -99,6 +99,11 @@ var ConditionOperationRunning Condition = func(ctx *Context) bool {
 	return ctx.OperationRunning
 }
 
+// ConditionHistoryEnabled checks if history is enabled and available.
+var ConditionHistoryEnabled Condition = func(ctx *Context) bool {
+	return ctx.HistoryEnabled
+}
+
 // Context represents the current UI state for keybind resolution.
 type Context struct {
 	// Focus state
@@ -109,6 +114,7 @@ type Context struct {
 	// Mode state
 	ExecutionMode  bool
 	SelectorActive bool
+	HistoryEnabled bool
 
 	// Tab state
 	ResourcesActiveTab int // 0 = Resources, 1 = State

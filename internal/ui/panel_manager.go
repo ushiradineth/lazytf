@@ -78,7 +78,12 @@ func (pm *PanelManager) GetFocusedPanel() PanelID {
 // CycleFocus cycles to the next panel.
 func (pm *PanelManager) CycleFocus(reverse bool) tea.Cmd {
 	// Define focus order: Workspace -> Resources -> History -> Main
-	focusOrder := []PanelID{PanelWorkspace, PanelResources, PanelHistory, PanelMain}
+	// Only include history if it exists
+	focusOrder := []PanelID{PanelWorkspace, PanelResources}
+	if panel, ok := pm.panels[PanelHistory]; ok && panel != nil {
+		focusOrder = append(focusOrder, PanelHistory)
+	}
+	focusOrder = append(focusOrder, PanelMain)
 
 	current := pm.focusedPanel
 	if pm.commandLogFocused {
@@ -165,7 +170,7 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	layout := LayoutSpec{
 		FilterBarHeight:   FilterBarHeight,
 		StatusBarHeight:   StatusBarHeight,
-		CommandLogVisible: pm.commandLogVisible,
+		CommandLogVisible: pm.executionMode && pm.commandLogVisible,
 	}
 
 	// Calculate available height (subtract filter bar and status bar)
@@ -211,10 +216,10 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	}
 
 	// Right column: Main area + Command log
-	// Calculate command log height if visible
+	// Calculate command log height if visible (only in execution mode)
 	commandLogHeight := 0
 	mainAreaHeight := availableHeight
-	if pm.commandLogVisible {
+	if pm.executionMode && pm.commandLogVisible {
 		if pm.commandLogFocused {
 			// Full screen mode: command log takes 100%, main area hidden
 			commandLogHeight = availableHeight
@@ -239,8 +244,8 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 		Height: mainAreaHeight,
 	}
 
-	// Command log in right column under main area
-	if pm.commandLogVisible {
+	// Command log in right column under main area (only in execution mode)
+	if pm.executionMode && pm.commandLogVisible {
 		layout.CommandLog = PanelSpec{
 			X:      leftWidth,
 			Y:      FilterBarHeight + mainAreaHeight,
@@ -257,9 +262,15 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 		return 0, 0, 0
 	}
 
-	// When not in execution mode, history panel is not shown
-	// Divide space between workspace and resources only
+	// When not in execution mode, only show resources panel (no workspace or history)
 	if !pm.executionMode {
+		return 0, panelsHeight, 0
+	}
+
+	// When history panel is not registered, divide space between workspace and resources only
+	historyPanel, hasHistory := pm.panels[PanelHistory]
+	historyEnabled := hasHistory && historyPanel != nil
+	if !historyEnabled {
 		// Environment: 5% when inactive, 20% when active
 		workspaceRatio := 0.05
 		if pm.focusedPanel == PanelWorkspace {
@@ -333,7 +344,11 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "2":
 		return true, pm.SetFocus(PanelResources)
 	case "3":
-		return true, pm.SetFocus(PanelHistory)
+		// Only focus history if it exists
+		if panel, ok := pm.panels[PanelHistory]; ok && panel != nil {
+			return true, pm.SetFocus(PanelHistory)
+		}
+		return true, nil
 	case "0":
 		return true, pm.SetFocus(PanelMain)
 	case "4":

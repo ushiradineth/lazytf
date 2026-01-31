@@ -206,13 +206,13 @@ func (t *Toast) renderBox() string {
 
 	switch t.level {
 	case ToastSuccess:
-		textStyle = t.styles.Create
+		textStyle = styles.TfDiffAdd
 		borderColor = t.styles.Theme.CreateColor
 	case ToastWarning:
-		textStyle = t.styles.Update
+		textStyle = styles.TfDiffChange
 		borderColor = t.styles.Theme.UpdateColor
 	case ToastError:
-		textStyle = t.styles.Delete
+		textStyle = styles.TfDiffRemove
 		borderColor = t.styles.Theme.DeleteColor
 	default: // ToastInfo
 		textStyle = t.styles.Highlight

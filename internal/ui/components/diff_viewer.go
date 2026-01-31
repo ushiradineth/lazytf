@@ -14,10 +14,12 @@ import (
 
 // DiffViewer renders a side-by-side diff for the selected resource.
 type DiffViewer struct {
-	styles     *styles.Styles
-	diffEngine *diff.Engine
-	width      int
-	height     int
+	styles       *styles.Styles
+	diffEngine   *diff.Engine
+	width        int
+	height       int
+	scrollOffset int
+	totalLines   int
 }
 
 // NewDiffViewer creates a diff viewer.
@@ -39,9 +41,54 @@ func (d *DiffViewer) SetStyles(s *styles.Styles) {
 	d.styles = s
 }
 
+// ScrollUp scrolls the view up by n lines.
+func (d *DiffViewer) ScrollUp(n int) {
+	d.scrollOffset -= n
+	if d.scrollOffset < 0 {
+		d.scrollOffset = 0
+	}
+}
+
+// ScrollDown scrolls the view down by n lines.
+func (d *DiffViewer) ScrollDown(n int) {
+	d.scrollOffset += n
+	maxOffset := d.totalLines - d.height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if d.scrollOffset > maxOffset {
+		d.scrollOffset = maxOffset
+	}
+}
+
+// ScrollToTop scrolls to the top.
+func (d *DiffViewer) ScrollToTop() {
+	d.scrollOffset = 0
+}
+
+// ScrollToBottom scrolls to the bottom.
+func (d *DiffViewer) ScrollToBottom() {
+	maxOffset := d.totalLines - d.height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	d.scrollOffset = maxOffset
+}
+
+// ResetScroll resets the scroll position.
+func (d *DiffViewer) ResetScroll() {
+	d.scrollOffset = 0
+}
+
+// GetScrollInfo returns scroll position info for scrollbar.
+func (d *DiffViewer) GetScrollInfo() (offset, total, visible int) {
+	return d.scrollOffset, d.totalLines, d.height
+}
+
 // View renders the diff viewer content.
 func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 	if resource == nil {
+		d.totalLines = 0
 		return d.pad("")
 	}
 
@@ -58,6 +105,7 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 		} else {
 			content = d.styles.Dimmed.Render("No changes for selected resource")
 		}
+		d.totalLines = 1
 		return d.pad(content)
 	}
 
@@ -72,23 +120,86 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 		body = d.renderCompactList(diffs, resource.Change)
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
-	return d.pad(content)
+
+	// Split into lines and apply scroll offset
+	lines := strings.Split(content, "\n")
+	d.totalLines = len(lines)
+
+	// Clamp scroll offset
+	maxOffset := d.totalLines - d.height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if d.scrollOffset > maxOffset {
+		d.scrollOffset = maxOffset
+	}
+
+	// Get visible lines
+	start := d.scrollOffset
+	end := start + d.height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	if start > len(lines) {
+		start = len(lines)
+	}
+
+	visibleContent := strings.Join(lines[start:end], "\n")
+	return d.pad(visibleContent)
 }
 
 func (d *DiffViewer) renderHeader(resource *terraform.ResourceChange, diffs []diff.MinimalDiff) string {
 	changeCount := len(diffs)
-	icon := resource.Action.GetActionIcon()
-	actionLabel := actionLabel(resource.Action)
-	if actionLabel != "" {
-		actionLabel = " [" + actionLabel + "]"
-	}
-	title := fmt.Sprintf("%s %s%s", icon, resource.Address, actionLabel)
-	if changeCount == 1 {
-		title += "  (1 change)"
+	label := actionLabel(resource.Action)
+
+	// Build header text: "update: module.alpha.aws_instance.node_0  (2 changes)"
+	var headerText string
+	if label != "" {
+		headerText = label + ": " + resource.Address
 	} else {
-		title += fmt.Sprintf("  (%d changes)", changeCount)
+		headerText = resource.Address
 	}
-	return d.styles.Title.Width(d.width).Render(title)
+
+	// Add change count
+	if changeCount == 1 {
+		headerText += "  (1 change)"
+	} else {
+		headerText += fmt.Sprintf("  (%d changes)", changeCount)
+	}
+
+	// Truncate if needed
+	if d.width > 0 && lipgloss.Width(headerText) > d.width {
+		headerText = utils.TruncateEnd(headerText, d.width)
+	}
+
+	// Style header with action color (same as diff lines)
+	actionStyle := d.actionStyle(resource.Action)
+	styledHeader := actionStyle.Render(headerText)
+
+	// Create lines in border color
+	lineWidth := d.width
+	if lineWidth <= 0 {
+		lineWidth = lipgloss.Width(headerText)
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(d.styles.Theme.BorderColor)
+	line := borderStyle.Render(strings.Repeat("─", lineWidth))
+
+	return line + "\n" + styledHeader + "\n" + line + "\n"
+}
+
+func (d *DiffViewer) actionStyle(action terraform.ActionType) lipgloss.Style {
+	switch action {
+	case terraform.ActionCreate:
+		return styles.TfDiffAdd
+	case terraform.ActionUpdate:
+		return styles.TfDiffChange
+	case terraform.ActionDelete:
+		return styles.TfDiffRemove
+	case terraform.ActionReplace:
+		return styles.TfDiffChange
+	default:
+		return styles.TfDimmed
+	}
 }
 
 func (d *DiffViewer) renderTable(diffs []diff.MinimalDiff, change *terraform.Change) string {

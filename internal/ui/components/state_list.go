@@ -164,7 +164,7 @@ func (s *StateListContent) View() string {
 	}
 
 	if s.errorMsg != "" {
-		return s.styles.Delete.Render("Error: " + s.errorMsg)
+		return styles.TfDiffRemove.Render("Error: " + s.errorMsg)
 	}
 
 	if len(s.resources) == 0 {

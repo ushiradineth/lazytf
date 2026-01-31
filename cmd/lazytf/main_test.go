@@ -20,36 +20,31 @@ import (
 
 var testMu sync.Mutex
 
-func TestRun_NoPlanFile(t *testing.T) {
+func TestRun_EmptyPlanFilePath(t *testing.T) {
 	oldPlanFile := planFile
-	oldReadOnly := readOnlyMode
 	t.Cleanup(func() {
 		planFile = oldPlanFile
-		readOnlyMode = oldReadOnly
 	})
 	useTempConfig(t)
 	planFile = ""
-	readOnlyMode = true
 
-	err := run(&cobra.Command{}, nil)
+	// Pass an empty string as plan file path - should fail to parse
+	err := run(&cobra.Command{}, []string{""})
 	if err == nil {
-		t.Fatalf("expected error for missing plan file")
+		t.Fatalf("expected error for empty plan file path")
 	}
-	if !strings.Contains(err.Error(), "no plan file specified") {
+	if !strings.Contains(err.Error(), "failed to parse plan file") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestRun_ParseFileError(t *testing.T) {
 	oldPlanFile := planFile
-	oldReadOnly := readOnlyMode
 	t.Cleanup(func() {
 		planFile = oldPlanFile
-		readOnlyMode = oldReadOnly
 	})
 	useTempConfig(t)
 	planFile = filepath.Join(t.TempDir(), "missing.json")
-	readOnlyMode = true
 
 	err := run(&cobra.Command{}, nil)
 	if err == nil {
@@ -86,13 +81,11 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	}
 
 	oldPlanFile := planFile
-	oldReadOnly := readOnlyMode
 	oldFlags := tfFlags
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	t.Cleanup(func() {
 		planFile = oldPlanFile
-		readOnlyMode = oldReadOnly
 		tfFlags = oldFlags
 		workDir = oldWorkDir
 		programRunner = oldRunner
@@ -111,7 +104,7 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	}
 	t.Setenv("PATH", tfDir)
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode (no plan file)
 	tfFlags = ""
 
 	programRunner = func(_ tea.Model) error {
@@ -124,17 +117,17 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 }
 
 func TestRun_ExecuteModeTerraformMissing(t *testing.T) {
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
 	})
 	useTempConfig(t)
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	workDir = t.TempDir()
 	programRunner = func(_ tea.Model) error {
 		t.Fatalf("program runner should not be called when executor init fails")
@@ -153,12 +146,12 @@ func TestRun_ExecuteModeWorkdirResolution(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	oldFactory := executorFactory
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
 		executorFactory = oldFactory
@@ -194,7 +187,7 @@ func TestRun_ExecuteModeWorkdirResolution(t *testing.T) {
 		return nil
 	}
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	workDir = relDir
 	t.Chdir(cwd)
 
@@ -302,17 +295,17 @@ func TestResolveFolderSelectionRelative(t *testing.T) {
 }
 
 func TestRun_WorkspaceAndFolderConflict(t *testing.T) {
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldWorkspace := workspaceName
 	oldFolder := folderPath
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		workspaceName = oldWorkspace
 		folderPath = oldFolder
 	})
 	useTempConfig(t)
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	workspaceName = "dev"
 	folderPath = consts.EnvDevPath
 
@@ -323,13 +316,13 @@ func TestRun_WorkspaceAndFolderConflict(t *testing.T) {
 }
 
 func TestRun_WorkspaceSwitchError(t *testing.T) {
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldWorkspace := workspaceName
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	oldNewWorkspace := newWorkspaceManager
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		workspaceName = oldWorkspace
 		workDir = oldWorkDir
 		programRunner = oldRunner
@@ -337,7 +330,7 @@ func TestRun_WorkspaceSwitchError(t *testing.T) {
 	})
 	useTempConfig(t)
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	workspaceName = "dev"
 	workDir = t.TempDir()
 	programRunner = func(_ tea.Model) error {
@@ -355,13 +348,13 @@ func TestRun_WorkspaceSwitchError(t *testing.T) {
 }
 
 func TestRun_FolderSelectionError(t *testing.T) {
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldFolder := folderPath
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	oldNewFolder := newFolderManager
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		folderPath = oldFolder
 		workDir = oldWorkDir
 		programRunner = oldRunner
@@ -369,7 +362,7 @@ func TestRun_FolderSelectionError(t *testing.T) {
 	})
 	useTempConfig(t)
 
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	folderPath = consts.EnvDevPath
 	workDir = t.TempDir()
 	programRunner = func(_ tea.Model) error {
@@ -387,17 +380,14 @@ func TestRun_FolderSelectionError(t *testing.T) {
 }
 
 func TestRun_InvalidTheme(t *testing.T) {
-	oldReadOnly := readOnlyMode
 	oldPlanFile := planFile
 	oldTheme := themeName
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
 		planFile = oldPlanFile
 		themeName = oldTheme
 	})
 	useTempConfig(t)
 
-	readOnlyMode = true
 	planFile = filepath.Join("..", "..", "testdata", "plans", "sample.txt")
 	themeName = "missing-theme"
 
@@ -407,18 +397,15 @@ func TestRun_InvalidTheme(t *testing.T) {
 	}
 }
 
-func TestRun_PlanArgDisablesExecute(t *testing.T) {
-	oldReadOnly := readOnlyMode
+func TestRun_PlanArgRunsReadOnly(t *testing.T) {
 	oldPlanFile := planFile
 	oldRunner := programRunner
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
 		planFile = oldPlanFile
 		programRunner = oldRunner
 	})
 	useTempConfig(t)
 
-	readOnlyMode = false
 	planFile = ""
 	called := false
 	programRunner = func(_ tea.Model) error {
@@ -426,15 +413,13 @@ func TestRun_PlanArgDisablesExecute(t *testing.T) {
 		return nil
 	}
 
+	// When a plan file arg is provided, it runs in read-only mode
 	err := run(&cobra.Command{}, []string{filepath.Join("..", "..", "testdata", "plans", "sample.txt")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
 		t.Fatalf("expected program runner to be called")
-	}
-	if !readOnlyMode {
-		t.Fatalf("expected read-only mode to be enabled when plan arg provided")
 	}
 }
 
@@ -471,20 +456,17 @@ func TestRunProgramError(t *testing.T) {
 func TestRunMainSuccess(t *testing.T) {
 	oldArgs := os.Args
 	oldPlanFile := planFile
-	oldReadOnly := readOnlyMode
 	oldRunner := programRunner
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		planFile = oldPlanFile
-		readOnlyMode = oldReadOnly
 		programRunner = oldRunner
 	})
 	useTempConfig(t)
 
 	sample := filepath.Join("..", "..", "testdata", "plans", "sample.txt")
-	os.Args = []string{"lazytf", "--read-only", "--file", sample}
+	os.Args = []string{"lazytf", "--file", sample}
 	planFile = ""
-	readOnlyMode = true
 	called := false
 	programRunner = func(_ tea.Model) error {
 		called = true
@@ -502,19 +484,17 @@ func TestRunMainSuccess(t *testing.T) {
 func TestRunMainError(t *testing.T) {
 	oldArgs := os.Args
 	oldPlanFile := planFile
-	oldReadOnly := readOnlyMode
 	oldRunner := programRunner
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		planFile = oldPlanFile
-		readOnlyMode = oldReadOnly
 		programRunner = oldRunner
 	})
 	useTempConfig(t)
 
-	os.Args = []string{"lazytf", "--read-only"}
+	// Pass a non-existent plan file to trigger an error
+	os.Args = []string{"lazytf", "--file", "/nonexistent/plan.txt"}
 	planFile = ""
-	readOnlyMode = true
 	programRunner = func(_ tea.Model) error {
 		t.Fatalf("program runner should not be called on error")
 		return nil
@@ -892,47 +872,6 @@ func TestPrepareExecutionFlagsPresetError(t *testing.T) {
 	}
 }
 
-func TestFlagExplicitNilCmd(t *testing.T) {
-	result := flagExplicit(nil, "read-only")
-	if result {
-		t.Fatalf("expected false for nil command")
-	}
-}
-
-func TestFlagExplicitUnchanged(t *testing.T) {
-	cmd := &cobra.Command{}
-	cmd.Flags().Bool("test-flag", false, "test flag")
-
-	result := flagExplicit(cmd, "test-flag")
-	if result {
-		t.Fatalf("expected false for unchanged flag")
-	}
-}
-
-func TestFlagExplicitMissing(t *testing.T) {
-	cmd := &cobra.Command{}
-
-	result := flagExplicit(cmd, "nonexistent")
-	if result {
-		t.Fatalf("expected false for missing flag")
-	}
-}
-
-func TestResolveReadOnlyModeExplicitReadOnly(t *testing.T) {
-	oldReadOnly := readOnlyMode
-	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
-	})
-
-	readOnlyMode = true
-	cmd := &cobra.Command{}
-
-	result := resolveReadOnlyMode(cmd, nil)
-	if !result {
-		t.Fatalf("expected true when readOnlyMode is set")
-	}
-}
-
 func TestResolveAppStylesSuccess(t *testing.T) {
 	cfg := testConfig()
 	cfg.Theme.Name = "default"
@@ -1060,13 +999,13 @@ func TestRunWithProjectOverride(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 
-	oldReadOnly := readOnlyMode
+	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	oldTheme := themeName
 	oldPreset := presetName
 	t.Cleanup(func() {
-		readOnlyMode = oldReadOnly
+		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
 		themeName = oldTheme
@@ -1102,7 +1041,7 @@ presets:
 	}
 
 	workDir = tempDir
-	readOnlyMode = false
+	planFile = "" // Ensure execution mode
 	themeName = ""
 	presetName = ""
 	programRunner = func(_ tea.Model) error {
