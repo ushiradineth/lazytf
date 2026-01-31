@@ -150,13 +150,11 @@ func (f *PanelFrame) buildPanel(contentLines []string, borderStyle, titleStyle l
 	scrollbarChars := f.calculateScrollbar(contentHeight)
 
 	for i, line := range contentLines {
-		var rightChar string
+		var scrollbar string
 		if f.config.ShowScrollbar {
-			rightChar = scrollbarChars[i]
-		} else {
-			rightChar = vertical
+			scrollbar = borderLine(borderStyle).Render(scrollbarChars[i])
 		}
-		lineContent := borderLine(borderStyle).Render(vertical) + line + borderLine(borderStyle).Render(rightChar)
+		lineContent := borderLine(borderStyle).Render(vertical) + line + scrollbar + borderLine(borderStyle).Render(vertical)
 		outputLines = append(outputLines, lineContent)
 	}
 

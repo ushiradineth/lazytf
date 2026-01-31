@@ -103,6 +103,8 @@ func (m *Model) renderMainContent() string {
 	}
 
 	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	// Update panel sizes to match the current layout (handles focus-based size changes)
+	m.panelManager.UpdatePanelSizes(layout)
 	m.syncMainAreaSelection()
 	contentHeight := contentAreaHeight(m.height)
 	leftColumn := m.renderLeftColumn(layout, contentHeight)
@@ -150,17 +152,32 @@ func enforceDimensions(view string, width, height int) string {
 
 func (m *Model) renderLeftColumn(layout LayoutSpec, contentHeight int) string {
 	var leftPanels []string
-	if m.environmentPanel != nil {
-		leftPanels = append(leftPanels, enforceDimensions(m.environmentPanel.View(), layout.LeftColumnWidth, layout.Workspace.Height))
+
+	// Always render the workspace/environment area to fill its allocated space
+	if layout.Workspace.Height > 0 {
+		workspaceView := ""
+		if m.environmentPanel != nil {
+			workspaceView = m.environmentPanel.View()
+		}
+		leftPanels = append(leftPanels, enforceDimensions(workspaceView, layout.LeftColumnWidth, layout.Workspace.Height))
 	}
+
+	// Resources panel
 	leftPanels = append(leftPanels, enforceDimensions(
 		m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height),
 		layout.LeftColumnWidth,
 		layout.Resources.Height,
 	))
-	if m.historyPanel != nil && m.executionMode {
-		leftPanels = append(leftPanels, enforceDimensions(m.historyPanel.View(), layout.LeftColumnWidth, layout.History.Height))
+
+	// History panel (only in execution mode with allocated height)
+	if m.executionMode && layout.History.Height > 0 {
+		historyView := ""
+		if m.historyPanel != nil {
+			historyView = m.historyPanel.View()
+		}
+		leftPanels = append(leftPanels, enforceDimensions(historyView, layout.LeftColumnWidth, layout.History.Height))
 	}
+
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftPanels...)
 	return lipgloss.NewStyle().
 		Width(layout.LeftColumnWidth).
@@ -172,15 +189,23 @@ func (m *Model) renderLeftColumn(layout LayoutSpec, contentHeight int) string {
 
 func (m *Model) renderRightColumn(layout LayoutSpec, contentHeight int) string {
 	var rightPanels []string
-	if m.mainArea != nil {
+
+	// Only render main area if it has height allocated (hidden when command log is focused)
+	if layout.Main.Height > 0 && m.mainArea != nil {
 		rightPanels = append(rightPanels, enforceDimensions(m.mainArea.View(), layout.RightColumnWidth, layout.Main.Height))
 	}
-	if m.panelManager.IsCommandLogVisible() && m.commandLogPanel != nil {
-		commandLogView := m.commandLogPanel.View()
-		if commandLogView != "" {
-			rightPanels = append(rightPanels, enforceDimensions(commandLogView, layout.RightColumnWidth, layout.CommandLog.Height))
+
+	// Render command log when visible
+	if m.panelManager.IsCommandLogVisible() && layout.CommandLog.Height > 0 {
+		// Always render the command log space when it's visible to prevent layout gaps.
+		// If the panel returns empty, create empty space to fill the reserved height.
+		commandLogView := ""
+		if m.commandLogPanel != nil {
+			commandLogView = m.commandLogPanel.View()
 		}
+		rightPanels = append(rightPanels, enforceDimensions(commandLogView, layout.RightColumnWidth, layout.CommandLog.Height))
 	}
+
 	rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightPanels...)
 	return lipgloss.NewStyle().
 		Width(layout.RightColumnWidth).

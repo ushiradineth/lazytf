@@ -213,24 +213,24 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	// Right column: Main area + Command log
 	// Calculate command log height if visible
 	commandLogHeight := 0
+	mainAreaHeight := availableHeight
 	if pm.commandLogVisible {
 		if pm.commandLogFocused {
-			// Expanded mode: 50% of right column
-			commandLogHeight = int(float64(availableHeight) * CommandLogExpanded)
+			// Full screen mode: command log takes 100%, main area hidden
+			commandLogHeight = availableHeight
+			mainAreaHeight = 0
 		} else {
 			// Compact mode: fixed height
 			commandLogHeight = CommandLogHeight
-		}
-		if commandLogHeight > availableHeight-10 {
-			commandLogHeight = availableHeight - 10
-		}
-		if commandLogHeight < 3 {
-			commandLogHeight = 3
+			if commandLogHeight > availableHeight-10 {
+				commandLogHeight = availableHeight - 10
+			}
+			if commandLogHeight < 3 {
+				commandLogHeight = 3
+			}
+			mainAreaHeight = availableHeight - commandLogHeight
 		}
 	}
-
-	// Main area gets remaining height in right column
-	mainAreaHeight := availableHeight - commandLogHeight
 
 	layout.Main = PanelSpec{
 		X:      leftWidth,
