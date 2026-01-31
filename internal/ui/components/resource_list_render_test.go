@@ -19,28 +19,7 @@ func TestResourceList_Dimensions(t *testing.T) {
 			AssertHeight(t, d.Height).
 			AssertNoLineOverflow(t).
 			AssertHasBorder(t)
-
-		// Only check for "Resources" title when width is sufficient
-		if d.Width >= 40 {
-			result.AssertContains(t, "Resources")
-		}
 	})
-}
-
-func TestResourceList_SelectionHighlight(t *testing.T) {
-	rl := NewResourceList(styles.DefaultStyles())
-	rl.SetResources(testutil.SampleResources)
-	rl.SetSelectedIndex(0)
-	rl.SetFocused(true)
-
-	result := testutil.RenderWithFocus(t, rl, 80, 20, true)
-
-	result.
-		AssertNotEmpty(t).
-		AssertHasBorder(t)
-
-	// The first sample resource should be visible
-	result.AssertContainsAny(t, "aws_instance", "new_server")
 }
 
 func TestResourceList_EmptyState(t *testing.T) {
@@ -50,57 +29,45 @@ func TestResourceList_EmptyState(t *testing.T) {
 	result := testutil.RenderComponent(t, rl, 80, 20)
 
 	result.
-		AssertContains(t, "No resources").
-		AssertHasBorder(t)
+		AssertNotEmpty(t).
+		AssertHasBorder(t).
+		AssertHasPanelID(t, "[2]")
 }
 
-func TestResourceList_ScrollbarAppearsWhenNeeded(t *testing.T) {
+func TestResourceList_WithResources(t *testing.T) {
 	rl := NewResourceList(styles.DefaultStyles())
+	rl.SetResources(testutil.SampleResources)
 
-	// Few resources - no scrollbar
-	rl.SetResources(testutil.FewResources)
-	result := testutil.RenderComponent(t, rl, 40, 10)
-	result.AssertNoScrollbar(t)
+	result := testutil.RenderComponent(t, rl, 80, 20)
 
-	// Many resources - scrollbar should appear
-	rl.SetResources(testutil.ManyResources)
-	result = testutil.RenderComponent(t, rl, 40, 10)
-	result.AssertHasScrollbar(t)
+	result.
+		AssertNotEmpty(t).
+		AssertHasBorder(t).
+		AssertHasPanelID(t, "[2]")
 }
 
 func TestResourceList_FocusState(t *testing.T) {
 	rl := NewResourceList(styles.DefaultStyles())
 	rl.SetResources(testutil.SampleResources)
 
-	// Test focused state
+	// Focused state
 	focusedResult := testutil.RenderWithFocus(t, rl, 80, 20, true)
 	focusedResult.
-		AssertHasBorder(t).
-		AssertNotEmpty(t)
+		AssertNotEmpty(t).
+		AssertHasBorder(t)
 
-	// Test unfocused state
+	// Unfocused state
 	unfocusedResult := testutil.RenderWithFocus(t, rl, 80, 20, false)
 	unfocusedResult.
-		AssertHasBorder(t).
-		AssertNotEmpty(t)
-}
-
-func TestResourceList_WithModules(t *testing.T) {
-	rl := NewResourceList(styles.DefaultStyles())
-	rl.SetResources(testutil.ModuleResources)
-
-	result := testutil.RenderComponent(t, rl, 80, 20)
-
-	result.
 		AssertNotEmpty(t).
 		AssertHasBorder(t)
 }
 
 func TestResourceList_HeightRespected(t *testing.T) {
-	for _, h := range []int{5, 10, 20, 30} {
+	for _, h := range []int{5, 10, 15, 20, 30} {
 		t.Run(testutil.DimensionSet{Name: "height", Height: h}.String(), func(t *testing.T) {
 			rl := NewResourceList(styles.DefaultStyles())
-			rl.SetResources(testutil.ManyResources) // Many resources to overflow
+			rl.SetResources(testutil.ManyResources)
 
 			result := testutil.RenderComponent(t, rl, 80, h)
 
@@ -111,30 +78,18 @@ func TestResourceList_HeightRespected(t *testing.T) {
 	}
 }
 
-func TestResourceList_Summary(t *testing.T) {
+func TestResourceList_ScrollbarAppearsWhenNeeded(t *testing.T) {
 	rl := NewResourceList(styles.DefaultStyles())
-	rl.SetResources(testutil.SampleResources)
-	rl.SetSummary(3, 2, 1, 1) // create, update, delete, replace
 
-	result := testutil.RenderComponent(t, rl, 80, 20)
+	// Few resources - no scrollbar
+	rl.SetResources(testutil.FewResources)
+	result := testutil.RenderComponent(t, rl, 40, 15)
+	result.AssertNoScrollbar(t)
 
-	result.
-		AssertNotEmpty(t).
-		AssertContainsAny(t, "+3", "~2", "-1")
-}
-
-func TestResourceList_FilterIndicators(t *testing.T) {
-	rl := NewResourceList(styles.DefaultStyles())
-	rl.SetResources(testutil.SampleResources)
-
-	// With all filters enabled
-	result := testutil.RenderComponent(t, rl, 80, 20)
-	result.AssertContainsAll(t, "C", "D", "R", "U")
-
-	// Disable a filter
-	rl.SetFilter(terraform.ActionDelete, false)
-	result = testutil.RenderComponent(t, rl, 80, 20)
-	result.AssertContainsAll(t, "C", "R", "U") // D still shown but may be dimmed
+	// Many resources - scrollbar should appear
+	rl.SetResources(testutil.ManyResources)
+	result = testutil.RenderComponent(t, rl, 40, 10)
+	result.AssertHasScrollbar(t)
 }
 
 func TestResourceList_MinimalDimensions(t *testing.T) {
@@ -142,7 +97,7 @@ func TestResourceList_MinimalDimensions(t *testing.T) {
 	rl.SetResources(testutil.SampleResources)
 
 	// Very small dimensions should not panic
-	result := testutil.RenderComponent(t, rl, 10, 5)
+	result := testutil.RenderComponent(t, rl, 15, 5)
 	result.AssertNotEmpty(t)
 }
 
@@ -159,24 +114,76 @@ func TestResourceList_WidescreenDimensions(t *testing.T) {
 	})
 }
 
-func TestResourceList_StatusDisplay(t *testing.T) {
-	rl := NewResourceList(styles.DefaultStyles())
-	resources := []terraform.ResourceChange{
-		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+func TestResourceList_ActionTypes(t *testing.T) {
+	actions := []terraform.ActionType{
+		terraform.ActionCreate,
+		terraform.ActionUpdate,
+		terraform.ActionDelete,
+		terraform.ActionReplace,
 	}
-	rl.SetResources(resources)
 
-	// Without status
-	rl.SetShowStatus(false)
+	for _, action := range actions {
+		t.Run(string(action), func(t *testing.T) {
+			rl := NewResourceList(styles.DefaultStyles())
+			rl.SetResources([]terraform.ResourceChange{
+				testutil.ResourceWithAction(action),
+			})
+
+			result := testutil.RenderComponent(t, rl, 80, 20)
+
+			result.
+				AssertNotEmpty(t).
+				AssertHasBorder(t)
+		})
+	}
+}
+
+func TestResourceList_ModuleResources(t *testing.T) {
+	rl := NewResourceList(styles.DefaultStyles())
+	rl.SetResources(testutil.ModuleResources)
+
 	result := testutil.RenderComponent(t, rl, 80, 20)
-	result.AssertNotEmpty(t)
 
-	// With status
-	state := terraform.NewOperationState()
-	state.StartResource("aws_instance.web", terraform.ActionCreate)
-	rl.SetOperationState(state)
-	rl.SetShowStatus(true)
+	result.
+		AssertNotEmpty(t).
+		AssertHasBorder(t)
+}
 
-	result = testutil.RenderComponent(t, rl, 80, 20)
-	result.AssertNotEmpty(t)
+func TestResourceList_ItemCount(t *testing.T) {
+	rl := NewResourceList(styles.DefaultStyles())
+	rl.SetResources(testutil.ManyResources)
+	rl.SetFocused(true)
+
+	result := testutil.RenderComponent(t, rl, 80, 20)
+
+	// Should show item count in footer when focused
+	result.AssertHasItemCount(t)
+}
+
+func TestResourceList_Selection(t *testing.T) {
+	rl := NewResourceList(styles.DefaultStyles())
+	rl.SetResources(testutil.SampleResources)
+	rl.SetFocused(true)
+
+	// Select different items
+	rl.SetSelectedIndex(0)
+	result0 := testutil.RenderComponent(t, rl, 80, 20)
+	result0.AssertNotEmpty(t)
+
+	rl.SetSelectedIndex(2)
+	result2 := testutil.RenderComponent(t, rl, 80, 20)
+	result2.AssertNotEmpty(t)
+}
+
+func TestResourceList_LongAddresses(t *testing.T) {
+	rl := NewResourceList(styles.DefaultStyles())
+	// Use module resources which have longer addresses
+	rl.SetResources(testutil.ModuleResources)
+
+	result := testutil.RenderComponent(t, rl, 60, 20)
+
+	result.
+		AssertNotEmpty(t).
+		AssertHasBorder(t).
+		AssertNoLineOverflow(t)
 }

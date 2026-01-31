@@ -141,3 +141,65 @@ func (r *RenderResult) VisualWidth(lineIndex int) int {
 	}
 	return lipgloss.Width(r.Lines[lineIndex])
 }
+
+// Overlayer is an interface for components that overlay on base content.
+type Overlayer interface {
+	Overlay(baseView string) string
+	SetSize(width, height int)
+}
+
+// RenderOverlay renders an overlay component on a blank base.
+func RenderOverlay(t *testing.T, o Overlayer, width, height int) *RenderResult {
+	t.Helper()
+
+	o.SetSize(width, height)
+
+	// Create a blank base view
+	base := createBlankBase(width, height)
+	raw := o.Overlay(base)
+	plain := cleaner.StripANSI(raw)
+	lines := strings.Split(plain, "\n")
+
+	maxWidth := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+
+	return &RenderResult{
+		Raw:          raw,
+		Plain:        plain,
+		Lines:        lines,
+		LineCount:    len(lines),
+		MaxLineWidth: maxWidth,
+		Width:        width,
+		Height:       height,
+		t:            t,
+	}
+}
+
+// createBlankBase creates a blank base view of the given dimensions.
+func createBlankBase(width, height int) string {
+	lines := make([]string, height)
+	blankLine := strings.Repeat(" ", width)
+	for i := range lines {
+		lines[i] = blankLine
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Viewable is an interface for components that have just a View method (used for Modal).
+type Viewable interface {
+	View() string
+	SetSize(width, height int)
+}
+
+// RenderViewable renders a component that implements Viewable.
+func RenderViewable(t *testing.T, v Viewable, width, height int) *RenderResult {
+	t.Helper()
+
+	v.SetSize(width, height)
+	return RenderCapture(t, v.View, width, height)
+}

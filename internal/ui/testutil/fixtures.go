@@ -3,9 +3,15 @@ package testutil
 import (
 	"time"
 
+	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
+
+// NewTestDiffEngine creates a diff engine for testing.
+func NewTestDiffEngine() *diff.Engine {
+	return diff.NewEngine()
+}
 
 // Sample resources for testing.
 var (
@@ -237,11 +243,16 @@ func generateManyResources(n int) []terraform.ResourceChange {
 
 // intToString converts an int to a string.
 func intToString(n int) string {
+	return IntToString(n)
+}
+
+// IntToString converts an int to a string (exported for use in tests).
+func IntToString(n int) string {
 	if n == 0 {
 		return "0"
 	}
 	if n < 0 {
-		return "-" + intToString(-n)
+		return "-" + IntToString(-n)
 	}
 	digits := []byte{}
 	for n > 0 {
@@ -263,4 +274,149 @@ func HistoryEntry(id int64, status history.Status, summary string) history.Entry
 		WorkDir:     "/path/to/project",
 		Environment: "test",
 	}
+}
+
+// Diagnostics/Log fixtures
+
+// SampleDiagnostics contains sample terraform diagnostics for testing.
+var SampleDiagnostics = []terraform.Diagnostic{
+	{
+		Severity: "error",
+		Summary:  "Error creating resource",
+		Detail:   "Failed to create aws_instance.web: rate limit exceeded",
+	},
+	{
+		Severity: "warning",
+		Summary:  "Deprecated attribute",
+		Detail:   "The 'instance_type' attribute is deprecated, use 'instance_class' instead",
+	},
+}
+
+// SampleLogText contains sample terraform command output.
+var SampleLogText = `Terraform will perform the following actions:
+
+  # aws_instance.web will be created
+  + resource "aws_instance" "web" {
+      + ami           = "ami-12345678"
+      + instance_type = "t3.micro"
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.`
+
+// Environment fixtures
+
+// SampleEnvironments contains sample environments for testing.
+var SampleEnvironments = []struct {
+	Name      string
+	Path      string
+	IsCurrent bool
+}{
+	{Name: "dev", Path: "/path/to/dev", IsCurrent: true},
+	{Name: "staging", Path: "/path/to/staging", IsCurrent: false},
+	{Name: "prod", Path: "/path/to/prod", IsCurrent: false},
+}
+
+// State fixtures
+
+// SampleStateResources contains sample state resources for testing.
+var SampleStateResources = []string{
+	"aws_instance.web",
+	"aws_instance.api",
+	"aws_vpc.main",
+	"aws_subnet.public[0]",
+	"aws_subnet.public[1]",
+	"module.database.aws_rds_instance.main",
+}
+
+// Diff fixtures
+
+// ResourceWithComplexChange creates a resource with complex nested changes.
+func ResourceWithComplexChange() terraform.ResourceChange {
+	return terraform.ResourceChange{
+		Address:      "aws_instance.complex",
+		ResourceType: "aws_instance",
+		ResourceName: "complex",
+		Action:       terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{
+				"instance_type": "t3.micro",
+				"tags": map[string]any{
+					"Name":        "old-server",
+					"Environment": "dev",
+				},
+				"security_groups": []any{"sg-old"},
+			},
+			After: map[string]any{
+				"instance_type": "t3.small",
+				"tags": map[string]any{
+					"Name":        "new-server",
+					"Environment": "prod",
+					"Team":        "platform",
+				},
+				"security_groups": []any{"sg-new-1", "sg-new-2"},
+			},
+		},
+	}
+}
+
+// ResourceWithMultilineChange creates a resource with multiline string changes.
+func ResourceWithMultilineChange() terraform.ResourceChange {
+	return terraform.ResourceChange{
+		Address:      "aws_instance.userdata",
+		ResourceType: "aws_instance",
+		ResourceName: "userdata",
+		Action:       terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{
+				"user_data": "#!/bin/bash\necho 'Hello'\nexit 0",
+			},
+			After: map[string]any{
+				"user_data": "#!/bin/bash\necho 'Hello World'\necho 'Starting service'\nexit 0",
+			},
+		},
+	}
+}
+
+// LongResourceAddress returns a resource with a very long address for truncation testing.
+func LongResourceAddress() terraform.ResourceChange {
+	return terraform.ResourceChange{
+		Address:      "module.very_long_module_name.module.another_nested_module.aws_instance.server_with_a_very_descriptive_name",
+		ResourceType: "aws_instance",
+		ResourceName: "server_with_a_very_descriptive_name",
+		Action:       terraform.ActionCreate,
+		Change:       changeForAction(terraform.ActionCreate),
+	}
+}
+
+// AllActionTypes returns one resource of each action type.
+func AllActionTypes() []terraform.ResourceChange {
+	return []terraform.ResourceChange{
+		ResourceWithAction(terraform.ActionCreate),
+		ResourceWithAction(terraform.ActionUpdate),
+		ResourceWithAction(terraform.ActionDelete),
+		ResourceWithAction(terraform.ActionReplace),
+	}
+}
+
+// ManyHistoryEntries generates n history entries for scrolling tests.
+func ManyHistoryEntries(n int) []history.Entry {
+	entries := make([]history.Entry, n)
+	statuses := []history.Status{
+		history.StatusSuccess,
+		history.StatusFailed,
+		history.StatusCanceled,
+	}
+	for i := range n {
+		entries[i] = history.Entry{
+			ID:          int64(i + 1),
+			StartedAt:   time.Now().Add(-time.Duration(i+1) * time.Hour),
+			FinishedAt:  time.Now().Add(-time.Duration(i+1)*time.Hour + 5*time.Minute),
+			Duration:    time.Duration((i%10)+1) * time.Minute,
+			Status:      statuses[i%len(statuses)],
+			Summary:     "Operation " + intToString(i+1),
+			WorkDir:     "/path/to/project",
+			Environment: "env-" + intToString(i%3),
+		}
+	}
+	return entries
 }
