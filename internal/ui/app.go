@@ -188,7 +188,7 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 
 	// Initialize overlay components
 	toast := components.NewToast(appStyles)
-	toast.SetPosition(components.ToastTopLeft)
+	toast.SetPosition(components.ToastTopRight)
 	helpModal := components.NewModal(appStyles)
 	themeModal := components.NewModal(appStyles)
 	settingsModal := components.NewModal(appStyles)
