@@ -37,7 +37,6 @@ var (
 	planFile            string
 	mouseEnabled        bool
 	readOnlyMode        bool
-	autoPlan            bool
 	tfFlags             string
 	workDir             string
 	envName             string
@@ -88,7 +87,6 @@ showing only changed attributes in a git-style diff format.`,
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
 	rootCmd.Flags().BoolVar(&readOnlyMode, "read-only", false, "Run in read-only mode (no terraform execution)")
-	rootCmd.Flags().BoolVar(&autoPlan, "auto-plan", false, "Automatically run terraform plan on startup")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
 	rootCmd.Flags().StringVar(&workDir, "workdir", ".", "Working directory for terraform")
 	rootCmd.Flags().StringVar(&envName, "env", "", "Environment name to select")
@@ -162,7 +160,6 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 
 	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
 		Executor:       exec,
-		AutoPlan:       autoPlan,
 		Flags:          flags,
 		WorkDir:        workDir,
 		EnvName:        selectedEnv,

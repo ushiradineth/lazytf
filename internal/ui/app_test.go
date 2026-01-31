@@ -1620,31 +1620,6 @@ func TestClearToastCmd(t *testing.T) {
 	}
 }
 
-func TestInitExecutionModeAutoPlan(t *testing.T) {
-	origNewEnvironmentDetector := newEnvironmentDetector
-	defer func() {
-		newEnvironmentDetector = origNewEnvironmentDetector
-	}()
-
-	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
-		return &fakeDetector{result: environment.DetectionResult{}}, nil
-	}
-
-	m := NewModel(&terraform.Plan{})
-	m.executionMode = true
-	m.autoPlan = true
-	m.executor = &terraform.Executor{}
-	m.envWorkDir = t.TempDir()
-
-	cmd := m.Init()
-	if cmd == nil {
-		t.Fatalf("expected init command")
-	}
-	if !m.planRunning {
-		t.Fatalf("expected plan to start")
-	}
-}
-
 func TestWaitPlanCompleteCmdUsesStdout(t *testing.T) {
 	result := terraform.NewExecutionResult()
 	result.Stdout = "No changes. Infrastructure is up-to-date."

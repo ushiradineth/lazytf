@@ -87,14 +87,12 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 
 	oldPlanFile := planFile
 	oldReadOnly := readOnlyMode
-	oldAuto := autoPlan
 	oldFlags := tfFlags
 	oldWorkDir := workDir
 	oldRunner := programRunner
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		readOnlyMode = oldReadOnly
-		autoPlan = oldAuto
 		tfFlags = oldFlags
 		workDir = oldWorkDir
 		programRunner = oldRunner
@@ -114,7 +112,6 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	t.Setenv("PATH", tfDir)
 
 	readOnlyMode = false
-	autoPlan = false
 	tfFlags = ""
 
 	programRunner = func(_ tea.Model) error {

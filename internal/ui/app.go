@@ -45,12 +45,11 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode    bool
-	executor         *terraform.Executor
-	applyView        *views.ApplyView
-	planView         *views.PlanView
-	autoPlan         bool
-	planFlags        []string
+	executionMode bool
+	executor      *terraform.Executor
+	applyView     *views.ApplyView
+	planView      *views.PlanView
+	planFlags     []string
 	applyFlags       []string
 	planRunFlags     []string
 	planRunning      bool
@@ -155,7 +154,6 @@ var newWorkspaceManager = func(workDir string) (workspaceManager, error) {
 // ExecutionConfig configures execution mode behavior.
 type ExecutionConfig struct {
 	Executor       *terraform.Executor
-	AutoPlan       bool
 	Flags          []string
 	WorkDir        string
 	EnvName        string
@@ -275,7 +273,6 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	keybinds.RegisterWorkspacePanelBindings(m.keybindRegistry)
 	m.registerKeybindHandlers()
 	m.executor = cfg.Executor
-	m.autoPlan = cfg.AutoPlan
 	m.planFlags = append([]string{}, cfg.Flags...)
 	m.applyFlags = append([]string{}, cfg.Flags...)
 	m.envWorkDir = cfg.WorkDir
@@ -326,11 +323,6 @@ func (m *Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	if m.executionMode {
 		if cmd := m.detectEnvironmentsCmd(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-	if m.executionMode && m.autoPlan {
-		if cmd := m.beginPlan(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
