@@ -211,7 +211,7 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 		output = msg.Result.Output
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("terraform apply -refresh-only", output)
+		m.commandLogPanel.AppendSessionLog("Refreshed", "terraform apply -refresh-only", output)
 	}
 
 	if msg.Error != nil || !msg.Success {
@@ -309,6 +309,21 @@ func (m *Model) beginValidate() tea.Cmd {
 }
 
 func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
+	// Log to session history
+	output := msg.RawOutput
+	if msg.Error != nil {
+		output = msg.Error.Error()
+	} else if msg.Result != nil {
+		if msg.Result.Valid {
+			output = "Configuration is valid"
+		} else {
+			output = fmt.Sprintf("%d errors, %d warnings", msg.Result.ErrorCount, msg.Result.WarningCount)
+		}
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("Validated", "terraform validate -json", output)
+	}
+
 	if msg.Error != nil {
 		m.addErrorDiagnostic("Validate failed", msg.Error, msg.RawOutput)
 		var cmd tea.Cmd
@@ -394,6 +409,19 @@ func (m *Model) beginFormat() tea.Cmd {
 }
 
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
+	// Log to session history
+	output := ""
+	if msg.Error != nil {
+		output = msg.Error.Error()
+	} else if len(msg.ChangedFiles) == 0 {
+		output = "No files changed"
+	} else {
+		output = fmt.Sprintf("Formatted %d file(s):\n%s", len(msg.ChangedFiles), strings.Join(msg.ChangedFiles, "\n"))
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("Formatted", "terraform fmt -recursive", output)
+	}
+
 	if msg.Error != nil {
 		m.addErrorDiagnostic("Format failed", msg.Error, "")
 		cmd := m.toastError(fmt.Sprintf("Format failed: %v", msg.Error))
@@ -458,6 +486,21 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	// Hide loading toast
 	if m.toast != nil {
 		m.toast.Hide()
+	}
+
+	// Log to session history
+	output := ""
+	if msg.Error != nil {
+		output = msg.Error.Error()
+	} else {
+		addresses := make([]string, len(msg.Resources))
+		for i, r := range msg.Resources {
+			addresses[i] = r.Address
+		}
+		output = fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+	}
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("State listed", "terraform state list", output)
 	}
 
 	if msg.Error != nil {
@@ -527,7 +570,7 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 		output = msg.Error.Error()
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("terraform state show "+msg.Address, output)
+		m.commandLogPanel.AppendSessionLog("State shown", "terraform state show "+msg.Address, output)
 	}
 
 	if m.toast != nil {
@@ -597,7 +640,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 
 	// Log to session history
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("terraform plan", msg.Output)
+		m.commandLogPanel.AppendSessionLog("Planned", m.buildCommand("plan", m.planRunFlags, false), msg.Output)
 	}
 
 	if msg.Error != nil {
@@ -679,7 +722,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		output = msg.Result.Output
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("terraform apply", output)
+		m.commandLogPanel.AppendSessionLog("Applied", m.buildCommand("apply", m.applyFlags, true), output)
 	}
 
 	if msg.Error != nil || !msg.Success {

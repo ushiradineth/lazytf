@@ -881,7 +881,7 @@ func TestAppendDiagnostics(t *testing.T) {
 	m.executionMode = true
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsPanel.SetSize(40, 5)
-	m.diagnosticsPanel.AppendSessionLog("terraform plan", "session log output")
+	m.diagnosticsPanel.AppendSessionLog("Planned", "terraform plan", "session log output")
 	m.diagnosticsHeight = 5
 
 	content := m.appendDiagnostics("base")

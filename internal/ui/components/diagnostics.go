@@ -27,9 +27,10 @@ type DiagnosticsPanel struct {
 
 // SessionLogEntry represents a single command log entry in the session.
 type SessionLogEntry struct {
-	Command   string
-	Output    string
-	Timestamp string
+	Label     string // Human-readable action (e.g., "Planned", "Applied")
+	Command   string // The actual terraform command
+	Output    string // Command output (optional)
+	Timestamp string // For reference, not displayed
 }
 
 // NewDiagnosticsPanel creates a diagnostics panel.
@@ -80,8 +81,9 @@ func (d *DiagnosticsPanel) SetStyles(s *styles.Styles) {
 }
 
 // AppendSessionLog adds a new command log entry to the session history.
-func (d *DiagnosticsPanel) AppendSessionLog(command, output string) {
+func (d *DiagnosticsPanel) AppendSessionLog(label, command, output string) {
 	entry := SessionLogEntry{
+		Label:     label,
 		Command:   command,
 		Output:    output,
 		Timestamp: time.Now().Format("15:04:05"),
@@ -135,10 +137,15 @@ func buildSessionSections(styles *styles.Styles, logs []SessionLogEntry, width i
 	if len(logs) == 0 {
 		return nil
 	}
-	sections := make([]string, 0, len(logs)*2)
+	sections := make([]string, 0, len(logs)*3)
 	for _, entry := range logs {
-		header := styles.Highlight.Render(fmt.Sprintf("[%s] %s", entry.Timestamp, entry.Command))
-		sections = append(sections, header)
+		// Render label in highlight style
+		label := styles.Highlight.Render(entry.Label)
+		sections = append(sections, label)
+		// Render command indented with dimmed style
+		command := styles.Dimmed.Render("  " + entry.Command)
+		sections = append(sections, command)
+		// Render output if present
 		if strings.TrimSpace(entry.Output) != "" {
 			output := entry.Output
 			if width > 0 {

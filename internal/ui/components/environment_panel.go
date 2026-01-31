@@ -264,9 +264,7 @@ func (e *EnvironmentPanel) rebuildItems() {
 			label:  e.envLabel(env),
 			detail: e.formatMetadata(env.Metadata),
 		}
-		if e.isCurrentEnv(env) {
-			item.env.IsCurrent = true
-		}
+		item.env.IsCurrent = e.isCurrentEnv(env)
 		e.items = append(e.items, item)
 	}
 

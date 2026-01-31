@@ -19,10 +19,13 @@ func TestDiagnosticsPanelEmptyAndSessionLogs(t *testing.T) {
 	}
 
 	// Session logs take priority when present
-	panel.AppendSessionLog("terraform plan", "plan output")
+	panel.AppendSessionLog("Planned", "terraform plan", "plan output")
 	out := panel.View()
 	if !strings.Contains(out, "terraform plan") {
 		t.Fatalf("expected session log command in output")
+	}
+	if !strings.Contains(out, "Planned") {
+		t.Fatalf("expected session log label in output")
 	}
 	if !strings.Contains(out, "plan output") {
 		t.Fatalf("expected session log output in output")

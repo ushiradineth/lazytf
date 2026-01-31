@@ -221,9 +221,9 @@ func (c *CommandLogPanel) GetDiagnosticsPanel() *DiagnosticsPanel {
 }
 
 // AppendSessionLog adds a command log entry to the session history.
-func (c *CommandLogPanel) AppendSessionLog(command, output string) {
+func (c *CommandLogPanel) AppendSessionLog(label, command, output string) {
 	if c.diagnosticsPanel != nil {
-		c.diagnosticsPanel.AppendSessionLog(command, output)
+		c.diagnosticsPanel.AppendSessionLog(label, command, output)
 	}
 }
 

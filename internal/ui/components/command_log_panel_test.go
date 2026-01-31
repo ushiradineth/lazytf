@@ -334,7 +334,7 @@ func TestCommandLogPanelAppendSessionLog(t *testing.T) {
 	panel := NewCommandLogPanel(styles.DefaultStyles())
 	panel.SetSize(80, 20)
 
-	panel.AppendSessionLog("terraform plan", "Plan output here")
+	panel.AppendSessionLog("Planned", "terraform plan", "Plan output here")
 	if panel.GetDiagnosticsPanel() == nil {
 		t.Error("diagnostics panel should not be nil")
 	}
@@ -344,7 +344,7 @@ func TestCommandLogPanelClearSessionLogs(t *testing.T) {
 	panel := NewCommandLogPanel(styles.DefaultStyles())
 	panel.SetSize(80, 20)
 
-	panel.AppendSessionLog("command", "output")
+	panel.AppendSessionLog("Action", "command", "output")
 	panel.ClearSessionLogs()
 	if panel.GetDiagnosticsPanel() == nil {
 		t.Error("diagnostics panel should not be nil")

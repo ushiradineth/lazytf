@@ -547,6 +547,11 @@ func (m *Model) handleClearToast() tea.Model {
 
 func (m *Model) handleEnvironmentChanged(msg components.EnvironmentChangedMsg) (tea.Model, tea.Cmd) {
 	if err := m.applyEnvironmentSelection(msg.Environment); err != nil {
+		// Log failed environment switch
+		if m.commandLogPanel != nil {
+			command := m.buildEnvironmentCommand(msg.Environment)
+			m.commandLogPanel.AppendSessionLog("Environment switch failed", command, err.Error())
+		}
 		cmd := m.toastError(fmt.Sprintf("Failed to switch environment: %v", err))
 		return m, cmd
 	}
@@ -554,8 +559,23 @@ func (m *Model) handleEnvironmentChanged(msg components.EnvironmentChangedMsg) (
 	if m.environmentPanel != nil {
 		m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
 	}
+
+	// Log successful environment switch
+	if m.commandLogPanel != nil {
+		command := m.buildEnvironmentCommand(msg.Environment)
+		m.commandLogPanel.AppendSessionLog("Environment switched", command, "Switched to "+m.envDisplayName())
+	}
+
 	cmd := m.toastSuccess("Environment changed to " + m.envDisplayName())
 	return m, cmd
+}
+
+// buildEnvironmentCommand builds a command string for logging environment switches.
+func (m *Model) buildEnvironmentCommand(env environment.Environment) string {
+	if env.Strategy == environment.StrategyWorkspace {
+		return "terraform workspace select " + env.Name
+	}
+	return "cd " + env.Path
 }
 
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

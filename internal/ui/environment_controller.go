@@ -113,9 +113,7 @@ func (m *Model) setEnvironmentOptions(result environment.DetectionResult, strate
 		if !strategyMatches(strategy, env.Strategy) {
 			continue
 		}
-		if envMatchesCurrent(env, current) {
-			env.IsCurrent = true
-		}
+		env.IsCurrent = envMatchesCurrent(env, current)
 		options = append(options, env)
 	}
 	m.envOptions = options
