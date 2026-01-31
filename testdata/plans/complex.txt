@@ -1,0 +1,663 @@
+Terraform will perform the following actions:
+
+  # module.app.helm_release.app will be updated in-place
+  ~ resource "helm_release" "app" {
+        name      = "web-app"
+        namespace = "default"
+      ~ values    = [
+          ~ "applications:\n  name: web\n  retry: true\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: info\n" -> "applications:\n  name: web\n  retry: false\n  rollout:\n    maxUnavailable: 1\n  env:\n    LOG_LEVEL: debug\n",
+        ]
+      ~ set       = [
+          ~ "image.tag=1.2.3" -> "image.tag=1.2.4",
+            "resources.requests.cpu=250m",
+        ]
+      ~ metadata  = {
+          ~ revision    = "7" -> "8"
+          ~ app_version = "1.2.3" -> "1.2.4"
+          + first_deployed = (known after apply)
+        }
+    }
+
+  # aws_instance.web will be updated in-place
+  ~ resource "aws_instance" "web" {
+      ~ instance_type          = "t3.micro" -> "t3.small"
+        ami                    = "ami-123456"
+      ~ vpc_security_group_ids = [
+            "sg-111",
+          - "sg-222",
+          + "sg-333",
+        ]
+      ~ tags                   = {
+          ~ "Environment" = "staging" -> "prod"
+            "Owner"       = "team-a"
+          + "CostCenter"  = "platform"
+        }
+    }
+
+  # aws_db_instance.primary must be replaced
+  -/+ resource "aws_db_instance" "primary" {
+        identifier              = "db-primary"
+        engine                  = "postgres"
+      ~ allocated_storage       = 50 -> 100 # forces replacement
+      ~ backup_retention_period = 7 -> 14
+      ~ tags                    = {
+            "Environment" = "prod"
+          + "Tier"        = "critical"
+        }
+      + endpoint                = (known after apply)
+      + address                 = (known after apply)
+    }
+
+  # aws_security_group.legacy will be destroyed
+  - resource "aws_security_group" "legacy" {
+      - name        = "legacy-sg"
+      - description = "deprecated"
+      - ingress     = [
+          - {
+              - from_port   = 22
+              - to_port     = 22
+              - protocol    = "tcp"
+              - cidr_blocks = [
+                  - "0.0.0.0/0",
+                ]
+            },
+        ]
+      - tags        = {
+          - "Environment" = "dev"
+        }
+    }
+
+  # google_storage_bucket.assets will be created
+  + resource "google_storage_bucket" "assets" {
+      + name                        = "assets-prod"
+      + location                    = "US"
+      + uniform_bucket_level_access = true
+      + versioning                  = {
+          + enabled = true
+        }
+      + labels                      = {
+          + "env"  = "prod"
+          + "team" = "platform"
+        }
+      + self_link                   = (known after apply)
+      + url                         = (known after apply)
+    }
+
+  # kubernetes_config_map.app_settings will be updated in-place
+  ~ resource "kubernetes_config_map" "app_settings" {
+      ~ data = {
+          ~ "app.yaml"  = <<-EOT
+                featureFlags:
+              -   newCheckout: false
+              +   newCheckout: true
+                  betaUI: false
+                rateLimits:
+              -   perMinute: 120
+              +   perMinute: 200
+            EOT
+          ~ "log_level" = "info" -> "debug"
+        }
+    }
+
+  # aws_s3_bucket.root_0 will be created
+  + resource "aws_s3_bucket" "root_0" {
+      + bucket     = "root-bucket-0"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "0"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # aws_s3_bucket.root_1 will be created
+  + resource "aws_s3_bucket" "root_1" {
+      + bucket     = "root-bucket-1"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "1"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # aws_s3_bucket.root_2 will be created
+  + resource "aws_s3_bucket" "root_2" {
+      + bucket     = "root-bucket-2"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "2"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # aws_s3_bucket.root_3 will be created
+  + resource "aws_s3_bucket" "root_3" {
+      + bucket     = "root-bucket-3"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "3"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # aws_s3_bucket.root_4 will be created
+  + resource "aws_s3_bucket" "root_4" {
+      + bucket     = "root-bucket-4"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "4"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # aws_s3_bucket.root_5 will be created
+  + resource "aws_s3_bucket" "root_5" {
+      + bucket     = "root-bucket-5"
+      + versioning = {
+          + enabled = true
+        }
+      + tags       = {
+          + "env" = "test"
+          + "idx" = "5"
+        }
+      + arn        = (known after apply)
+      + id         = (known after apply)
+    }
+
+  # module.alpha.aws_instance.node_0 will be updated in-place
+  ~ resource "aws_instance" "node_0" {
+      ~ instance_type = "t3.micro" -> "t3.small"
+      ~ tags          = {
+            "Role"   = "worker"
+            "Module" = "module.alpha"
+          + "Index"  = "0"
+        }
+    }
+
+  # module.alpha.aws_instance.node_1 will be updated in-place
+  ~ resource "aws_instance" "node_1" {
+      ~ instance_type = "t3.micro" -> "t3.small"
+      ~ tags          = {
+            "Role"   = "worker"
+            "Module" = "module.alpha"
+          + "Index"  = "1"
+        }
+    }
+
+  # module.alpha.aws_instance.node_2 will be updated in-place
+  ~ resource "aws_instance" "node_2" {
+      ~ instance_type = "t3.micro" -> "t3.small"
+      ~ tags          = {
+            "Role"   = "worker"
+            "Module" = "module.alpha"
+          + "Index"  = "2"
+        }
+    }
+
+  # module.alpha.aws_instance.node_3 will be updated in-place
+  ~ resource "aws_instance" "node_3" {
+      ~ instance_type = "t3.micro" -> "t3.small"
+      ~ tags          = {
+            "Role"   = "worker"
+            "Module" = "module.alpha"
+          + "Index"  = "3"
+        }
+    }
+
+  # module.alpha.aws_instance.node_4 will be updated in-place
+  ~ resource "aws_instance" "node_4" {
+      ~ instance_type = "t3.micro" -> "t3.small"
+      ~ tags          = {
+            "Role"   = "worker"
+            "Module" = "module.alpha"
+          + "Index"  = "4"
+        }
+    }
+
+  # module.beta.aws_lambda_function.handler_0 will be updated in-place
+  ~ resource "aws_lambda_function" "handler_0" {
+        function_name = "beta-handler-0"
+      ~ runtime       = "python3.9" -> "python3.11"
+      ~ memory_size   = 128 -> 256
+      ~ environment   = {
+          ~ variables = {
+              ~ "LOG_LEVEL" = "INFO" -> "DEBUG"
+              + "INDEX"     = "0"
+            }
+        }
+    }
+
+  # module.beta.aws_lambda_function.handler_1 will be updated in-place
+  ~ resource "aws_lambda_function" "handler_1" {
+        function_name = "beta-handler-1"
+      ~ runtime       = "python3.9" -> "python3.11"
+      ~ memory_size   = 128 -> 256
+      ~ environment   = {
+          ~ variables = {
+              ~ "LOG_LEVEL" = "INFO" -> "DEBUG"
+              + "INDEX"     = "1"
+            }
+        }
+    }
+
+  # module.beta.aws_lambda_function.handler_2 will be updated in-place
+  ~ resource "aws_lambda_function" "handler_2" {
+        function_name = "beta-handler-2"
+      ~ runtime       = "python3.9" -> "python3.11"
+      ~ memory_size   = 128 -> 256
+      ~ environment   = {
+          ~ variables = {
+              ~ "LOG_LEVEL" = "INFO" -> "DEBUG"
+              + "INDEX"     = "2"
+            }
+        }
+    }
+
+  # module.beta.aws_lambda_function.handler_3 will be updated in-place
+  ~ resource "aws_lambda_function" "handler_3" {
+        function_name = "beta-handler-3"
+      ~ runtime       = "python3.9" -> "python3.11"
+      ~ memory_size   = 128 -> 256
+      ~ environment   = {
+          ~ variables = {
+              ~ "LOG_LEVEL" = "INFO" -> "DEBUG"
+              + "INDEX"     = "3"
+            }
+        }
+    }
+
+  # module.beta.aws_lambda_function.handler_4 will be updated in-place
+  ~ resource "aws_lambda_function" "handler_4" {
+        function_name = "beta-handler-4"
+      ~ runtime       = "python3.9" -> "python3.11"
+      ~ memory_size   = 128 -> 256
+      ~ environment   = {
+          ~ variables = {
+              ~ "LOG_LEVEL" = "INFO" -> "DEBUG"
+              + "INDEX"     = "4"
+            }
+        }
+    }
+
+  # module.gamma.aws_sqs_queue.queue_0 will be created
+  + resource "aws_sqs_queue" "queue_0" {
+      + name                       = "gamma-queue-0"
+      + visibility_timeout_seconds = 30
+      + message_retention_seconds  = 345600
+      + tags                       = {
+          + "Module" = "gamma"
+          + "Index"  = "0"
+        }
+      + arn                        = (known after apply)
+      + url                        = (known after apply)
+    }
+
+  # module.gamma.aws_sqs_queue.queue_1 will be created
+  + resource "aws_sqs_queue" "queue_1" {
+      + name                       = "gamma-queue-1"
+      + visibility_timeout_seconds = 30
+      + message_retention_seconds  = 345600
+      + tags                       = {
+          + "Module" = "gamma"
+          + "Index"  = "1"
+        }
+      + arn                        = (known after apply)
+      + url                        = (known after apply)
+    }
+
+  # module.gamma.aws_sqs_queue.queue_2 will be created
+  + resource "aws_sqs_queue" "queue_2" {
+      + name                       = "gamma-queue-2"
+      + visibility_timeout_seconds = 30
+      + message_retention_seconds  = 345600
+      + tags                       = {
+          + "Module" = "gamma"
+          + "Index"  = "2"
+        }
+      + arn                        = (known after apply)
+      + url                        = (known after apply)
+    }
+
+  # module.delta.aws_dynamodb_table.table_0 will be created
+  + resource "aws_dynamodb_table" "table_0" {
+      + name           = "delta-table-0"
+      + billing_mode   = "PAY_PER_REQUEST"
+      + hash_key       = "pk"
+      + range_key      = "sk"
+      + attribute      = [
+          + {
+              + name = "pk"
+              + type = "S"
+            },
+          + {
+              + name = "sk"
+              + type = "S"
+            },
+        ]
+      + tags           = {
+          + "Module" = "delta"
+          + "Index"  = "0"
+        }
+      + arn            = (known after apply)
+      + stream_arn     = (known after apply)
+    }
+
+  # module.delta.aws_dynamodb_table.table_1 will be created
+  + resource "aws_dynamodb_table" "table_1" {
+      + name           = "delta-table-1"
+      + billing_mode   = "PAY_PER_REQUEST"
+      + hash_key       = "pk"
+      + range_key      = "sk"
+      + attribute      = [
+          + {
+              + name = "pk"
+              + type = "S"
+            },
+          + {
+              + name = "sk"
+              + type = "S"
+            },
+        ]
+      + tags           = {
+          + "Module" = "delta"
+          + "Index"  = "1"
+        }
+      + arn            = (known after apply)
+      + stream_arn     = (known after apply)
+    }
+
+  # module.delta.aws_dynamodb_table.table_2 will be created
+  + resource "aws_dynamodb_table" "table_2" {
+      + name           = "delta-table-2"
+      + billing_mode   = "PAY_PER_REQUEST"
+      + hash_key       = "pk"
+      + range_key      = "sk"
+      + attribute      = [
+          + {
+              + name = "pk"
+              + type = "S"
+            },
+          + {
+              + name = "sk"
+              + type = "S"
+            },
+        ]
+      + tags           = {
+          + "Module" = "delta"
+          + "Index"  = "2"
+        }
+      + arn            = (known after apply)
+      + stream_arn     = (known after apply)
+    }
+
+  # module.delta.aws_dynamodb_table.table_3 will be created
+  + resource "aws_dynamodb_table" "table_3" {
+      + name           = "delta-table-3"
+      + billing_mode   = "PAY_PER_REQUEST"
+      + hash_key       = "pk"
+      + range_key      = "sk"
+      + attribute      = [
+          + {
+              + name = "pk"
+              + type = "S"
+            },
+          + {
+              + name = "sk"
+              + type = "S"
+            },
+        ]
+      + tags           = {
+          + "Module" = "delta"
+          + "Index"  = "3"
+        }
+      + arn            = (known after apply)
+      + stream_arn     = (known after apply)
+    }
+
+  # module.epsilon.google_compute_instance.vm_0 will be updated in-place
+  ~ resource "google_compute_instance" "vm_0" {
+        name         = "epsilon-vm-0"
+      ~ machine_type = "e2-micro" -> "e2-small"
+      ~ labels       = {
+            "module" = "epsilon"
+          + "index"  = "0"
+        }
+    }
+
+  # module.epsilon.google_compute_instance.vm_1 will be updated in-place
+  ~ resource "google_compute_instance" "vm_1" {
+        name         = "epsilon-vm-1"
+      ~ machine_type = "e2-micro" -> "e2-small"
+      ~ labels       = {
+            "module" = "epsilon"
+          + "index"  = "1"
+        }
+    }
+
+  # module.epsilon.google_compute_instance.vm_2 will be updated in-place
+  ~ resource "google_compute_instance" "vm_2" {
+        name         = "epsilon-vm-2"
+      ~ machine_type = "e2-micro" -> "e2-small"
+      ~ labels       = {
+            "module" = "epsilon"
+          + "index"  = "2"
+        }
+    }
+
+  # module.epsilon.google_compute_instance.vm_3 will be updated in-place
+  ~ resource "google_compute_instance" "vm_3" {
+        name         = "epsilon-vm-3"
+      ~ machine_type = "e2-micro" -> "e2-small"
+      ~ labels       = {
+            "module" = "epsilon"
+          + "index"  = "3"
+        }
+    }
+
+  # module.epsilon.google_compute_instance.vm_4 will be updated in-place
+  ~ resource "google_compute_instance" "vm_4" {
+        name         = "epsilon-vm-4"
+      ~ machine_type = "e2-micro" -> "e2-small"
+      ~ labels       = {
+            "module" = "epsilon"
+          + "index"  = "4"
+        }
+    }
+
+  # module.zeta.azurerm_storage_account.storage_0 will be created
+  + resource "azurerm_storage_account" "storage_0" {
+      + name                     = "zetastorage0"
+      + resource_group_name      = "zeta-rg"
+      + location                 = "eastus"
+      + account_tier             = "Standard"
+      + account_replication_type = "LRS"
+      + tags                     = {
+          + "module" = "zeta"
+          + "index"  = "0"
+        }
+      + primary_blob_endpoint    = (known after apply)
+      + primary_access_key       = (known after apply)
+    }
+
+  # module.zeta.azurerm_storage_account.storage_1 will be created
+  + resource "azurerm_storage_account" "storage_1" {
+      + name                     = "zetastorage1"
+      + resource_group_name      = "zeta-rg"
+      + location                 = "eastus"
+      + account_tier             = "Standard"
+      + account_replication_type = "LRS"
+      + tags                     = {
+          + "module" = "zeta"
+          + "index"  = "1"
+        }
+      + primary_blob_endpoint    = (known after apply)
+      + primary_access_key       = (known after apply)
+    }
+
+  # module.zeta.azurerm_storage_account.storage_2 will be created
+  + resource "azurerm_storage_account" "storage_2" {
+      + name                     = "zetastorage2"
+      + resource_group_name      = "zeta-rg"
+      + location                 = "eastus"
+      + account_tier             = "Standard"
+      + account_replication_type = "LRS"
+      + tags                     = {
+          + "module" = "zeta"
+          + "index"  = "2"
+        }
+      + primary_blob_endpoint    = (known after apply)
+      + primary_access_key       = (known after apply)
+    }
+
+  # module.eta.aws_ecs_service.service will be updated in-place
+  ~ resource "aws_ecs_service" "service" {
+        name            = "eta-service"
+        cluster         = "eta-cluster"
+      ~ desired_count   = 2 -> 4
+      ~ task_definition = "eta-task:5" -> "eta-task:6"
+      ~ deployment_configuration = {
+          ~ maximum_percent         = 200 -> 250
+          ~ minimum_healthy_percent = 50 -> 100
+        }
+    }
+
+  # module.theta.aws_cloudwatch_log_group.logs_0 will be created
+  + resource "aws_cloudwatch_log_group" "logs_0" {
+      + name              = "/theta/logs-0"
+      + retention_in_days = 30
+      + tags              = {
+          + "module" = "theta"
+          + "index"  = "0"
+        }
+      + arn               = (known after apply)
+    }
+
+  # module.theta.aws_cloudwatch_log_group.logs_1 will be created
+  + resource "aws_cloudwatch_log_group" "logs_1" {
+      + name              = "/theta/logs-1"
+      + retention_in_days = 30
+      + tags              = {
+          + "module" = "theta"
+          + "index"  = "1"
+        }
+      + arn               = (known after apply)
+    }
+
+  # module.theta.aws_cloudwatch_log_group.logs_2 will be created
+  + resource "aws_cloudwatch_log_group" "logs_2" {
+      + name              = "/theta/logs-2"
+      + retention_in_days = 30
+      + tags              = {
+          + "module" = "theta"
+          + "index"  = "2"
+        }
+      + arn               = (known after apply)
+    }
+
+  # module.theta.aws_cloudwatch_log_group.logs_3 will be created
+  + resource "aws_cloudwatch_log_group" "logs_3" {
+      + name              = "/theta/logs-3"
+      + retention_in_days = 30
+      + tags              = {
+          + "module" = "theta"
+          + "index"  = "3"
+        }
+      + arn               = (known after apply)
+    }
+
+  # module.iota.aws_sns_topic.topic_0 will be created
+  + resource "aws_sns_topic" "topic_0" {
+      + name         = "iota-topic-0"
+      + display_name = "Iota Topic 0"
+      + tags         = {
+          + "module" = "iota"
+          + "index"  = "0"
+        }
+      + arn          = (known after apply)
+    }
+
+  # module.iota.aws_sns_topic.topic_1 will be created
+  + resource "aws_sns_topic" "topic_1" {
+      + name         = "iota-topic-1"
+      + display_name = "Iota Topic 1"
+      + tags         = {
+          + "module" = "iota"
+          + "index"  = "1"
+        }
+      + arn          = (known after apply)
+    }
+
+  # module.iota.aws_sns_topic.topic_2 will be created
+  + resource "aws_sns_topic" "topic_2" {
+      + name         = "iota-topic-2"
+      + display_name = "Iota Topic 2"
+      + tags         = {
+          + "module" = "iota"
+          + "index"  = "2"
+        }
+      + arn          = (known after apply)
+    }
+
+  # module.kappa.kubernetes_deployment.app will be updated in-place
+  ~ resource "kubernetes_deployment" "app" {
+        metadata = {
+            name      = "kappa-app"
+            namespace = "kappa"
+        }
+      ~ spec = {
+          ~ replicas = 3 -> 5
+          ~ template = {
+              ~ spec = {
+                  ~ container = [
+                      ~ {
+                            name  = "app"
+                          ~ image = "app:v1.0.0" -> "app:v1.1.0"
+                          ~ resources = {
+                              ~ requests = {
+                                  ~ cpu    = "100m" -> "200m"
+                                  ~ memory = "128Mi" -> "256Mi"
+                                }
+                              ~ limits = {
+                                  ~ cpu    = "500m" -> "1000m"
+                                  ~ memory = "512Mi" -> "1Gi"
+                                }
+                            }
+                        },
+                    ]
+                }
+            }
+        }
+    }
+
+  # module.lambda_nested.module.inner.aws_lambda_function.func will be updated in-place
+  ~ resource "aws_lambda_function" "func" {
+        function_name = "nested-lambda"
+      ~ timeout       = 30 -> 60
+      ~ memory_size   = 128 -> 512
+      ~ environment   = {
+          ~ variables = {
+              ~ "STAGE" = "dev" -> "prod"
+            }
+        }
+    }
+
+Plan: 27 to add, 21 to change, 1 to destroy.
