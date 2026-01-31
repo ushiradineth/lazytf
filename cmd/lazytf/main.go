@@ -33,10 +33,10 @@ type teaProgram interface {
 }
 
 var (
-	version         = "0.1.0"
-	planFile        string
-	mouseEnabled    bool
-	tfFlags         string
+	version             = "0.1.0"
+	planFile            string
+	mouseEnabled        bool
+	tfFlags             string
 	workDir             string
 	envName             string
 	presetName          string

@@ -394,7 +394,7 @@ func registerExecutionBindings(r *Registry) {
 	})
 	// History toggle (global in execution mode with history enabled)
 	r.Register(Binding{
-		Keys:  []string{"h"},
+		Keys:   []string{"h"},
 		Action: ActionToggleHistory,
 		Scope:  ScopeGlobal,
 		Condition: func(ctx *Context) bool {
