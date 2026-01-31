@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
@@ -1074,13 +1075,34 @@ func (m *Model) planSummary() string {
 	deleteCount := m.countResourcesByAction(terraform.ActionDelete)
 	replace := m.countResourcesByAction(terraform.ActionReplace)
 
-	lines := []string{
-		fmt.Sprintf("+ %d to create", create),
-		fmt.Sprintf("~ %d to update", update),
-		fmt.Sprintf("- %d to destroy", deleteCount),
+	parts := []string{
+		fmt.Sprintf("+%d", create),
+		fmt.Sprintf("~%d", update),
+		fmt.Sprintf("-%d", deleteCount),
 	}
 	if replace > 0 {
-		lines = append(lines, fmt.Sprintf("± %d to replace", replace))
+		parts = append(parts, fmt.Sprintf("±%d", replace))
+	}
+	return strings.Join(parts, " ")
+}
+
+// planSummaryVerbose returns a multi-line summary with labels and colors for the confirm dialog.
+func (m *Model) planSummaryVerbose() string {
+	if m.plan == nil {
+		return "No changes"
+	}
+	create := m.countResourcesByAction(terraform.ActionCreate)
+	update := m.countResourcesByAction(terraform.ActionUpdate)
+	deleteCount := m.countResourcesByAction(terraform.ActionDelete)
+	replace := m.countResourcesByAction(terraform.ActionReplace)
+
+	lines := []string{
+		styles.TfDiffAdd.Render("+") + fmt.Sprintf(" %d to create", create),
+		styles.TfDiffChange.Render("~") + fmt.Sprintf(" %d to update", update),
+		styles.TfDiffRemove.Render("-") + fmt.Sprintf(" %d to destroy", deleteCount),
+	}
+	if replace > 0 {
+		lines = append(lines, styles.TfDiffChange.Render("±")+fmt.Sprintf(" %d to replace", replace))
 	}
 	return strings.Join(lines, "\n")
 }

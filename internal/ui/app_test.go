@@ -683,7 +683,7 @@ func TestPlanSummary(t *testing.T) {
 		},
 	}
 	summary := m.planSummary()
-	if !strings.Contains(summary, "+ 1 to create") || !strings.Contains(summary, "± 1 to replace") {
+	if !strings.Contains(summary, "+1") || !strings.Contains(summary, "±1") {
 		t.Fatalf("unexpected summary output: %q", summary)
 	}
 }

@@ -33,7 +33,8 @@ func (h HistoryItem) Render(s *styles.Styles, width int, selected bool) string {
 	}
 
 	statusText := historyStatusText(s, h.entry.Status, statusPlain)
-	line := historyLine(when, statusText, dur, desc)
+	coloredDesc := colorizeSummary(desc)
+	line := historyLine(when, statusText, dur, coloredDesc)
 	return PadLine(line, width)
 }
 
@@ -87,6 +88,78 @@ func historyDescription(entry history.Entry) string {
 		desc = "apply"
 	}
 	return desc
+}
+
+// colorizeSummary converts summary text to compact colored format.
+// Handles both old verbose format ("+ 1 to create ~ 0 to update") and new compact format ("+1 ~0 -2").
+func colorizeSummary(summary string) string {
+	// Check if it's the old verbose format
+	if strings.Contains(summary, " to ") {
+		return convertVerboseToCompact(summary)
+	}
+
+	// Handle compact format "+1 ~0 -2 ±1"
+	parts := strings.Fields(summary)
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		switch {
+		case strings.HasPrefix(part, "+"):
+			result = append(result, styles.TfDiffAdd.Render(part))
+		case strings.HasPrefix(part, "-"):
+			result = append(result, styles.TfDiffRemove.Render(part))
+		case strings.HasPrefix(part, "~"), strings.HasPrefix(part, "±"):
+			result = append(result, styles.TfDiffChange.Render(part))
+		default:
+			result = append(result, part)
+		}
+	}
+	return strings.Join(result, " ")
+}
+
+// convertVerboseToCompact converts "+ 1 to create ~ 0 to update - 2 to destroy ± 1 to replace" to colored "+1 ~0 -2 ±1".
+func convertVerboseToCompact(summary string) string {
+	var result []string
+
+	// Parse patterns like "+ 1 to create", "~ 0 to update", "- 2 to destroy", "± 1 to replace"
+	type pattern struct {
+		prefix string
+		symbol string
+		color  string // "add", "change", "remove"
+	}
+	patterns := []pattern{
+		{"+ ", "+", "add"},
+		{"~ ", "~", "change"},
+		{"- ", "-", "remove"},
+		{"± ", "±", "change"},
+	}
+
+	for _, p := range patterns {
+		if idx := strings.Index(summary, p.prefix); idx != -1 {
+			// Find the number after the prefix
+			rest := summary[idx+len(p.prefix):]
+			numEnd := 0
+			for numEnd < len(rest) && rest[numEnd] >= '0' && rest[numEnd] <= '9' {
+				numEnd++
+			}
+			if numEnd > 0 {
+				num := rest[:numEnd]
+				text := p.symbol + num
+				switch p.color {
+				case "add":
+					result = append(result, styles.TfDiffAdd.Render(text))
+				case "remove":
+					result = append(result, styles.TfDiffRemove.Render(text))
+				case "change":
+					result = append(result, styles.TfDiffChange.Render(text))
+				}
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return summary
+	}
+	return strings.Join(result, " ")
 }
 
 func historyDescWidth(width int, statusPlain, dur string) int {
@@ -204,9 +277,10 @@ func (h *HistoryPanel) View() string {
 
 func formatTime(ts time.Time) string {
 	if ts.IsZero() {
-		return "--:--"
+		return "--- -- --:--"
 	}
-	return ts.Format("15:04")
+	// Show "Jan 02 15:04" format for compact date+time
+	return ts.Format("Jan 02 15:04")
 }
 
 func formatDuration(d time.Duration) string {

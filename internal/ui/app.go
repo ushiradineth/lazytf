@@ -766,7 +766,7 @@ func (m *Model) showConfirmApplyModal() {
 	}
 
 	// Build the confirmation message with plan summary
-	summary := m.planSummary()
+	summary := m.planSummaryVerbose()
 	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
 
 	actions := []components.ModalAction{

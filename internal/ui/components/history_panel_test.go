@@ -274,14 +274,14 @@ func TestHistoryLine(t *testing.T) {
 
 func TestFormatTime(t *testing.T) {
 	// Zero time
-	if formatTime(time.Time{}) != "--:--" {
-		t.Error("expected --:-- for zero time")
+	if formatTime(time.Time{}) != "--- -- --:--" {
+		t.Errorf("expected '--- -- --:--' for zero time, got %s", formatTime(time.Time{}))
 	}
 
 	// Non-zero time
 	tm := time.Date(2024, 1, 1, 10, 30, 0, 0, time.UTC)
-	if formatTime(tm) != "10:30" {
-		t.Errorf("expected 10:30, got %s", formatTime(tm))
+	if formatTime(tm) != "Jan 01 10:30" {
+		t.Errorf("expected 'Jan 01 10:30', got %s", formatTime(tm))
 	}
 }
 
