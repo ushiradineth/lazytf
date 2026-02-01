@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -106,6 +107,9 @@ type Model struct {
 	commandLogPanel     *components.CommandLogPanel
 	resourcesController *ResourcesPanelController
 
+	// Progress indicator
+	progressIndicator *components.ProgressIndicator
+
 	// Keybind registry
 	keybindRegistry *keybinds.Registry
 }
@@ -195,6 +199,9 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 	// Initialize resources panel controller
 	resourcesController := NewResourcesPanelController(resourceList)
 
+	// Initialize progress indicator
+	progressIndicator := components.NewProgressIndicator(appStyles)
+
 	// Initialize keybind registry (non-execution mode by default)
 	kbRegistry := keybinds.NewRegistry()
 	keybinds.RegisterDefaults(kbRegistry, false)
@@ -227,6 +234,9 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 		mainArea:            mainArea,
 		commandLogPanel:     commandLogPanel,
 		resourcesController: resourcesController,
+
+		// Progress indicator
+		progressIndicator: progressIndicator,
 
 		// Keybind registry
 		keybindRegistry: kbRegistry,
@@ -281,7 +291,6 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	m.envStrategy = environment.StrategyUnknown
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
-	m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed")
 	m.operationState = terraform.NewOperationState()
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsHeight = 8
@@ -414,6 +423,12 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case ClearToastMsg, components.ClearToast:
 		model := m.handleClearToast()
 		return model, nil, true
+	case spinner.TickMsg:
+		if m.progressIndicator != nil {
+			cmd := m.progressIndicator.Update(msg)
+			return m, cmd, true
+		}
+		return m, nil, true
 	case components.EnvironmentChangedMsg:
 		model, cmd := m.handleEnvironmentChanged(msg)
 		return model, cmd, true

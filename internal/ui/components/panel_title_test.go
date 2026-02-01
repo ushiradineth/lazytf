@@ -12,10 +12,10 @@ func TestRenderPanelTitleLine(t *testing.T) {
 		BorderForeground(lipgloss.Color("#555"))
 
 	tests := []struct {
-		name        string
-		width       int
-		title       string
-		wantOK      bool
+		name         string
+		width        int
+		title        string
+		wantOK       bool
 		wantNonEmpty bool
 	}{
 		{

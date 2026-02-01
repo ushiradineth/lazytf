@@ -3,6 +3,7 @@ package components
 import (
 	"testing"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/styles"
@@ -23,9 +24,6 @@ func TestNewProgressIndicator(t *testing.T) {
 	}
 	if p.operation != OperationNone {
 		t.Errorf("expected operation OperationNone, got %d", p.operation)
-	}
-	if !p.blinkOn {
-		t.Error("expected blinkOn to be true initially")
 	}
 }
 
@@ -53,9 +51,6 @@ func TestProgressIndicatorStart(t *testing.T) {
 		if p.operation != op {
 			t.Errorf("expected operation %d, got %d", op, p.operation)
 		}
-		if !p.blinkOn {
-			t.Error("expected blinkOn to be true after Start")
-		}
 		if cmd == nil {
 			t.Error("expected non-nil cmd from Start")
 		}
@@ -80,7 +75,6 @@ func TestProgressIndicatorReset(t *testing.T) {
 
 	// Start an operation
 	p.Start(OperationApply)
-	p.blinkOn = false
 
 	// Reset
 	p.Reset()
@@ -90,9 +84,6 @@ func TestProgressIndicatorReset(t *testing.T) {
 	}
 	if p.operation != OperationNone {
 		t.Errorf("expected operation OperationNone after Reset, got %d", p.operation)
-	}
-	if !p.blinkOn {
-		t.Error("expected blinkOn to be true after Reset")
 	}
 }
 
@@ -108,27 +99,16 @@ func TestProgressIndicatorUpdate(t *testing.T) {
 
 	// Update when not running should return nil
 	p.state = ProgressIdle
-	cmd = p.Update(ProgressTickMsg{})
+	cmd = p.Update(spinner.TickMsg{})
 	if cmd != nil {
 		t.Error("expected nil cmd when not running")
 	}
 
-	// Update when running should toggle blinkOn and return tick cmd
+	// Update when running should return a tick cmd
 	p.Start(OperationPlan)
-	initialBlink := p.blinkOn
-
-	cmd = p.Update(ProgressTickMsg{})
-	if p.blinkOn == initialBlink {
-		t.Error("expected blinkOn to toggle on tick")
-	}
+	cmd = p.Update(spinner.TickMsg{})
 	if cmd == nil {
 		t.Error("expected non-nil cmd from Update when running")
-	}
-
-	// Toggle again
-	cmd = p.Update(ProgressTickMsg{})
-	if p.blinkOn != initialBlink {
-		t.Error("expected blinkOn to toggle back")
 	}
 }
 
@@ -212,25 +192,6 @@ func TestProgressIndicatorViewFailed(t *testing.T) {
 	}
 }
 
-func TestProgressIndicatorViewBlinking(t *testing.T) {
-	s := styles.DefaultStyles()
-	p := NewProgressIndicator(s)
-
-	p.Start(OperationPlan)
-
-	// blinkOn = true initially, should use ◉
-	view1 := p.View()
-
-	// Toggle blink
-	p.blinkOn = false
-	view2 := p.View()
-
-	// Views should be different due to different icons
-	if view1 == view2 {
-		t.Error("expected different views when blinkOn changes")
-	}
-}
-
 func TestProgressIndicatorViewOperationNone(t *testing.T) {
 	s := styles.DefaultStyles()
 	p := NewProgressIndicator(s)
@@ -261,22 +222,15 @@ func TestProgressIndicatorGetIconAndText(t *testing.T) {
 	s := styles.DefaultStyles()
 	p := NewProgressIndicator(s)
 
-	// Test running state icons
+	// Test running state - no icon returned (spinner handles it)
 	p.state = ProgressRunning
 	p.operation = OperationPlan
-	p.blinkOn = true
 	icon, text := p.getIconAndText()
-	if icon != "◉" {
-		t.Errorf("expected ◉ when blinkOn, got %q", icon)
+	if icon != "" {
+		t.Errorf("expected empty icon for running state, got %q", icon)
 	}
 	if text != "Running Plan" {
 		t.Errorf("expected 'Running Plan', got %q", text)
-	}
-
-	p.blinkOn = false
-	icon, text = p.getIconAndText()
-	if icon != "○" {
-		t.Errorf("expected ○ when blinkOff, got %q", icon)
 	}
 
 	// Test failed state
@@ -294,16 +248,6 @@ func TestProgressIndicatorGetIconAndText(t *testing.T) {
 	icon, text = p.getIconAndText()
 	if icon != "" || text != "" {
 		t.Errorf("expected empty icon and text for idle, got %q, %q", icon, text)
-	}
-}
-
-func TestProgressIndicatorTickCmd(t *testing.T) {
-	s := styles.DefaultStyles()
-	p := NewProgressIndicator(s)
-
-	cmd := p.tickCmd()
-	if cmd == nil {
-		t.Error("expected non-nil tick command")
 	}
 }
 

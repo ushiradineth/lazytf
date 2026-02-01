@@ -16,6 +16,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/ui/components"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
@@ -70,18 +71,28 @@ func (m *Model) beginPlan() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Running terraform plan...")
-		m.applyView.SetStatusText("Running...", "Plan complete", "Plan failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	m.updateExecutionViewForStreaming()
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationPlan)
+	}
+
+	planCmd := func() tea.Msg {
 		result, output, err := m.executor.Plan(ctx, terraform.PlanOptions{
 			Flags: planFlags,
 			Env:   planEnv,
 		})
 		return PlanStartMsg{Result: result, Output: output, Error: err}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(planCmd, progressCmd)
+	}
+	return planCmd
 }
 
 func (m *Model) beginApply() tea.Cmd {
@@ -122,7 +133,6 @@ func (m *Model) beginApply() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Applying changes...")
-		m.applyView.SetStatusText("Running...", "Apply complete", "Apply failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	// Transition to main view from confirm view
@@ -131,7 +141,13 @@ func (m *Model) beginApply() tea.Cmd {
 	}
 	m.updateExecutionViewForStreaming()
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationApply)
+	}
+
+	applyCmd := func() tea.Msg {
 		result, output, err := m.executor.Apply(ctx, terraform.ApplyOptions{
 			Flags:       m.applyFlags,
 			AutoApprove: true,
@@ -139,6 +155,11 @@ func (m *Model) beginApply() tea.Cmd {
 		})
 		return ApplyStartMsg{Result: result, Output: output, Error: err}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(applyCmd, progressCmd)
+	}
+	return applyCmd
 }
 
 func (m *Model) beginRefresh() tea.Cmd {
@@ -174,17 +195,27 @@ func (m *Model) beginRefresh() tea.Cmd {
 	if m.applyView != nil {
 		m.applyView.Reset()
 		m.applyView.SetTitle("Running terraform refresh...")
-		m.applyView.SetStatusText("Running...", "Refresh complete", "Refresh failed")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	m.updateExecutionViewForStreaming()
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationRefresh)
+	}
+
+	refreshCmd := func() tea.Msg {
 		result, output, err := m.executor.Refresh(ctx, terraform.RefreshOptions{
 			Env: refreshEnv,
 		})
 		return RefreshStartMsg{Result: result, Output: output, Error: err}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(refreshCmd, progressCmd)
+	}
+	return refreshCmd
 }
 
 func (m *Model) handleRefreshStart(msg RefreshStartMsg) (tea.Model, tea.Cmd) {
@@ -219,7 +250,16 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	}
 
 	if msg.Error != nil || !msg.Success {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		return m.handleRefreshFailure(msg)
+	}
+
+	// Reset progress indicator on success
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
 	}
 
 	if m.applyView != nil {
@@ -292,7 +332,13 @@ func (m *Model) beginValidate() tea.Cmd {
 		return nil
 	}
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationValidate)
+	}
+
+	validateCmd := func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		result, err := m.executor.Validate(ctx, terraform.ValidateOptions{
@@ -310,6 +356,11 @@ func (m *Model) beginValidate() tea.Cmd {
 		}
 		return ValidateCompleteMsg{Result: &validateResult, RawOutput: result.Stdout, ExecResult: result}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(validateCmd, progressCmd)
+	}
+	return validateCmd
 }
 
 func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
@@ -329,6 +380,10 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	}
 
 	if msg.Error != nil {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		m.addErrorDiagnostic("Validate failed", msg.Error, msg.RawOutput)
 		var cmd tea.Cmd
 		if m.toast != nil {
@@ -338,6 +393,10 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	}
 
 	if msg.Result == nil {
+		// Reset progress indicator (no error, just no result)
+		if m.progressIndicator != nil {
+			m.progressIndicator.Reset()
+		}
 		var cmd tea.Cmd
 		if m.toast != nil {
 			cmd = m.toast.ShowInfo("Validate completed (no result)")
@@ -361,10 +420,18 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 
 	var cmd tea.Cmd
 	if msg.Result.Valid {
+		// Reset progress indicator on success
+		if m.progressIndicator != nil {
+			m.progressIndicator.Reset()
+		}
 		if m.toast != nil {
 			cmd = m.toast.ShowSuccess("Configuration is valid")
 		}
 	} else {
+		// Mark progress indicator as failed for validation errors
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		if m.toast != nil {
 			cmd = m.toast.ShowError(fmt.Sprintf("Validation failed: %d errors, %d warnings", msg.Result.ErrorCount, msg.Result.WarningCount))
 		}
@@ -389,7 +456,13 @@ func (m *Model) beginFormat() tea.Cmd {
 		return nil
 	}
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationFormat)
+	}
+
+	formatCmd := func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		result, err := m.executor.Format(ctx, terraform.FormatOptions{
@@ -410,6 +483,11 @@ func (m *Model) beginFormat() tea.Cmd {
 		}
 		return FormatCompleteMsg{ChangedFiles: changedFiles, ExecResult: result}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(formatCmd, progressCmd)
+	}
+	return formatCmd
 }
 
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
@@ -427,9 +505,18 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	}
 
 	if msg.Error != nil {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		m.addErrorDiagnostic("Format failed", msg.Error, "")
 		cmd := m.toastError(fmt.Sprintf("Format failed: %v", msg.Error))
 		return m, cmd
+	}
+
+	// Reset progress indicator on success
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
 	}
 
 	if len(msg.ChangedFiles) == 0 {
@@ -459,7 +546,13 @@ func (m *Model) beginStateList() tea.Cmd {
 		return nil
 	}
 
-	return func() tea.Msg {
+	// Start progress indicator
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationStateList)
+	}
+
+	stateListCmd := func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		result, err := m.executor.StateList(ctx, terraform.StateListOptions{
@@ -484,6 +577,11 @@ func (m *Model) beginStateList() tea.Cmd {
 		}
 		return StateListCompleteMsg{Resources: resources}
 	}
+
+	if progressCmd != nil {
+		return tea.Batch(stateListCmd, progressCmd)
+	}
+	return stateListCmd
 }
 
 func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, tea.Cmd) {
@@ -508,6 +606,10 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	}
 
 	if msg.Error != nil {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		if m.stateListContent != nil {
 			m.stateListContent.SetError(msg.Error.Error())
 		}
@@ -517,6 +619,11 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 			cmd = m.toast.ShowError(fmt.Sprintf("State list failed: %v", msg.Error))
 		}
 		return m, cmd
+	}
+
+	// Reset progress indicator on success
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
 	}
 
 	// Update state list content (for tab view)
@@ -650,6 +757,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Error != nil {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		if m.applyView != nil {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Plan failed: %v", msg.Error))
@@ -667,6 +778,11 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
 		return m, cmd
+	}
+
+	// Reset progress indicator on success
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
 	}
 
 	if msg.Plan != nil {
@@ -738,7 +854,16 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Error != nil || !msg.Success {
+		// Mark progress indicator as failed
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
 		return m.handleApplyFailure(msg)
+	}
+
+	// Reset progress indicator on success
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
 	}
 
 	// Set full output to applyView so [0] Operation Logs shows everything

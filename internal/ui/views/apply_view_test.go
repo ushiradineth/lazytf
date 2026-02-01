@@ -9,7 +9,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
-func TestApplyViewStatusAndFooter(t *testing.T) {
+func TestApplyViewStatusAndHeader(t *testing.T) {
 	s := styles.DefaultStyles()
 	view := NewApplyView(s)
 	view.SetSize(60, 10)
@@ -17,8 +17,8 @@ func TestApplyViewStatusAndFooter(t *testing.T) {
 	view.SetStatus(ApplySuccess)
 
 	out := view.View()
-	if !strings.Contains(out, "Apply complete") {
-		t.Fatalf("expected success footer")
+	if !strings.Contains(out, "OK") {
+		t.Fatalf("expected success header with OK prefix")
 	}
 }
 
@@ -51,20 +51,6 @@ func TestApplyViewAutoScrolls(t *testing.T) {
 	}
 	if view.viewport.YOffset == 0 {
 		t.Fatalf("expected viewport to scroll, got offset %d", view.viewport.YOffset)
-	}
-}
-
-func TestApplyViewSetStatusTextAndProgress(t *testing.T) {
-	s := styles.DefaultStyles()
-	view := NewApplyView(s)
-	view.SetSize(40, 6)
-	view.SetStatusText("run", "ok", "bad")
-	view.SetStatus(ApplyRunning)
-	view.SetProgress("2/5")
-
-	out := view.View()
-	if !strings.Contains(out, "Progress: 2/5") {
-		t.Fatalf("expected progress text")
 	}
 }
 
@@ -106,4 +92,29 @@ func TestApplyViewUpdateSpinnerTick(_ *testing.T) {
 
 	_, _ = view.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	_, _ = view.Update(view.spinner.Tick())
+}
+
+func TestApplyViewHeaderStates(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+	view.SetSize(60, 10)
+	view.SetTitle("Test operation")
+
+	tests := []struct {
+		status   ApplyStatus
+		contains string
+	}{
+		{ApplyPending, "Test operation"},
+		{ApplyRunning, "Test operation"},
+		{ApplySuccess, "OK"},
+		{ApplyFailed, "ERR"},
+	}
+
+	for _, tc := range tests {
+		view.SetStatus(tc.status)
+		out := view.View()
+		if !strings.Contains(out, tc.contains) {
+			t.Errorf("status %d: expected output to contain %q", tc.status, tc.contains)
+		}
+	}
 }

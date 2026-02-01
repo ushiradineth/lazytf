@@ -39,6 +39,21 @@ func (m *Model) renderStatusBar() string {
 
 	statusText := strings.Join(parts, " │ ")
 
+	// Add progress indicator on the right side
+	progressView := ""
+	if m.progressIndicator != nil {
+		progressView = m.progressIndicator.View()
+	}
+
+	if progressView != "" {
+		progressWidth := lipgloss.Width(progressView)
+		statusWidth := lipgloss.Width(statusText)
+		gap := m.width - statusWidth - progressWidth
+		if gap > 0 {
+			statusText = statusText + strings.Repeat(" ", gap) + progressView
+		}
+	}
+
 	// Limit status bar to 1 line to prevent scrolling
 	return m.styles.StatusBar.
 		Width(m.width).

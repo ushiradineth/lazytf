@@ -28,19 +28,10 @@ type ApplyView struct {
 	outputLines []string
 	status      ApplyStatus
 	spinner     spinner.Model
-	progress    string
 	styles      *styles.Styles
 	title       string
-	statusText  statusText
 	width       int
 	maxLines    int
-}
-
-type statusText struct {
-	running string
-	success string
-	failure string
-	pending string
 }
 
 // NewApplyView creates a new apply view.
@@ -58,12 +49,6 @@ func NewApplyView(s *styles.Styles) *ApplyView {
 		status:   ApplyPending,
 		styles:   s,
 		maxLines: 10000,
-		statusText: statusText{
-			running: "Running...",
-			success: "Apply complete",
-			failure: "Apply failed",
-			pending: "Waiting",
-		},
 	}
 }
 
@@ -76,8 +61,7 @@ func (v *ApplyView) SetStyles(s *styles.Styles) {
 func (v *ApplyView) SetSize(width, height int) {
 	v.width = width
 	headerHeight := 1
-	footerHeight := 1
-	bodyHeight := height - headerHeight - footerHeight
+	bodyHeight := height - headerHeight
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
@@ -91,33 +75,14 @@ func (v *ApplyView) SetTitle(title string) {
 	v.title = title
 }
 
-// SetStatusText customizes footer labels.
-func (v *ApplyView) SetStatusText(running, success, failure string) {
-	if running != "" {
-		v.statusText.running = running
-	}
-	if success != "" {
-		v.statusText.success = success
-	}
-	if failure != "" {
-		v.statusText.failure = failure
-	}
-}
-
 // SetStatus updates the apply status.
 func (v *ApplyView) SetStatus(status ApplyStatus) {
 	v.status = status
 }
 
-// SetProgress updates the progress footer.
-func (v *ApplyView) SetProgress(progress string) {
-	v.progress = progress
-}
-
 // Reset clears output and resets status.
 func (v *ApplyView) Reset() {
 	v.outputLines = nil
-	v.progress = ""
 	v.status = ApplyPending
 	v.viewport.SetContent("")
 }
@@ -180,8 +145,7 @@ func (v *ApplyView) View() string {
 	if v.width > 0 {
 		body = lipgloss.NewStyle().Width(v.width).Height(v.viewport.Height).Render(body)
 	}
-	footer := v.renderFooter()
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body)
 }
 
 func (v *ApplyView) renderHeader() string {
@@ -204,36 +168,6 @@ func (v *ApplyView) renderHeader() string {
 		return v.styles.Title.Width(v.width).Render(label)
 	}
 	return v.styles.Title.Render(label)
-}
-
-func (v *ApplyView) renderFooter() string {
-	var statusDot string
-	var text string
-
-	switch v.status {
-	case ApplyRunning:
-		statusDot = v.styles.DiffChange.Render("●")
-		if v.progress != "" {
-			text = "Progress: " + v.progress
-		} else {
-			text = v.statusText.running
-		}
-	case ApplySuccess:
-		statusDot = v.styles.DiffAdd.Render("●")
-		text = v.statusText.success
-	case ApplyFailed:
-		statusDot = v.styles.DiffRemove.Render("●")
-		text = v.statusText.failure
-	case ApplyPending:
-		statusDot = v.styles.Dimmed.Render("○")
-		text = v.statusText.pending
-	}
-
-	footer := statusDot + " " + text
-	if v.width > 0 {
-		return v.styles.StatusBar.Width(v.width).Render(footer)
-	}
-	return v.styles.StatusBar.Render(footer)
 }
 
 func (v *ApplyView) refreshViewport() {

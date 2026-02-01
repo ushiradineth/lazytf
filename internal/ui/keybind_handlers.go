@@ -203,16 +203,25 @@ func (m *Model) handleActionFocusResources(_ *keybinds.Context) tea.Cmd {
 	if m.panelManager == nil {
 		return nil
 	}
-	// Reset main area to diff mode when leaving history detail or about
+	// When returning to resources, restore logs mode if an operation is running
 	if m.mainArea != nil {
-		mode := m.mainArea.GetMode()
-		if mode == ModeHistoryDetail || mode == ModeAbout {
-			m.mainArea.SetMode(ModeDiff)
+		if m.isOperationRunning() {
+			m.mainArea.SetMode(ModeLogs)
+		} else {
+			mode := m.mainArea.GetMode()
+			if mode == ModeHistoryDetail || mode == ModeAbout {
+				m.mainArea.SetMode(ModeDiff)
+			}
 		}
 	}
 	m.historyFocused = false
 	m.updateLayout()
 	return m.panelManager.SetFocus(PanelResources)
+}
+
+// isOperationRunning returns true if any terraform operation is in progress.
+func (m *Model) isOperationRunning() bool {
+	return m.planRunning || m.applyRunning || m.refreshRunning
 }
 
 func (m *Model) handleActionFocusHistory(_ *keybinds.Context) tea.Cmd {
@@ -279,11 +288,16 @@ func (m *Model) cycleFocusWithDirection(reverse bool) tea.Cmd {
 		historyCmd := m.showSelectedHistoryDetail()
 		return tea.Batch(cmd, historyCmd)
 	}
-	// When leaving history or about, switch back to diff mode
+	// When leaving history or about, restore appropriate mode
 	if m.mainArea != nil {
 		mode := m.mainArea.GetMode()
 		if !m.historyFocused && (mode == ModeHistoryDetail || mode == ModeAbout) {
-			m.mainArea.SetMode(ModeDiff)
+			// Restore logs mode if an operation is running, otherwise diff mode
+			if m.isOperationRunning() {
+				m.mainArea.SetMode(ModeLogs)
+			} else {
+				m.mainArea.SetMode(ModeDiff)
+			}
 		}
 	}
 	return cmd
@@ -447,6 +461,17 @@ func (m *Model) sendKeyToPanel(panel keybinds.PanelID, keyType tea.KeyType) tea.
 
 // handleVerticalNavigation handles up/down navigation within panels.
 func (m *Model) handleVerticalNavigation(panel keybinds.PanelID, moveUp bool) tea.Cmd {
+	// When an operation is running (ModeLogs), redirect scroll to MainArea
+	// so user can scroll the logs while staying on Resources panel
+	if panel == keybinds.PanelResources && m.mainArea != nil && m.mainArea.GetMode() == ModeLogs {
+		keyType := tea.KeyDown
+		if moveUp {
+			keyType = tea.KeyUp
+		}
+		_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
+		return cmd
+	}
+
 	switch panel {
 	case keybinds.PanelResources:
 		if m.resourcesActiveTab == 0 {

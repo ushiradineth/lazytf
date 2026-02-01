@@ -210,22 +210,26 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 
 // HandleKey handles key events.
 func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
-	if !m.focused {
-		return false, nil
-	}
-
 	// Forward key events to appropriate child based on mode
 	switch m.mode {
 	case ModeLogs:
-		// Apply/Plan views handle scrolling
+		// Apply/Plan views handle scrolling (allow even when not focused,
+		// so users can scroll logs while on Resources panel during operations)
 		if m.applyView != nil {
 			switch msg.String() {
 			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
-				// These are typically handled by viewport inside applyView
 				_, cmd := m.Update(msg)
 				return true, cmd
 			}
 		}
+	}
+
+	// Other modes require focus
+	if !m.focused {
+		return false, nil
+	}
+
+	switch m.mode {
 	case ModeDiff:
 		// Diff viewer scrolling
 		if m.diffViewer != nil {
