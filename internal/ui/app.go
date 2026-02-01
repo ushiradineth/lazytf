@@ -1027,17 +1027,8 @@ func (m *Model) viewExecutionOverride() string {
 		return ""
 	}
 	switch m.execView {
-	case viewCommandLog:
-		return m.renderFullScreenCommandLog()
-	case viewStateList:
-		if m.stateListView != nil {
-			return m.stateListView.View()
-		}
-	case viewStateShow:
-		if m.stateShowView != nil {
-			return m.stateShowView.View()
-		}
-	case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics, viewPlanConfirm:
+	case viewMain, viewPlanOutput, viewApplyOutput, viewHistoryDetail, viewDiagnostics, viewPlanConfirm,
+		viewCommandLog, viewStateList, viewStateShow:
 		return ""
 	}
 	return ""

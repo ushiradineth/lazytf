@@ -531,8 +531,10 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	m.stateListView.SetSize(m.width, m.height)
 	m.stateListView.SetResources(msg.Resources)
 
-	// If we're on the State tab, stay there; otherwise only switch if explicitly requested
-	// (The 'S' keybinding has been removed, so this only happens when switching tabs)
+	// Automatically show the first item's details if we have resources
+	if len(msg.Resources) > 0 {
+		return m, m.showSelectedStateDetail()
+	}
 
 	return m, nil
 }
@@ -541,9 +543,6 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
 		return nil
-	}
-	if m.toast != nil {
-		m.toast.ShowInfo("Loading state...")
 	}
 	stateEnv, err := m.prepareTerraformEnv()
 	if err != nil {
@@ -577,9 +576,6 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 		m.commandLogPanel.AppendSessionLog("State shown", "terraform state show "+msg.Address, output)
 	}
 
-	if m.toast != nil {
-		m.toast.Hide()
-	}
 	if msg.Error != nil {
 		m.addErrorDiagnostic("State show failed", msg.Error, "")
 		var cmd tea.Cmd
@@ -589,18 +585,24 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 		return m, cmd
 	}
 
-	// Initialize state show view if needed
-	if m.stateShowView == nil {
-		m.stateShowView = views.NewStateShowView(m.styles)
+	// Show state in main area instead of full-screen view
+	if m.mainArea != nil {
+		m.mainArea.SetStateContent(msg.Address, msg.Output)
 	}
-	m.stateShowView.SetSize(m.width, m.height)
-	m.stateShowView.SetAddress(msg.Address)
-	m.stateShowView.SetContent(msg.Output)
-
-	// Switch to state show view
-	m.execView = viewStateShow
 
 	return m, nil
+}
+
+// showSelectedStateDetail loads and shows the currently selected state resource in the main area.
+func (m *Model) showSelectedStateDetail() tea.Cmd {
+	if m.stateListContent == nil {
+		return nil
+	}
+	selected := m.stateListContent.GetSelected()
+	if selected == nil {
+		return nil
+	}
+	return m.beginStateShow(selected.Address)
 }
 
 func (m *Model) prepareTerraformEnv() ([]string, error) {

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
@@ -18,26 +17,21 @@ type StateResourceItem struct {
 
 // Render renders the state resource item.
 func (s StateResourceItem) Render(st *styles.Styles, width int, selected bool) string {
-	line := s.resource.Address
-	maxWidth := max(10, width-2) // Account for prefix "> " or "  "
-	if len(line) > maxWidth {
-		line = line[:maxWidth-3] + "..."
+	address := s.resource.Address
+	maxWidth := max(10, width)
+	if len(address) > maxWidth {
+		address = address[:maxWidth-3] + "..."
 	}
 
-	// Pad line to width for consistent selection highlighting
-	fullLine := "  " + line
+	// Use consistent selection styling like resource list and history panel
 	if selected {
-		fullLine = "> " + line
-	}
-	lineWidth := lipgloss.Width(fullLine)
-	if lineWidth < width {
-		fullLine = fullLine + strings.Repeat(" ", width-lineWidth)
+		bg := st.SelectedLineBackground
+		text := st.LineItemText.Background(bg).Bold(true).Render(address)
+		return PadLineWithBg(text, width, bg)
 	}
 
-	if selected {
-		return st.Selected.MaxWidth(width).Render(fullLine)
-	}
-	return st.ListItem.MaxWidth(width).Render(fullLine)
+	text := st.LineItemText.Render(address)
+	return PadLine(text, width)
 }
 
 // StateListContent renders the terraform state list using ListPanel.

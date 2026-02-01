@@ -366,61 +366,6 @@ func (m *Model) appendDiagnostics(content string) string {
 	return lipgloss.JoinVertical(lipgloss.Left, content, panel)
 }
 
-func (m *Model) renderFullScreenCommandLog() string {
-	if m.commandLogPanel == nil {
-		return m.styles.Dimmed.Render("No logs available")
-	}
-
-	// Get diagnostics panel content
-	diagPanel := m.commandLogPanel.GetDiagnosticsPanel()
-	if diagPanel == nil {
-		return m.styles.Dimmed.Render("No logs available")
-	}
-
-	// Calculate dimensions for full screen
-	// Reserve space for title (1), border (2), and footer (1)
-	contentHeight := m.height - 4
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
-	contentWidth := m.width - 2
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-
-	// Update diagnostics panel size to full screen
-	diagPanel.SetSize(contentWidth, contentHeight)
-
-	// Get the content
-	content := diagPanel.View()
-
-	// Build title
-	title := " Command Log (Full Screen) "
-	titleRendered := m.styles.FocusedPanelTitle.Render(title)
-
-	// Build footer with help text
-	footer := m.styles.Dimmed.Render("Press 'esc' to exit | arrow keys to scroll")
-
-	// Wrap in border
-	panel := m.styles.FocusedBorder.
-		Width(contentWidth).
-		Height(contentHeight).
-		Render(content)
-
-	// Add title to top border
-	lines := strings.Split(panel, "\n")
-	if len(lines) > 0 {
-		// Replace first line with title
-		if line, ok := components.RenderPanelTitleLine(contentWidth+2, m.styles.FocusedBorder, titleRendered); ok {
-			lines[0] = line
-		}
-	}
-	panel = strings.Join(lines, "\n")
-
-	// Join panel and footer
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
-}
-
 func (m *Model) updateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return

@@ -111,15 +111,22 @@ func (m *Model) handleStateShowKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 }
 
-// handleEscKey handles escape key for exiting history detail mode.
+// handleEscKey handles escape key for exiting history detail or state show mode.
 func (m *Model) handleEscKey() bool {
 	if m.mainArea == nil {
 		return false
 	}
 	mode := m.mainArea.GetMode()
-	if mode == ModeHistoryDetail {
+	switch mode {
+	case ModeHistoryDetail:
 		m.mainArea.ExitHistoryDetail()
 		return true
+	case ModeStateShow:
+		m.mainArea.SetMode(ModeDiff)
+		return true
+	case ModeDiff, ModeLogs:
+		// Nothing to exit from these modes
+		return false
 	}
 	return false
 }

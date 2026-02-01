@@ -446,6 +446,8 @@ func (m *Model) handleVerticalNavigation(panel keybinds.PanelID, moveUp bool) te
 			} else {
 				m.stateListContent.MoveDown()
 			}
+			// Automatically show state details for selected item
+			return m.showSelectedStateDetail()
 		}
 	case keybinds.PanelHistory:
 		if m.historyPanel != nil {
@@ -501,9 +503,7 @@ func (m *Model) handleActionSelect(ctx *keybinds.Context) tea.Cmd {
 			m.panelManager.SetFocus(PanelMain)
 		}
 		return m.showSelectedHistoryDetail()
-	case keybinds.PanelCommandLog:
-		m.execView = viewCommandLog
-	case keybinds.PanelNone, keybinds.PanelWorkspace, keybinds.PanelMain:
+	case keybinds.PanelNone, keybinds.PanelWorkspace, keybinds.PanelMain, keybinds.PanelCommandLog:
 		// No select action for these panels
 	}
 	return nil

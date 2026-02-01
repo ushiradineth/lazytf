@@ -79,3 +79,20 @@ func (v *StateShowView) View() string {
 	footer := v.styles.StatusBar.Width(v.width).Render("↑↓/jk: scroll | esc: back to list | q: quit")
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
+
+// ViewContent renders just the viewport content (for embedding in MainArea).
+func (v *StateShowView) ViewContent() string {
+	if v.styles == nil {
+		return ""
+	}
+	body := v.viewport.View()
+	if v.width > 0 {
+		body = lipgloss.NewStyle().Width(v.width).Height(v.viewport.Height).Render(body)
+	}
+	return body
+}
+
+// GetAddress returns the current resource address.
+func (v *StateShowView) GetAddress() string {
+	return v.address
+}

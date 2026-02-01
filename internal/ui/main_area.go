@@ -20,6 +20,7 @@ const (
 	ModeDiff          MainAreaMode = iota // Show diff viewer
 	ModeLogs                              // Show operation logs
 	ModeHistoryDetail                     // Show history detail (formatted logs)
+	ModeStateShow                         // Show state resource details
 )
 
 // MainArea is a wrapper component that switches between diff view and logs.
@@ -35,6 +36,7 @@ type MainArea struct {
 	applyView    *views.ApplyView
 	planView     *views.PlanView
 	historyView  *views.HistoryView
+	stateView    *views.StateShowView
 
 	// Current state for diff mode
 	selectedResource *terraform.ResourceChange
@@ -50,6 +52,7 @@ func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.App
 		applyView:   applyView,
 		planView:    planView,
 		historyView: views.NewHistoryView(s),
+		stateView:   views.NewStateShowView(s),
 	}
 }
 
@@ -82,6 +85,9 @@ func (m *MainArea) SetSize(width, height int) {
 	if m.historyView != nil {
 		m.historyView.SetSize(innerWidth, innerHeight)
 	}
+	if m.stateView != nil {
+		m.stateView.SetSize(innerWidth, innerHeight)
+	}
 }
 
 // SetFocused sets the focus state.
@@ -105,6 +111,9 @@ func (m *MainArea) SetStyles(s *styles.Styles) {
 	}
 	if m.historyView != nil {
 		m.historyView.SetStyles(s)
+	}
+	if m.stateView != nil {
+		m.stateView.SetStyles(s)
 	}
 }
 
@@ -137,6 +146,16 @@ func (m *MainArea) SetHistoryContent(title, content string) {
 	}
 }
 
+// SetStateContent sets the state show content and switches to state mode.
+func (m *MainArea) SetStateContent(address, content string) {
+	if m.stateView == nil {
+		return
+	}
+	m.stateView.SetAddress(address)
+	m.stateView.SetContent(content)
+	m.mode = ModeStateShow
+}
+
 // GetHistoryView returns the history view (for external updates).
 func (m *MainArea) GetHistoryView() *views.HistoryView {
 	return m.historyView
@@ -166,6 +185,10 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 	case ModeHistoryDetail:
 		if m.historyView != nil {
 			m.historyView, cmd = m.historyView.Update(msg)
+		}
+	case ModeStateShow:
+		if m.stateView != nil {
+			m.stateView, cmd = m.stateView.Update(msg)
 		}
 	}
 
@@ -217,6 +240,15 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	case ModeHistoryDetail:
 		// History view handles scrolling
 		if m.historyView != nil {
+			switch msg.String() {
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
+				_, cmd := m.Update(msg)
+				return true, cmd
+			}
+		}
+	case ModeStateShow:
+		// State view handles scrolling
+		if m.stateView != nil {
 			switch msg.String() {
 			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
 				_, cmd := m.Update(msg)
@@ -280,12 +312,23 @@ func (m *MainArea) View() string {
 			content = m.styles.Dimmed.Render("No history detail available")
 		}
 		tabs = []string{title}
+
+	case ModeStateShow:
+		// Show terraform state details
+		if m.stateView != nil {
+			title = "State Details"
+			content = m.stateView.ViewContent()
+		} else {
+			title = "State Details"
+			content = m.styles.Dimmed.Render("No state data available")
+		}
+		tabs = []string{title}
 	}
 
 	// Set footer text based on mode
 	var footerText string
 	switch m.mode {
-	case ModeDiff, ModeLogs, ModeHistoryDetail:
+	case ModeDiff, ModeLogs, ModeHistoryDetail, ModeStateShow:
 		footerText = ""
 	}
 

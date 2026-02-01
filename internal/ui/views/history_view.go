@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/ui/components"
 )
 
 // ansiPattern matches ANSI escape codes for stripping colors.
@@ -62,10 +63,14 @@ func (v *HistoryView) colorizeOutput(content string) string {
 	}
 
 	lines := strings.Split(content, "\n")
-	result := make([]string, len(lines))
+	result := make([]string, 0, len(lines))
 
-	for i, line := range lines {
-		result[i] = v.colorizeLine(line)
+	for _, line := range lines {
+		colorized := v.colorizeLine(line)
+		// Skip empty lines generated from separator handling.
+		if colorized != "" || strings.TrimSpace(line) == "" {
+			result = append(result, colorized)
+		}
 	}
 
 	return strings.Join(result, "\n")
@@ -76,9 +81,19 @@ func (v *HistoryView) colorizeOutput(content string) string {
 func (v *HistoryView) colorizeLine(line string) string {
 	trimmed := strings.TrimSpace(line)
 
-	// Section separators (from smart formatter).
-	if strings.Contains(trimmed, "────") {
-		return v.styles.Dimmed.Render(line)
+	// Section separator lines are now handled by RenderSectionHeader, skip them.
+	if isSeparatorLine(trimmed) {
+		return ""
+	}
+
+	// Section titles (Details, Plan Output, Apply Output) - render like diff viewer headers.
+	if isSectionTitle(trimmed) {
+		return components.RenderSectionHeader(trimmed, v.width, v.styles.DiffChange, v.styles.Theme.BorderColor)
+	}
+
+	// Metadata key-value lines (Status:, Time:, Environment:, Directory:).
+	if isMetadataLine(trimmed) {
+		return v.colorizeMetadataLine(line, trimmed)
 	}
 
 	// Find leading whitespace to preserve indentation.
@@ -103,6 +118,53 @@ func (v *HistoryView) colorizeLine(line string) string {
 
 	// Everything else stays default color.
 	return line
+}
+
+// isMetadataLine checks if a line is a metadata key-value line.
+func isMetadataLine(trimmed string) bool {
+	return strings.HasPrefix(trimmed, "Status:") ||
+		strings.HasPrefix(trimmed, "Time:") ||
+		strings.HasPrefix(trimmed, "Environment:") ||
+		strings.HasPrefix(trimmed, "Directory:")
+}
+
+// colorizeMetadataLine applies styling to metadata key-value lines.
+func (v *HistoryView) colorizeMetadataLine(line, trimmed string) string {
+	leadingSpace := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+
+	// Find the colon position to split key and value.
+	colonIdx := strings.Index(trimmed, ":")
+	if colonIdx == -1 {
+		return line
+	}
+
+	key := trimmed[:colonIdx+1] // includes colon
+	value := trimmed[colonIdx+1:]
+
+	// Style: dimmed key, normal value, colored status icon.
+	styledKey := v.styles.Dimmed.Render(key)
+
+	// Special handling for status line - color the icon.
+	if strings.HasPrefix(trimmed, "Status:") {
+		value = v.colorizeStatusValue(value)
+	}
+
+	return leadingSpace + styledKey + value
+}
+
+// colorizeStatusValue applies color to the status value based on its content.
+func (v *HistoryView) colorizeStatusValue(value string) string {
+	value = strings.TrimSpace(value)
+	switch {
+	case strings.HasPrefix(value, "●") || strings.Contains(value, "Success"):
+		return " " + v.styles.DiffAdd.Render(value)
+	case strings.HasPrefix(value, "✗") || strings.Contains(value, "Failed"):
+		return " " + v.styles.DiffRemove.Render(value)
+	case strings.HasPrefix(value, "○") || strings.Contains(value, "Canceled"):
+		return " " + v.styles.DiffChange.Render(value)
+	default:
+		return " " + value
+	}
 }
 
 // SetStyles updates the view styles.
@@ -150,4 +212,22 @@ func (v *HistoryView) ViewContent() string {
 // GetTitle returns the current title.
 func (v *HistoryView) GetTitle() string {
 	return v.title
+}
+
+// isSeparatorLine checks if a line consists only of horizontal line characters.
+func isSeparatorLine(trimmed string) bool {
+	if trimmed == "" {
+		return false
+	}
+	for _, r := range trimmed {
+		if r != '─' {
+			return false
+		}
+	}
+	return true
+}
+
+// isSectionTitle checks if a line is a section title (Details, Plan Output, Apply Output).
+func isSectionTitle(trimmed string) bool {
+	return trimmed == "Details" || trimmed == "Plan Output" || trimmed == "Apply Output"
 }
