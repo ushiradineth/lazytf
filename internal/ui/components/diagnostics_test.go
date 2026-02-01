@@ -227,3 +227,21 @@ func TestDiagnosticsPanelExpandFillsContent(t *testing.T) {
 			minExpectedContentLines, expandedContentLines, expandedView)
 	}
 }
+
+func TestSetParsedText(t *testing.T) {
+	s := styles.DefaultStyles()
+	d := NewDiagnosticsPanel(s)
+	// SetParsedText is a no-op for API compatibility
+	// Just verify it doesn't panic
+	d.SetParsedText("some parsed text")
+	d.SetParsedText("")
+}
+
+func TestSetShowRaw(t *testing.T) {
+	s := styles.DefaultStyles()
+	d := NewDiagnosticsPanel(s)
+	// SetShowRaw is a no-op for API compatibility
+	// Just verify it doesn't panic
+	d.SetShowRaw(true)
+	d.SetShowRaw(false)
+}

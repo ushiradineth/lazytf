@@ -1161,3 +1161,55 @@ func TestResourceListItemCount(t *testing.T) {
 		t.Errorf("expected 3 items, got %d", r.ItemCount())
 	}
 }
+
+func TestFormatShortDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		want     string
+	}{
+		{"zero", 0, ""},
+		{"negative", -1 * time.Second, ""},
+		{"seconds", 30 * time.Second, "30s"},
+		{"one second", 1 * time.Second, "1s"},
+		{"59 seconds", 59 * time.Second, "59s"},
+		{"one minute", 60 * time.Second, "1m"},
+		{"minutes", 5 * time.Minute, "5m"},
+		{"59 minutes", 59 * time.Minute, "59m"},
+		{"one hour", 60 * time.Minute, "1h"},
+		{"hours", 3 * time.Hour, "3h"},
+		{"mixed", 90 * time.Second, "1m"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatShortDuration(tt.duration)
+			if got != tt.want {
+				t.Errorf("formatShortDuration(%v) = %q, want %q", tt.duration, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetStatusStyle(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+
+	tests := []struct {
+		name   string
+		status terraform.OperationStatus
+	}{
+		{"pending", terraform.StatusPending},
+		{"in progress", terraform.StatusInProgress},
+		{"complete", terraform.StatusComplete},
+		{"errored", terraform.StatusErrored},
+		{"unknown", terraform.OperationStatus("unknown")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Just verify it doesn't panic and returns a style
+			style := r.getStatusStyle(tt.status)
+			_ = style.Render("test")
+		})
+	}
+}

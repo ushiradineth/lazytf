@@ -5103,3 +5103,520 @@ func TestHandleKeyMsgBasic(t *testing.T) {
 	_, _ = m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	// Should not crash
 }
+
+func TestToastErrorNilToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.toast = nil
+
+	cmd := m.toastError("error message")
+	if cmd != nil {
+		t.Error("expected nil cmd when toast is nil")
+	}
+}
+
+func TestToastErrorWithToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.toastError("error message")
+	if cmd == nil {
+		t.Error("expected non-nil cmd when toast is available")
+	}
+}
+
+func TestToastInfoNilToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.toast = nil
+
+	cmd := m.toastInfo("info message")
+	if cmd != nil {
+		t.Error("expected nil cmd when toast is nil")
+	}
+}
+
+func TestToastInfoWithToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.toastInfo("info message")
+	if cmd == nil {
+		t.Error("expected non-nil cmd when toast is available")
+	}
+}
+
+func TestToastSuccessNilToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.toast = nil
+
+	cmd := m.toastSuccess("success message")
+	if cmd != nil {
+		t.Error("expected nil cmd when toast is nil")
+	}
+}
+
+func TestToastSuccessWithToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.toastSuccess("success message")
+	if cmd == nil {
+		t.Error("expected non-nil cmd when toast is available")
+	}
+}
+
+func TestShowFormattedFilesNilToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.toast = nil
+
+	// Should not panic when toast is nil
+	m.showFormattedFiles([]string{"file1.tf", "file2.tf"})
+}
+
+func TestShowFormattedFilesWithToast(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Should show toast with single file
+	m.showFormattedFiles([]string{"file1.tf"})
+}
+
+func TestShowFormattedFilesMultiple(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Should show toast with multiple files
+	m.showFormattedFiles([]string{"file1.tf", "file2.tf", "file3.tf"})
+}
+
+func TestShowFormattedFilesEmpty(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Empty list should still work without panicking
+	m.showFormattedFiles([]string{})
+}
+
+func TestHandleHistoryKeysUpNavigation(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyEntries = []history.Entry{
+		{ID: 1, Summary: "plan"},
+		{ID: 2, Summary: "apply"},
+	}
+	m.historySelected = 1
+
+	handled, _ := m.handleHistoryKeys("up")
+	if !handled {
+		t.Error("expected handled to be true")
+	}
+	if m.historySelected != 0 {
+		t.Errorf("expected historySelected to be 0, got %d", m.historySelected)
+	}
+}
+
+func TestHandleHistoryKeysDownNavigation(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyEntries = []history.Entry{
+		{ID: 1, Summary: "plan"},
+		{ID: 2, Summary: "apply"},
+	}
+	m.historySelected = 0
+
+	handled, _ := m.handleHistoryKeys("j")
+	if !handled {
+		t.Error("expected handled to be true")
+	}
+	if m.historySelected != 1 {
+		t.Errorf("expected historySelected to be 1, got %d", m.historySelected)
+	}
+}
+
+func TestHandleHistoryKeysEnterSelection(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyEntries = []history.Entry{
+		{ID: 1, Summary: "plan"},
+	}
+	m.historySelected = 0
+
+	handled, _ := m.handleHistoryKeys("enter")
+	if !handled {
+		t.Error("expected handled to be true")
+	}
+	// cmd may be nil if history panel is not fully initialized
+}
+
+func TestHandleEscKeyModeHistoryDetailExit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea == nil {
+		t.Skip("mainArea is nil")
+	}
+	m.mainArea.SetMode(ModeHistoryDetail)
+	handled := m.handleEscKey()
+	if !handled {
+		t.Error("expected handled to be true for ModeHistoryDetail")
+	}
+}
+
+func TestHandleEscKeyModeStateShowExit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea == nil {
+		t.Skip("mainArea is nil")
+	}
+	m.mainArea.SetMode(ModeStateShow)
+	handled := m.handleEscKey()
+	if !handled {
+		t.Error("expected handled to be true for ModeStateShow")
+	}
+}
+
+func TestHandleEscKeyModeAboutExit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea == nil {
+		t.Skip("mainArea is nil")
+	}
+	m.mainArea.SetMode(ModeAbout)
+	handled := m.handleEscKey()
+	if !handled {
+		t.Error("expected handled to be true for ModeAbout")
+	}
+}
+
+func TestHandleEscKeyModeDiffNoExit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea == nil {
+		t.Skip("mainArea is nil")
+	}
+	m.mainArea.SetMode(ModeDiff)
+	handled := m.handleEscKey()
+	if handled {
+		t.Error("expected handled to be false for ModeDiff")
+	}
+}
+
+func TestHandleEscKeyNilMainAreaCheck(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.mainArea = nil
+	handled := m.handleEscKey()
+	if handled {
+		t.Error("expected handled to be false when mainArea is nil")
+	}
+}
+
+func TestFocusCommandLogPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Just verify it doesn't panic
+	_ = m.focusCommandLog()
+}
+
+func TestFocusCommandLogNilPanelManagerCheck(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+	cmd := m.focusCommandLog()
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+func TestFocusMainPanelNilPanelManagerCheck(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+	cmd := m.focusMainPanel()
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+func TestHandleStateListKeyQuit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	handled, cmd := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for q key")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for quit")
+	}
+	if !m.quitting {
+		t.Error("expected quitting to be true")
+	}
+}
+
+func TestHandleStateListKeyEsc(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for esc key")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain after esc")
+	}
+}
+
+func TestHandleStateListKeyUp(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	m.stateListView = nil
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyUp})
+	if !handled {
+		t.Error("expected handled to be true for up key")
+	}
+}
+
+func TestHandleStateListKeyDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	m.stateListView = nil
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected handled to be true for j key")
+	}
+}
+
+func TestHandleStateListKeyEnter(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	m.stateListView = nil
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Error("expected handled to be true for enter key")
+	}
+}
+
+func TestHandleStateListKeyUnknown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected handled to be false for unknown key")
+	}
+}
+
+func TestHandleStateShowKeyQuit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateShow
+	handled, cmd := m.handleStateShowKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for q key")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for quit")
+	}
+	if !m.quitting {
+		t.Error("expected quitting to be true")
+	}
+}
+
+func TestHandleStateShowKeyEsc(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateShow
+	handled, _ := m.handleStateShowKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for esc key")
+	}
+	if m.execView != viewStateList {
+		t.Error("expected execView to be viewStateList after esc")
+	}
+}
+
+func TestHandleStateShowKeyDefault(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateShow
+	m.stateShowView = nil
+	handled, _ := m.handleStateShowKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if !handled {
+		t.Error("expected handled to be true for default key")
+	}
+}
+
+func TestHandleCommandLogKeyQuit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewCommandLog
+	handled, cmd := m.handleCommandLogKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for q key")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for quit")
+	}
+	if !m.quitting {
+		t.Error("expected quitting to be true")
+	}
+}
+
+func TestHandleCommandLogKeyEsc(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewCommandLog
+	handled, _ := m.handleCommandLogKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for esc key")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain after esc")
+	}
+}
+
+func TestHandleCommandLogKeyDefault(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewCommandLog
+	handled, _ := m.handleCommandLogKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected handled to be false for unknown key")
+	}
+}
+
+func TestHandleLegacyOutputKeyQuitNotRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewPlanOutput
+	m.planRunning = false
+	m.applyRunning = false
+	handled, _ := m.handleLegacyOutputKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for q key")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain")
+	}
+}
+
+func TestHandleLegacyOutputKeyQuitRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewPlanOutput
+	m.planRunning = true
+	handled, cmd := m.handleLegacyOutputKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for q key")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for quit")
+	}
+	if !m.quitting {
+		t.Error("expected quitting to be true")
+	}
+}
+
+func TestHandleLegacyOutputKeyEscNotRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewApplyOutput
+	m.planRunning = false
+	m.applyRunning = false
+	handled, _ := m.handleLegacyOutputKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for esc key")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain after esc")
+	}
+}
+
+func TestHandleLegacyOutputKeyEscRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewApplyOutput
+	m.applyRunning = true
+	handled, _ := m.handleLegacyOutputKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for esc key")
+	}
+	// Should not change view when running
+	if m.execView != viewApplyOutput {
+		t.Error("expected execView to remain viewApplyOutput when running")
+	}
+}
+
+func TestHandleLegacyOutputKeyDefault(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewPlanOutput
+	handled, _ := m.handleLegacyOutputKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected handled to be false for unknown key")
+	}
+}
+
+func TestHandleExecutionKeyViewMain(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewMain
+	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected handled to be false for viewMain")
+	}
+}
+
+func TestHandleExecutionKeyViewPlanOutput(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewPlanOutput
+	m.planRunning = false
+	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !handled {
+		t.Error("expected handled to be true for viewPlanOutput")
+	}
+}
+
+func TestHandleExecutionKeyViewStateList(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.execView = viewStateList
+	handled, _ := m.handleExecutionKey(tea.KeyMsg{Type: tea.KeyEscape})
+	if !handled {
+		t.Error("expected handled to be true for viewStateList")
+	}
+}
+
+func TestInputCaptured(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	if m.inputCaptured() {
+		t.Error("expected inputCaptured to return false")
+	}
+}

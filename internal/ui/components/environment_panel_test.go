@@ -1385,3 +1385,21 @@ func TestEnvironmentPanelItemCount(t *testing.T) {
 		t.Errorf("expected 2 items, got %d", panel.ItemCount())
 	}
 }
+
+func TestSetWarnings(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+	// SetWarnings is a no-op for compatibility
+	// Just verify it doesn't panic
+	panel.SetWarnings([]string{"warning1", "warning2"})
+	panel.SetWarnings([]string{})
+	panel.SetWarnings(nil)
+}
+
+func TestActivateSelector(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+	// ActivateSelector is a no-op for compatibility
+	// Just verify it doesn't panic
+	panel.ActivateSelector()
+}

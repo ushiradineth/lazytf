@@ -284,3 +284,269 @@ func TestJoinJSONPointer(t *testing.T) {
 		t.Fatalf("unexpected pointer: %q", got)
 	}
 }
+
+func TestIsUnknown(t *testing.T) {
+	tests := []struct {
+		name string
+		val  any
+		want bool
+	}{
+		{"bool true", true, true},
+		{"bool false", false, false},
+		{"string", "hello", false},
+		{"int", 42, false},
+		{"float", 3.14, false},
+		{"nil", nil, false},
+		{"empty map", map[string]any{}, false},
+		{"map with true bool", map[string]any{"a": true}, true},
+		{"map with false bool", map[string]any{"a": false}, false},
+		{"map with string", map[string]any{"a": "value"}, false},
+		{"nested map with true", map[string]any{"outer": map[string]any{"inner": true}}, true},
+		{"nested map all false", map[string]any{"outer": map[string]any{"inner": false}}, false},
+		{"empty slice", []any{}, false},
+		{"slice with true", []any{true}, true},
+		{"slice with false", []any{false}, false},
+		{"slice with string", []any{"hello"}, false},
+		{"slice with nested map containing true", []any{map[string]any{"a": true}}, true},
+		{"mixed slice with true", []any{"a", 1, true}, true},
+		{"mixed slice no bool", []any{"a", 1, 3.14}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnknown(tt.val)
+			if got != tt.want {
+				t.Errorf("isUnknown(%v) = %v, want %v", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsUnknownValue(t *testing.T) {
+	tests := []struct {
+		name string
+		val  any
+		want bool
+	}{
+		{"UnknownValue type", UnknownValue{}, true},
+		{"string", "hello", false},
+		{"int", 42, false},
+		{"nil", nil, false},
+		{"map", map[string]any{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnknownValue(tt.val)
+			if got != tt.want {
+				t.Errorf("isUnknownValue(%v) = %v, want %v", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsMap(t *testing.T) {
+	tests := []struct {
+		name string
+		val  any
+		want bool
+	}{
+		{"map[string]any", map[string]any{"a": 1}, true},
+		{"empty map", map[string]any{}, true},
+		{"nil", nil, false},
+		{"string", "hello", false},
+		{"slice", []any{1, 2}, false},
+		{"int", 42, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isMap(tt.val)
+			if got != tt.want {
+				t.Errorf("isMap(%v) = %v, want %v", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsList(t *testing.T) {
+	tests := []struct {
+		name string
+		val  any
+		want bool
+	}{
+		{"slice any", []any{1, 2}, true},
+		{"slice string", []string{"a", "b"}, true},
+		{"empty slice", []any{}, true},
+		{"array", [3]int{1, 2, 3}, true},
+		{"nil", nil, false},
+		{"string", "hello", false},
+		{"map", map[string]any{}, false},
+		{"int", 42, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isList(tt.val)
+			if got != tt.want {
+				t.Errorf("isList(%v) = %v, want %v", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToMap(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     any
+		wantNil bool
+	}{
+		{"valid map", map[string]any{"a": 1}, false},
+		{"empty map", map[string]any{}, false},
+		{"nil", nil, true},
+		{"string", "hello", true},
+		{"slice", []any{}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toMap(tt.val)
+			if tt.wantNil && got != nil {
+				t.Errorf("toMap(%v) = %v, want nil", tt.val, got)
+			}
+			if !tt.wantNil && got == nil {
+				t.Errorf("toMap(%v) = nil, want non-nil", tt.val)
+			}
+		})
+	}
+}
+
+func TestInterfaceToList(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     any
+		wantLen int
+		wantNil bool
+	}{
+		{"slice any", []any{1, 2, 3}, 3, false},
+		{"empty slice", []any{}, 0, false},
+		{"array", [2]string{"a", "b"}, 2, false},
+		{"not a slice", "hello", 0, true},
+		{"map", map[string]any{}, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := interfaceToList(tt.val)
+			if tt.wantNil && got != nil {
+				t.Errorf("interfaceToList(%v) = %v, want nil", tt.val, got)
+			}
+			if !tt.wantNil && len(got) != tt.wantLen {
+				t.Errorf("interfaceToList(%v) len = %d, want %d", tt.val, len(got), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestInterfaceToStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		list []any
+		want []string
+	}{
+		{"all strings", []any{"a", "b", "c"}, []string{"a", "b", "c"}},
+		{"empty", []any{}, []string{}},
+		{"mixed types skips non-strings", []any{"a", 1, "b"}, []string{"a", "b"}},
+		{"no strings", []any{1, 2, 3}, []string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := interfaceToStrings(tt.list)
+			if len(got) != len(tt.want) {
+				t.Errorf("interfaceToStrings(%v) = %v, want %v", tt.list, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("interfaceToStrings(%v)[%d] = %q, want %q", tt.list, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestAllStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		list []any
+		want bool
+	}{
+		{"all strings", []any{"a", "b", "c"}, true},
+		{"empty", []any{}, true},
+		{"mixed types", []any{"a", 1, "b"}, false},
+		{"no strings", []any{1, 2, 3}, false},
+		{"single string", []any{"a"}, true},
+		{"single non-string", []any{1}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := allStrings(tt.list)
+			if got != tt.want {
+				t.Errorf("allStrings(%v) = %v, want %v", tt.list, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShouldSkipUnknown(t *testing.T) {
+	tests := []struct {
+		name          string
+		unknownExists bool
+		unknownVal    any
+		beforeVal     any
+		afterVal      any
+		want          bool
+	}{
+		{"unknown exists and values equal", true, true, "a", "a", true},
+		{"unknown exists but values different", true, true, "a", "b", false},
+		{"unknown doesn't exist", false, nil, "a", "a", false},
+		{"unknown false", true, false, "a", "a", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldSkipUnknown(tt.unknownExists, tt.unknownVal, tt.beforeVal, tt.afterVal)
+			if got != tt.want {
+				t.Errorf("shouldSkipUnknown() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeUnknownValue(t *testing.T) {
+	tests := []struct {
+		name          string
+		unknownExists bool
+		unknownVal    any
+		afterVal      any
+		afterExists   bool
+		wantUnknown   bool
+	}{
+		{"unknown exists and after nil", true, true, nil, false, true},
+		{"unknown exists and after empty", true, true, nil, true, true},
+		{"unknown exists but after has value", true, true, "value", true, false},
+		{"unknown doesn't exist", false, nil, "value", true, false},
+		{"unknown false", true, false, nil, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, _ := normalizeUnknownValue(tt.unknownExists, tt.unknownVal, tt.afterVal, tt.afterExists)
+			_, isUnknownVal := val.(UnknownValue)
+			if isUnknownVal != tt.wantUnknown {
+				t.Errorf("normalizeUnknownValue() isUnknown = %v, want %v", isUnknownVal, tt.wantUnknown)
+			}
+		})
+	}
+}
