@@ -471,6 +471,12 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 // handleRequestApply handles the RequestApplyMsg by showing confirmation modal.
 func (m *Model) handleRequestApply() (tea.Model, tea.Cmd, bool) {
+	if m.planRunning || m.applyRunning {
+		if m.toast != nil {
+			return m, m.toast.ShowInfo("Operation already in progress"), true
+		}
+		return m, nil, true
+	}
 	if m.plan == nil {
 		if m.toast != nil {
 			return m, m.toast.ShowError("No plan loaded; run terraform plan first"), true
@@ -856,6 +862,10 @@ func nextResourcesTab(current, direction int) int {
 func (m *Model) loadStateListIfNeeded() tea.Cmd {
 	if m.resourcesActiveTab != 1 || m.stateListContent == nil || m.stateListContent.ResourceCount() != 0 {
 		return nil
+	}
+	// Don't set loading state if an operation is already in progress
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return m.beginStateList() // Will show toast
 	}
 	m.stateListContent.SetLoading(true)
 	return m.beginStateList()

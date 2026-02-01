@@ -29,6 +29,9 @@ func (m *Model) beginPlan() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	m.err = nil
@@ -101,6 +104,9 @@ func (m *Model) beginApply() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	m.err = nil
@@ -168,6 +174,9 @@ func (m *Model) beginRefresh() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	m.err = nil
@@ -321,6 +330,9 @@ func (m *Model) beginValidate() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	if m.toast != nil {
@@ -445,6 +457,9 @@ func (m *Model) beginFormat() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	if m.toast != nil {
@@ -535,6 +550,9 @@ func (m *Model) beginStateList() tea.Cmd {
 		return nil
 	}
 	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
 		return nil
 	}
 	if m.toast != nil {
