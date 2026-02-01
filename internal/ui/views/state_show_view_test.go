@@ -142,3 +142,60 @@ func TestStateShowViewViewZeroWidth(t *testing.T) {
 		t.Error("expected non-empty output even with zero width")
 	}
 }
+
+func TestStateShowViewSetStyles(t *testing.T) {
+	view := NewStateShowView(styles.DefaultStyles())
+	view.SetSize(60, 20)
+
+	newStyles := styles.DefaultStyles()
+	view.SetStyles(newStyles)
+
+	if view.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestStateShowViewViewContent(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewStateShowView(s)
+	view.SetSize(80, 20)
+	view.SetContent("resource content\nline 2\nline 3")
+
+	content := view.ViewContent()
+	if content == "" {
+		t.Error("expected non-empty content")
+	}
+}
+
+func TestStateShowViewViewContentNilStyles(t *testing.T) {
+	view := &StateShowView{}
+	content := view.ViewContent()
+	if content != "" {
+		t.Error("expected empty content for nil styles")
+	}
+}
+
+func TestStateShowViewViewContentZeroWidth(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewStateShowView(s)
+	view.SetSize(0, 20)
+	view.SetContent("test content")
+
+	content := view.ViewContent()
+	// Should still return something even with zero width
+	_ = content
+}
+
+func TestStateShowViewGetAddress(t *testing.T) {
+	view := NewStateShowView(styles.DefaultStyles())
+
+	// Initially empty
+	if view.GetAddress() != "" {
+		t.Error("expected empty address initially")
+	}
+
+	view.SetAddress("aws_instance.web")
+	if view.GetAddress() != "aws_instance.web" {
+		t.Errorf("expected 'aws_instance.web', got %q", view.GetAddress())
+	}
+}

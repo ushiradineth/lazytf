@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -71,5 +72,95 @@ func TestToastOverlayDebug(t *testing.T) {
 		if !strings.Contains(line2, "╭") {
 			t.Error("Toast box should be visible in line 2")
 		}
+	}
+}
+
+func TestToastSetDuration(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+
+	// Default duration
+	toast.SetDuration(3 * time.Second)
+	// Just ensure it doesn't panic
+}
+
+func TestToastSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+
+	newStyles := styles.DefaultStyles()
+	toast.SetStyles(newStyles)
+
+	if toast.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestToastShowInfo(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+	toast.SetSize(80, 20)
+
+	cmd := toast.ShowInfo("Test info message")
+	if cmd == nil {
+		t.Error("expected non-nil cmd from ShowInfo")
+	}
+	if !toast.IsVisible() {
+		t.Error("expected toast to be visible after ShowInfo")
+	}
+}
+
+func TestToastHide(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+	toast.SetSize(80, 20)
+
+	// Show then hide
+	_ = toast.ShowSuccess("Test message")
+	toast.Hide()
+
+	if toast.IsVisible() {
+		t.Error("expected toast to not be visible after Hide")
+	}
+}
+
+func TestToastIsVisible(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+	toast.SetSize(80, 20)
+
+	// Initially not visible
+	if toast.IsVisible() {
+		t.Error("expected toast to not be visible initially")
+	}
+
+	// After showing
+	_ = toast.ShowSuccess("Test")
+	if !toast.IsVisible() {
+		t.Error("expected toast to be visible after Show")
+	}
+
+	// After hiding
+	toast.Hide()
+	if toast.IsVisible() {
+		t.Error("expected toast to not be visible after Hide")
+	}
+}
+
+func TestToastUpdate(t *testing.T) {
+	s := styles.DefaultStyles()
+	toast := NewToast(s)
+	toast.SetSize(80, 20)
+
+	// Update with nil message
+	cmd := toast.Update(nil)
+	_ = cmd
+
+	// Update with ClearToast
+	_ = toast.ShowSuccess("Test")
+	cmd = toast.Update(ClearToast{})
+	_ = cmd
+	if toast.IsVisible() {
+		t.Error("expected toast to be hidden after ClearToast")
 	}
 }

@@ -1335,3 +1335,53 @@ func TestEnvironmentPanelRenderWithFocusedAndItems(t *testing.T) {
 		t.Error("expected non-empty view")
 	}
 }
+
+func TestEnvironmentPanelSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+
+	newStyles := styles.DefaultStyles()
+	panel.SetStyles(newStyles)
+
+	if panel.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestEnvironmentPanelGetSelectedIndex(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+
+	envs := []environment.Environment{
+		{Name: "env1", Strategy: environment.StrategyFolder},
+		{Name: "env2", Strategy: environment.StrategyFolder},
+		{Name: "env3", Strategy: environment.StrategyFolder},
+	}
+	panel.SetEnvironmentInfo("", "", environment.StrategyFolder, envs)
+	panel.selectedIndex = 2
+
+	if panel.GetSelectedIndex() != 2 {
+		t.Errorf("expected index 2, got %d", panel.GetSelectedIndex())
+	}
+}
+
+func TestEnvironmentPanelItemCount(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+
+	// Empty
+	if panel.ItemCount() != 0 {
+		t.Errorf("expected 0 items, got %d", panel.ItemCount())
+	}
+
+	// With items
+	envs := []environment.Environment{
+		{Name: "a", Strategy: environment.StrategyFolder},
+		{Name: "b", Strategy: environment.StrategyFolder},
+	}
+	panel.SetEnvironmentInfo("", "", environment.StrategyFolder, envs)
+
+	if panel.ItemCount() != 2 {
+		t.Errorf("expected 2 items, got %d", panel.ItemCount())
+	}
+}

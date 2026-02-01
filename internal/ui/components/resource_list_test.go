@@ -989,3 +989,175 @@ func TestSearchGroupingAndFilterCounts(t *testing.T) {
 		t.Fatalf("expected group count 1, got %#v", group)
 	}
 }
+
+func TestResourceListRefresh(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+	})
+
+	// Refresh should rebuild the visible items
+	r.Refresh()
+
+	if len(r.visibleItems) == 0 {
+		t.Fatal("expected visible items after refresh")
+	}
+}
+
+func TestResourceListIsFocused(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+
+	if r.IsFocused() {
+		t.Error("expected unfocused by default")
+	}
+
+	r.SetFocused(true)
+	if !r.IsFocused() {
+		t.Error("expected focused after SetFocused(true)")
+	}
+
+	r.SetFocused(false)
+	if r.IsFocused() {
+		t.Error("expected unfocused after SetFocused(false)")
+	}
+}
+
+func TestResourceListSetStyles(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	newStyles := styles.DefaultStyles()
+
+	r.SetStyles(newStyles)
+
+	if r.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestResourceListHandleKey(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetFocused(true)
+
+	// Test j key (move down)
+	handled, _ := r.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected j key to be handled")
+	}
+	if r.selectedIndex != 1 {
+		t.Errorf("expected selectedIndex=1 after j, got %d", r.selectedIndex)
+	}
+
+	// Test k key (move up)
+	handled, _ = r.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if !handled {
+		t.Error("expected k key to be handled")
+	}
+	if r.selectedIndex != 0 {
+		t.Errorf("expected selectedIndex=0 after k, got %d", r.selectedIndex)
+	}
+
+	// Test down arrow
+	handled, _ = r.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if !handled {
+		t.Error("expected down key to be handled")
+	}
+
+	// Test up arrow
+	handled, _ = r.HandleKey(tea.KeyMsg{Type: tea.KeyUp})
+	if !handled {
+		t.Error("expected up key to be handled")
+	}
+}
+
+func TestResourceListHandleKeyUnknown(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+	})
+
+	// Unknown keys should not be handled
+	handled, _ := r.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected unknown key 'x' to not be handled")
+	}
+}
+
+func TestResourceListSetSummary(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+
+	r.SetSummary(5, 3, 1, 2)
+
+	if r.summaryCreate != 5 {
+		t.Errorf("expected summaryCreate=5, got %d", r.summaryCreate)
+	}
+	if r.summaryUpdate != 3 {
+		t.Errorf("expected summaryUpdate=3, got %d", r.summaryUpdate)
+	}
+	if r.summaryDelete != 1 {
+		t.Errorf("expected summaryDelete=1, got %d", r.summaryDelete)
+	}
+	if r.summaryReplace != 2 {
+		t.Errorf("expected summaryReplace=2, got %d", r.summaryReplace)
+	}
+}
+
+func TestResourceListRenderSummaryHeader(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.summaryCreate = 2
+	r.summaryUpdate = 1
+	r.summaryDelete = 0
+	r.summaryReplace = 1
+
+	header := r.renderSummaryHeader()
+	if header == "" {
+		t.Error("expected non-empty summary header")
+	}
+}
+
+func TestResourceListGetSelectedIndex(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.db", Action: terraform.ActionCreate},
+	})
+
+	if r.GetSelectedIndex() != 0 {
+		t.Errorf("expected initial index=0, got %d", r.GetSelectedIndex())
+	}
+
+	r.MoveDown()
+	if r.GetSelectedIndex() != 1 {
+		t.Errorf("expected index=1 after MoveDown, got %d", r.GetSelectedIndex())
+	}
+}
+
+func TestResourceListItemCount(t *testing.T) {
+	s := styles.DefaultStyles()
+	r := NewResourceList(s)
+	r.SetSize(80, 20)
+
+	// Empty list
+	if r.ItemCount() != 0 {
+		t.Errorf("expected 0 items, got %d", r.ItemCount())
+	}
+
+	// With resources
+	resources := []terraform.ResourceChange{
+		{Address: "a", Action: terraform.ActionCreate},
+		{Address: "b", Action: terraform.ActionUpdate},
+		{Address: "c", Action: terraform.ActionDelete},
+	}
+	r.SetResources(resources)
+
+	if r.ItemCount() != 3 {
+		t.Errorf("expected 3 items, got %d", r.ItemCount())
+	}
+}

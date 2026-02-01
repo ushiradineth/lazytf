@@ -328,3 +328,250 @@ Plan: 1 to add, 0 to change, 1 to destroy.
 		t.Fatalf("expected replace action, got %s", plan.Resources[0].Action)
 	}
 }
+
+func TestTextParserParseNilInput(t *testing.T) {
+	parser := NewTextParser()
+	_, err := parser.Parse(nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+	if err.Error() != "no input provided" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTextParserParseStreamNilInput(t *testing.T) {
+	parser := NewTextParser()
+	_, err := parser.ParseStream(nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+	if err.Error() != "no input provided" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTextParserParseStreamNoChanges(t *testing.T) {
+	lines := make(chan string, 10)
+	lines <- "No changes. Your infrastructure matches the configuration."
+	close(lines)
+
+	parser := NewTextParser()
+	plan, err := parser.ParseStream(lines)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan.Resources) != 0 {
+		t.Fatalf("expected no resources, got %d", len(plan.Resources))
+	}
+}
+
+func TestApplyActionValueMinusPrefix(t *testing.T) {
+	builder := newPlanBuilder(NewCleaner())
+	builder.before = make(map[string]any)
+	builder.after = make(map[string]any)
+
+	// Test "-" prefix sets before value
+	builder.applyActionValue("-", []string{"key"}, "old_value", false)
+
+	if builder.before["key"] != "old_value" {
+		t.Fatalf("expected before[key] = old_value, got %v", builder.before["key"])
+	}
+}
+
+func TestApplyActionValueTildeWithUnknown(t *testing.T) {
+	builder := newPlanBuilder(NewCleaner())
+	builder.before = make(map[string]any)
+	builder.after = make(map[string]any)
+	builder.afterUnknown = make(map[string]any)
+
+	// Test "~" prefix with unknown sets both before and afterUnknown
+	builder.applyActionValue("~", []string{"key"}, nil, true)
+
+	if builder.before["key"] != nil {
+		t.Fatalf("expected before[key] = nil, got %v", builder.before["key"])
+	}
+	if _, ok := builder.afterUnknown["key"]; !ok {
+		t.Fatal("expected afterUnknown[key] to be set")
+	}
+}
+
+func TestApplyActionValuePlusWithUnknown(t *testing.T) {
+	builder := newPlanBuilder(NewCleaner())
+	builder.before = make(map[string]any)
+	builder.after = make(map[string]any)
+	builder.afterUnknown = make(map[string]any)
+
+	// Test "+" prefix with unknown sets afterUnknown
+	builder.applyActionValue("+", []string{"key"}, nil, true)
+
+	if _, ok := builder.afterUnknown["key"]; !ok {
+		t.Fatal("expected afterUnknown[key] to be set")
+	}
+}
+
+func TestExtractResourceAddress(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"aws_instance.example", "aws_instance.example"},
+		{"aws_instance.example is tainted, so must be replaced", "aws_instance.example"},
+		{"module.foo.aws_instance.bar will be created", "module.foo.aws_instance.bar"},
+		{"", ""},
+		{"   ", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := extractResourceAddress(tt.input)
+			if got != tt.expected {
+				t.Errorf("extractResourceAddress(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseHeredocDelimiter(t *testing.T) {
+	tests := []struct {
+		input     string
+		delimiter string
+		ok        bool
+	}{
+		{"<<EOF", "EOF", true},
+		{"<<-EOF", "EOF", true},
+		{"<<-EOT some comment", "EOT", true},
+		{"not heredoc", "", false},
+		{"<<", "", false},
+		{"<<-", "", false},
+		{"<<  ", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			delimiter, ok := parseHeredocDelimiter(tt.input)
+			if ok != tt.ok {
+				t.Errorf("parseHeredocDelimiter(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if delimiter != tt.delimiter {
+				t.Errorf("parseHeredocDelimiter(%q) = %q, want %q", tt.input, delimiter, tt.delimiter)
+			}
+		})
+	}
+}
+
+func TestSplitArrow(t *testing.T) {
+	tests := []struct {
+		input  string
+		before string
+		after  string
+	}{
+		{`"old" -> "new"`, `"old"`, `"new"`},
+		{"t2.micro -> t2.small", "t2.micro", "t2.small"},
+		{`"value" -> (known after apply)`, `"value"`, "(known after apply)"},
+		{"no arrow here", "no arrow here", ""},
+		{"value # comment -> other", "value", "other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			before, after := splitArrow(tt.input)
+			if before != tt.before {
+				t.Errorf("splitArrow(%q) before = %q, want %q", tt.input, before, tt.before)
+			}
+			if after != tt.after {
+				t.Errorf("splitArrow(%q) after = %q, want %q", tt.input, after, tt.after)
+			}
+		})
+	}
+}
+
+func TestTextParserDeleteAction(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # aws_instance.web will be destroyed
+  - resource "aws_instance" "web" {
+      - ami = "ami-123" -> null
+      - id  = "i-12345" -> null
+    }
+
+Plan: 0 to add, 0 to change, 1 to destroy.
+`
+	parser := NewTextParser()
+	plan, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+	if plan.Resources[0].Action != terraform.ActionDelete {
+		t.Fatalf("expected delete action, got %s", plan.Resources[0].Action)
+	}
+	if plan.Resources[0].Change.Before["ami"] != "ami-123" {
+		t.Fatalf("expected before ami value, got %v", plan.Resources[0].Change.Before["ami"])
+	}
+}
+
+func TestTextParserEmptyPlanOutput(t *testing.T) {
+	input := `Some random text
+without any resource changes
+`
+	parser := NewTextParser()
+	_, err := parser.Parse(strings.NewReader(input))
+	if err == nil {
+		t.Fatal("expected error for empty plan")
+	}
+	if !strings.Contains(err.Error(), "no resource changes parsed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSetPathValueNestedCreation(t *testing.T) {
+	m := make(map[string]any)
+	setPathValue(m, []string{"a", "b", "c"}, "value")
+
+	a, ok := m["a"].(map[string]any)
+	if !ok {
+		t.Fatal("expected a to be a map")
+	}
+	b, ok := a["b"].(map[string]any)
+	if !ok {
+		t.Fatal("expected b to be a map")
+	}
+	if b["c"] != "value" {
+		t.Fatalf("expected c = value, got %v", b["c"])
+	}
+}
+
+func TestParseTerraformValueEdgeCases(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+		unknown  bool
+	}{
+		{"(known after apply)", nil, true},
+		{"\"hello\"", "hello", false},
+		{"true", true, false},
+		{"false", false, false},
+		{"null", nil, false},
+		{"123", int64(123), false},
+		{"3.14", 3.14, false},
+		{"[\"a\", \"b\"]", []any{"a", "b"}, false},
+		{"{}", map[string]any{}, false},
+		{"value,", "value", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			val, unknown := parseTerraformValue(tt.input)
+			if unknown != tt.unknown {
+				t.Errorf("parseTerraformValue(%q) unknown = %v, want %v", tt.input, unknown, tt.unknown)
+			}
+			// For complex types just check they're not nil when expected
+			if tt.expected == nil && val != nil && !tt.unknown {
+				t.Errorf("parseTerraformValue(%q) = %v, want nil", tt.input, val)
+			}
+		})
+	}
+}

@@ -303,3 +303,110 @@ func TestModalItemModeSelection(t *testing.T) {
 		t.Errorf("Expected selection to remain 1 after negative set, got %d", modal.GetSelectedIndex())
 	}
 }
+
+func TestModalMoveSelectionUp(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "2", Description: "Item 2"},
+		{Key: "3", Description: "Item 3"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Start at index 2
+	modal.SetSelectedIndex(2)
+	if modal.GetSelectedIndex() != 2 {
+		t.Fatalf("Expected initial selection 2, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move up
+	modal.moveSelectionUp()
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection 1 after moveUp, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move up again
+	modal.moveSelectionUp()
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection 0 after second moveUp, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move up at top should stay at 0
+	modal.moveSelectionUp()
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection to remain 0, got %d", modal.GetSelectedIndex())
+	}
+}
+
+func TestModalMoveSelectionDown(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "2", Description: "Item 2"},
+		{Key: "3", Description: "Item 3"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Start at index 0
+	if modal.GetSelectedIndex() != 0 {
+		t.Fatalf("Expected initial selection 0, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move down
+	modal.moveSelectionDown()
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection 1 after moveDown, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move down again
+	modal.moveSelectionDown()
+	if modal.GetSelectedIndex() != 2 {
+		t.Errorf("Expected selection 2 after second moveDown, got %d", modal.GetSelectedIndex())
+	}
+
+	// Move down at bottom should stay at 2
+	modal.moveSelectionDown()
+	if modal.GetSelectedIndex() != 2 {
+		t.Errorf("Expected selection to remain 2, got %d", modal.GetSelectedIndex())
+	}
+}
+
+func TestModalMoveSelectionSkipsHeaders(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "", Description: "Header", IsHeader: true},
+		{Key: "2", Description: "Item 2"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Start at index 0
+	modal.SetSelectedIndex(0)
+
+	// Move down should skip header and go to index 2
+	modal.moveSelectionDown()
+	if modal.GetSelectedIndex() != 2 {
+		t.Errorf("Expected selection 2 (skipping header), got %d", modal.GetSelectedIndex())
+	}
+
+	// Move up should skip header and go to index 0
+	modal.moveSelectionUp()
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection 0 (skipping header), got %d", modal.GetSelectedIndex())
+	}
+}

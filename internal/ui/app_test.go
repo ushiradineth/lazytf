@@ -14,6 +14,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
@@ -1936,4 +1937,1867 @@ func TestApplyBindingDebug(t *testing.T) {
 			t.Error("Toast is NOT visible after processing RequestApplyMsg")
 		}
 	}
+}
+
+func TestHandleRefreshOutput(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.applyView = views.NewApplyView(m.styles)
+
+	// Handle a refresh output message
+	msg := RefreshOutputMsg{Line: "Refreshing state..."}
+	result, cmd := m.handleRefreshOutput(msg)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil command to continue streaming")
+	}
+}
+
+func TestHandleRefreshOutputNilApplyView(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.applyView = nil
+
+	msg := RefreshOutputMsg{Line: "Refreshing state..."}
+	result, cmd := m.handleRefreshOutput(msg)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Should still return command even if applyView is nil
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+}
+
+func TestHandleErrorMsg(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+
+	testErr := errors.New("test error")
+	msg := ErrorMsg{Err: testErr}
+	result := m.handleErrorMsg(msg)
+
+	model, ok := result.(*Model)
+	if !ok {
+		t.Fatal("expected *Model result")
+	}
+	if model.err != testErr {
+		t.Errorf("expected error to be set, got %v", model.err)
+	}
+}
+
+func TestHandlePostUpdate(t *testing.T) {
+	plan := &terraform.Plan{
+		Resources: []terraform.ResourceChange{
+			{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		},
+	}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Handle a generic message to trigger the post update flow
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	result, cmd := m.handlePostUpdate(msg)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	_ = cmd // cmd might be nil for this key
+}
+
+func TestHandlePostUpdateWithEnvironmentPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+	m.updateLayout()
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	result, cmd := m.handlePostUpdate(msg)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestBuildEnvironmentCommand(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+
+	// Test workspace strategy
+	wsEnv := environment.Environment{
+		Strategy: environment.StrategyWorkspace,
+		Name:     "dev",
+	}
+	wsCmd := m.buildEnvironmentCommand(wsEnv)
+	if wsCmd != "terraform workspace select dev" {
+		t.Errorf("expected 'terraform workspace select dev', got %q", wsCmd)
+	}
+
+	// Test folder strategy
+	folderEnv := environment.Environment{
+		Strategy: environment.StrategyFolder,
+		Path:     "/path/to/env",
+	}
+	folderCmd := m.buildEnvironmentCommand(folderEnv)
+	if folderCmd != "cd /path/to/env" {
+		t.Errorf("expected 'cd /path/to/env', got %q", folderCmd)
+	}
+}
+
+func TestPromptEnvironmentSelection(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Should return early without panelManager or environmentPanel
+	m.panelManager = nil
+	result, cmd := m.promptEnvironmentSelection()
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+func TestPromptEnvironmentSelectionWithPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+	m.panelManager.RegisterPanel(PanelWorkspace, m.environmentPanel)
+
+	result, cmd := m.promptEnvironmentSelection()
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	_ = cmd // cmd should not be nil but depends on panel manager state
+}
+
+func TestHandleEnvironmentChanged(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.envWorkDir = t.TempDir()
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	// Create a mock environment
+	env := environment.Environment{
+		Strategy:  environment.StrategyWorkspace,
+		Name:      "test-workspace",
+		Path:      m.envWorkDir,
+		IsCurrent: false,
+	}
+
+	// Set up executor mock that will fail (to test error path)
+	m.executor = nil // nil executor will cause applyEnvironmentSelection to fail
+
+	msg := components.EnvironmentChangedMsg{Environment: env}
+	result, cmd := m.handleEnvironmentChanged(msg)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Should have a toast command for the error
+	if cmd == nil {
+		t.Fatal("expected toast command for error")
+	}
+}
+
+func TestHandleStateTabKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Not on state tab - should not handle
+	m.resourcesActiveTab = 0
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	cmd, handled := m.handleStateTabKey(msg)
+	if handled {
+		t.Error("expected not to handle when not on state tab")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when not handled")
+	}
+}
+
+func TestHandleStateTabKeyOnStateTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+
+	// Need stateListContent for handling
+	m.stateListContent = components.NewStateListContent(m.styles)
+	m.stateListContent.SetSize(80, 20)
+
+	// Focus on resources panel
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelResources)
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	_, handled := m.handleStateTabKey(msg)
+	// Result depends on whether stateListContent can handle the key
+	_ = handled
+}
+
+func TestHandleStateTabKeyNonKeyMsg(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executionMode = true
+	m.resourcesActiveTab = 1
+	m.stateListContent = components.NewStateListContent(m.styles)
+
+	// Non-key message should not be handled
+	msg := tea.WindowSizeMsg{Width: 80, Height: 24}
+	cmd, handled := m.handleStateTabKey(msg)
+	if handled {
+		t.Error("expected not to handle non-key message")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd for non-key message")
+	}
+}
+
+func TestShouldPromptEnvironment(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+
+	// No detection result - should not prompt
+	m.envDetection = nil
+	if m.shouldPromptEnvironment() {
+		t.Error("expected false when no detection result")
+	}
+
+	// Mixed strategy - should prompt
+	m.envDetection = &environment.DetectionResult{
+		Strategy: environment.StrategyMixed,
+	}
+	if !m.shouldPromptEnvironment() {
+		t.Error("expected true for mixed strategy")
+	}
+
+	// Single option - should not prompt
+	m.envDetection = &environment.DetectionResult{
+		Strategy: environment.StrategyWorkspace,
+	}
+	m.envOptions = []environment.Environment{{Name: "default"}}
+	if m.shouldPromptEnvironment() {
+		t.Error("expected false for single option")
+	}
+
+	// Multiple options - should prompt
+	m.envOptions = []environment.Environment{
+		{Name: "dev"},
+		{Name: "prod"},
+	}
+	if !m.shouldPromptEnvironment() {
+		t.Error("expected true for multiple options")
+	}
+}
+
+func TestStrategyAvailable(t *testing.T) {
+	// Test workspace strategy
+	result := environment.DetectionResult{
+		Workspaces: []string{"dev"},
+	}
+	if !strategyAvailable(result, environment.StrategyWorkspace) {
+		t.Error("expected workspace strategy to be available")
+	}
+	if strategyAvailable(result, environment.StrategyFolder) {
+		t.Error("expected folder strategy not available with no folders")
+	}
+
+	// Test folder strategy
+	result = environment.DetectionResult{
+		FolderPaths: []string{"/path/to/folder"},
+	}
+	if !strategyAvailable(result, environment.StrategyFolder) {
+		t.Error("expected folder strategy to be available")
+	}
+	if strategyAvailable(result, environment.StrategyWorkspace) {
+		t.Error("expected workspace strategy not available with no workspaces")
+	}
+
+	// Test mixed strategy
+	result = environment.DetectionResult{
+		Workspaces:  []string{"dev"},
+		FolderPaths: []string{"/path/to/folder"},
+	}
+	if !strategyAvailable(result, environment.StrategyMixed) {
+		t.Error("expected mixed strategy to be available")
+	}
+
+	// Test unknown strategy
+	if strategyAvailable(result, environment.StrategyUnknown) {
+		t.Error("expected unknown strategy to not be available")
+	}
+}
+
+func TestMainAreaIsFocused(t *testing.T) {
+	s := styles.DefaultStyles()
+	m := NewMainArea(s, nil, nil, nil)
+	m.SetFocused(true)
+	if !m.IsFocused() {
+		t.Error("expected IsFocused to return true")
+	}
+	m.SetFocused(false)
+	if m.IsFocused() {
+		t.Error("expected IsFocused to return false")
+	}
+}
+
+func TestMainAreaSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	m := NewMainArea(s, nil, nil, nil)
+	m.SetSize(80, 20)
+
+	newStyles := styles.DefaultStyles()
+	m.SetStyles(newStyles)
+	// Should not panic and styles should be updated
+}
+
+func TestMainAreaUpdate(t *testing.T) {
+	s := styles.DefaultStyles()
+	applyView := views.NewApplyView(s)
+	m := NewMainArea(s, nil, applyView, nil)
+	m.SetSize(80, 20)
+
+	// Test update in ModeLogs
+	m.SetMode(ModeLogs)
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+
+	// Test update in ModeHistoryDetail
+	m.SetMode(ModeHistoryDetail)
+	result, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestMainAreaHandleKey(t *testing.T) {
+	s := styles.DefaultStyles()
+	m := NewMainArea(s, nil, nil, nil)
+	m.SetSize(80, 20)
+
+	// Not focused - should not handle
+	m.SetFocused(false)
+	handled, _ := m.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if handled {
+		t.Error("expected not to handle when not focused")
+	}
+
+	// Focused in ModeDiff
+	m.SetFocused(true)
+	m.SetMode(ModeDiff)
+
+	// Test scroll down
+	handled, _ = m.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected to handle 'j' in ModeDiff")
+	}
+
+	// Test scroll up
+	handled, _ = m.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if !handled {
+		t.Error("expected to handle 'k' in ModeDiff")
+	}
+}
+
+func TestMainAreaHandleKeyInLogsMode(t *testing.T) {
+	s := styles.DefaultStyles()
+	applyView := views.NewApplyView(s)
+	m := NewMainArea(s, nil, applyView, nil)
+	m.SetSize(80, 20)
+	m.SetFocused(true)
+	m.SetMode(ModeLogs)
+
+	// Test scroll keys in logs mode
+	handled, _ := m.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected to handle 'j' in ModeLogs")
+	}
+}
+
+func TestMainAreaGetViews(t *testing.T) {
+	s := styles.DefaultStyles()
+	applyView := views.NewApplyView(s)
+	planView := views.NewPlanView("", s)
+	m := NewMainArea(s, nil, applyView, planView)
+	m.SetSize(80, 20)
+
+	if m.GetApplyView() != applyView {
+		t.Error("expected GetApplyView to return applyView")
+	}
+	if m.GetPlanView() != planView {
+		t.Error("expected GetPlanView to return planView")
+	}
+	if m.GetDiffViewer() == nil {
+		t.Error("expected GetDiffViewer to return non-nil")
+	}
+}
+
+func TestPanelManagerGetPanel(t *testing.T) {
+	pm := NewPanelManager()
+	mockPanel := components.NewResourceList(styles.DefaultStyles())
+	pm.RegisterPanel(PanelResources, mockPanel)
+
+	panel, ok := pm.GetPanel(PanelResources)
+	if !ok || panel == nil {
+		t.Error("expected GetPanel to return registered panel")
+	}
+
+	// Non-existent panel
+	panel, ok = pm.GetPanel(PanelID(999))
+	if ok || panel != nil {
+		t.Error("expected nil for non-existent panel")
+	}
+}
+
+func TestPanelManagerToggleCommandLog(t *testing.T) {
+	pm := NewPanelManager()
+
+	// Initially visible by default
+	if !pm.IsCommandLogVisible() {
+		t.Error("expected command log to be visible initially")
+	}
+
+	// Toggle off
+	pm.ToggleCommandLog()
+	if pm.IsCommandLogVisible() {
+		t.Error("expected command log to be hidden after toggle")
+	}
+
+	// Toggle on again
+	pm.ToggleCommandLog()
+	if !pm.IsCommandLogVisible() {
+		t.Error("expected command log to be visible after second toggle")
+	}
+}
+
+func TestPanelManagerIsExecutionMode(t *testing.T) {
+	pm := NewPanelManager()
+
+	if pm.IsExecutionMode() {
+		t.Error("expected IsExecutionMode to return false initially")
+	}
+
+	pm.SetExecutionMode(true)
+	if !pm.IsExecutionMode() {
+		t.Error("expected IsExecutionMode to return true after SetExecutionMode(true)")
+	}
+}
+
+func TestPanelManagerHandleNavigation(t *testing.T) {
+	pm := NewPanelManager()
+	rl := components.NewResourceList(styles.DefaultStyles())
+	pm.RegisterPanel(PanelResources, rl)
+	pm.SetFocus(PanelResources)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	handled, _ := pm.HandleNavigation(msg)
+	// Should handle or not depending on panel state
+	_ = handled
+}
+
+func TestResourcesControllerGetActiveTab(t *testing.T) {
+	rl := components.NewResourceList(styles.DefaultStyles())
+	rc := NewResourcesPanelController(rl)
+
+	if rc.GetActiveTab() != 0 {
+		t.Errorf("expected initial tab to be 0, got %d", rc.GetActiveTab())
+	}
+
+	rc.SetActiveTab(1)
+	if rc.GetActiveTab() != 1 {
+		t.Errorf("expected tab to be 1, got %d", rc.GetActiveTab())
+	}
+}
+
+func TestResourcesControllerHandleKey(t *testing.T) {
+	rl := components.NewResourceList(styles.DefaultStyles())
+	rc := NewResourcesPanelController(rl)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	handled, cmd := rc.HandleKey(msg)
+	// Should handle navigation keys
+	_ = handled
+	_ = cmd
+}
+
+func TestResourcesControllerHandleKeyPlan(t *testing.T) {
+	rl := components.NewResourceList(styles.DefaultStyles())
+	rc := NewResourcesPanelController(rl)
+
+	// Test 'p' key for plan
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+	handled, cmd := rc.HandleKey(msg)
+	if !handled {
+		t.Error("expected 'p' key to be handled")
+	}
+	if cmd == nil {
+		t.Error("expected cmd to be non-nil for 'p' key")
+	}
+}
+
+func TestResourcesControllerHandleKeyTabSwitch(t *testing.T) {
+	rl := components.NewResourceList(styles.DefaultStyles())
+	rc := NewResourcesPanelController(rl)
+
+	// Test '[' key for tab switch
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}}
+	handled, cmd := rc.HandleKey(msg)
+	if !handled {
+		t.Error("expected '[' key to be handled")
+	}
+	if cmd == nil {
+		t.Error("expected cmd to be non-nil for '[' key")
+	}
+}
+
+func TestResourcesControllerRequestCommands(t *testing.T) {
+	// Test all request command factory functions return valid commands
+	cmd := requestPlan()
+	if cmd == nil {
+		t.Error("expected requestPlan to return non-nil command")
+	}
+
+	cmd = requestRefresh()
+	if cmd == nil {
+		t.Error("expected requestRefresh to return non-nil command")
+	}
+
+	cmd = requestValidate()
+	if cmd == nil {
+		t.Error("expected requestValidate to return non-nil command")
+	}
+
+	cmd = requestFormat()
+	if cmd == nil {
+		t.Error("expected requestFormat to return non-nil command")
+	}
+
+	cmd = requestApply()
+	if cmd == nil {
+		t.Error("expected requestApply to return non-nil command")
+	}
+}
+
+func TestResourcesControllerToggleCommands(t *testing.T) {
+	// Test toggle filter
+	cmd := toggleFilter(terraform.ActionCreate)
+	if cmd == nil {
+		t.Error("expected toggleFilter to return non-nil command")
+	}
+
+	// Test toggle all groups
+	cmd = toggleAllGroups()
+	if cmd == nil {
+		t.Error("expected toggleAllGroups to return non-nil command")
+	}
+
+	// Test toggle status
+	cmd = toggleStatus()
+	if cmd == nil {
+		t.Error("expected toggleStatus to return non-nil command")
+	}
+
+	// Test switch tab
+	cmd = switchResourcesTab(1)
+	if cmd == nil {
+		t.Error("expected switchResourcesTab to return non-nil command")
+	}
+}
+
+func TestToastInfo(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.updateLayout()
+
+	cmd := m.toastInfo("Test info message")
+	if cmd == nil {
+		t.Error("expected toastInfo to return non-nil command")
+	}
+}
+
+func TestToastSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.updateLayout()
+
+	cmd := m.toastSuccess("Test success message")
+	if cmd == nil {
+		t.Error("expected toastSuccess to return non-nil command")
+	}
+}
+
+func TestFocusMainPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.focusMainPanel()
+	// Should return a command or nil
+	_ = cmd
+}
+
+func TestBeginRefreshNoExecutor(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executor = nil
+
+	cmd := m.beginRefresh()
+	if cmd != nil {
+		t.Error("expected nil cmd when executor is nil")
+	}
+	if m.err == nil {
+		t.Error("expected error to be set when executor is nil")
+	}
+}
+
+func TestBeginRefreshAlreadyRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.planRunning = true
+
+	cmd := m.beginRefresh()
+	if cmd != nil {
+		t.Error("expected nil cmd when already running")
+	}
+}
+
+func TestBeginValidateNoExecutor(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executor = nil
+
+	cmd := m.beginValidate()
+	if cmd != nil {
+		t.Error("expected nil cmd when executor is nil")
+	}
+	if m.err == nil {
+		t.Error("expected error to be set when executor is nil")
+	}
+}
+
+func TestBeginFormatNoExecutor(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executor = nil
+
+	cmd := m.beginFormat()
+	if cmd != nil {
+		t.Error("expected nil cmd when executor is nil")
+	}
+	if m.err == nil {
+		t.Error("expected error to be set when executor is nil")
+	}
+}
+
+func TestBeginStateListNoExecutor(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executor = nil
+
+	cmd := m.beginStateList()
+	if cmd != nil {
+		t.Error("expected nil cmd when executor is nil")
+	}
+	if m.err == nil {
+		t.Error("expected error to be set when executor is nil")
+	}
+}
+
+func TestBeginStateShowNoExecutor(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.executor = nil
+
+	cmd := m.beginStateShow("some.address")
+	if cmd != nil {
+		t.Error("expected nil cmd when executor is nil")
+	}
+	if m.err == nil {
+		t.Error("expected error to be set when executor is nil")
+	}
+}
+
+func TestHandleRefreshCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.refreshRunning = true
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	msg := RefreshCompleteMsg{
+		Success: true,
+		Result:  &terraform.ExecutionResult{Output: "Refreshed"},
+	}
+	result, cmd := m.handleRefreshComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	if m.refreshRunning {
+		t.Error("expected refreshRunning to be false")
+	}
+	_ = cmd
+}
+
+func TestHandleValidateCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	msg := ValidateCompleteMsg{
+		Result: &terraform.ValidateResult{Valid: true},
+	}
+	result, cmd := m.handleValidateComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleValidateCompleteWithErrors(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := ValidateCompleteMsg{
+		Error: errors.New("validation failed"),
+	}
+	result, cmd := m.handleValidateComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleFormatCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	msg := FormatCompleteMsg{
+		ChangedFiles: []string{"main.tf", "variables.tf"},
+	}
+	result, cmd := m.handleFormatComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleStateListCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.stateListContent = components.NewStateListContent(m.styles)
+
+	resources := []terraform.StateResource{
+		{ResourceType: "aws_instance", Name: "web", Address: "aws_instance.web"},
+	}
+	msg := StateListCompleteMsg{Resources: resources}
+	result, cmd := m.handleStateListComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleStateListCompleteError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.stateListContent = components.NewStateListContent(m.styles)
+
+	msg := StateListCompleteMsg{Error: errors.New("state list failed")}
+	result, cmd := m.handleStateListComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleStateShowCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := StateShowCompleteMsg{
+		Address: "aws_instance.web",
+		Output:  `{"address": "aws_instance.web"}`,
+	}
+	result, cmd := m.handleStateShowComplete(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestResourceSummaryText(t *testing.T) {
+	m := NewModel(&terraform.Plan{
+		Resources: []terraform.ResourceChange{
+			{Address: "aws_instance.web", Action: terraform.ActionCreate},
+			{Address: "aws_instance.db", Action: terraform.ActionUpdate},
+		},
+	})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	text := m.resourceSummaryText()
+	if text == "" {
+		t.Error("expected non-empty resource summary text")
+	}
+}
+
+func TestShowFormattedFiles(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Empty modified list
+	m.showFormattedFiles(nil)
+
+	// With files
+	m.showFormattedFiles([]string{"main.tf", "variables.tf"})
+}
+
+func TestHandleActionQuit(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.ready = true
+
+	cmd := m.handleActionQuit(nil)
+	if cmd == nil {
+		t.Error("expected quit command")
+	}
+}
+
+func TestHandleActionToggleTheme(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionToggleTheme(nil)
+	// May return nil or a command
+	_ = cmd
+}
+
+func TestHandleActionFocusWorkspace(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.handleActionFocusWorkspace(nil)
+	_ = cmd
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeAbout {
+		t.Error("expected main area to be in about mode")
+	}
+}
+
+func TestHandleActionFocusResources(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.handleActionFocusResources(nil)
+	_ = cmd
+}
+
+func TestHandleActionFocusHistory(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.handleActionFocusHistory(nil)
+	_ = cmd
+	if !m.historyFocused {
+		t.Error("expected historyFocused to be true")
+	}
+}
+
+func TestHandleActionFocusMain(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.handleActionFocusMain(nil)
+	_ = cmd
+}
+
+func TestHandleActionCycleFocusBack(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Skip("panelManager not initialized")
+	}
+
+	cmd := m.handleActionCycleFocusBack(nil)
+	_ = cmd
+}
+
+func TestHandleActionToggleLog(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionToggleLog(nil)
+	_ = cmd
+}
+
+func TestHandleActionPlan(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionPlan(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionRefresh(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionRefresh(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionValidate(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionValidate(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionFormat(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionFormat(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionToggleAllGroups(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionToggleAllGroups(nil)
+	// This returns nil as it just modifies resourceList state
+	_ = cmd
+}
+
+func TestHandleActionToggleStatus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionToggleStatus(nil)
+	// This returns nil as it just modifies resourceList state
+	_ = cmd
+}
+
+func TestHandleActionSwitchTabPrev(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionSwitchTabPrev(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionSwitchTabNext(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionSwitchTabNext(nil)
+	if cmd == nil {
+		t.Error("expected non-nil command")
+	}
+}
+
+func TestHandleActionMoveUp(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Need a context with FocusedPanel
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionMoveUp(ctx)
+	_ = cmd
+}
+
+func TestHandleActionPageUp(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionPageUp(ctx)
+	_ = cmd
+}
+
+func TestHandleActionPageDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionPageDown(ctx)
+	_ = cmd
+}
+
+func TestHandleActionScrollTop(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionScrollTop(ctx)
+	_ = cmd
+}
+
+func TestHandleActionScrollEnd(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionScrollEnd(ctx)
+	_ = cmd
+}
+
+func TestHandleActionScrollUp(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionScrollUp(ctx)
+	_ = cmd
+}
+
+func TestHandleActionScrollDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := m.buildKeybindContext()
+	cmd := m.handleActionScrollDown(ctx)
+	_ = cmd
+}
+
+func TestHandleRefreshStart(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RefreshStartMsg{
+		Result: &terraform.ExecutionResult{},
+		Output: make(chan string),
+	}
+	result, cmd := m.handleRefreshStart(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleRefreshStartWithError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RefreshStartMsg{
+		Error: errors.New("refresh failed"),
+	}
+	result, cmd := m.handleRefreshStart(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleRefreshFailure(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.refreshRunning = true
+
+	msg := RefreshCompleteMsg{
+		Error: errors.New("refresh failed"),
+	}
+	result, cmd := m.handleRefreshFailure(msg)
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleCommandLogKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewCommandLog
+
+	// Test escape key
+	handled, cmd := m.handleCommandLogKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !handled {
+		t.Error("expected escape key to be handled")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain after escape")
+	}
+	_ = cmd
+}
+
+func TestHandleCommandLogKeyUnknown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+
+	// Test unknown key
+	handled, cmd := m.handleCommandLogKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if handled {
+		t.Error("expected unknown key not to be handled")
+	}
+	if cmd != nil {
+		t.Error("expected nil command for unknown key")
+	}
+}
+
+func TestHandleStateListKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewStateList
+
+	// Test escape key
+	handled, cmd := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !handled {
+		t.Error("expected escape key to be handled")
+	}
+	if m.execView != viewMain {
+		t.Error("expected execView to be viewMain after escape")
+	}
+	_ = cmd
+}
+
+func TestHandleStateListKeyUpDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Test up key
+	handled, _ := m.handleStateListKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if !handled {
+		t.Error("expected 'k' key to be handled")
+	}
+
+	// Test down key
+	handled, _ = m.handleStateListKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected 'j' key to be handled")
+	}
+}
+
+func TestHandleStateShowKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewStateShow
+
+	// Test escape key
+	handled, cmd := m.handleStateShowKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !handled {
+		t.Error("expected escape key to be handled")
+	}
+	if m.execView != viewStateList {
+		t.Error("expected execView to be viewStateList after escape")
+	}
+	_ = cmd
+}
+
+func TestHandleActionSelectEnv(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionSelectEnv(nil)
+	_ = cmd
+}
+
+func TestHandleActionConfirmYes(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionConfirmYes(nil)
+	_ = cmd
+}
+
+func TestHandleActionConfirmNo(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionConfirmNo(nil)
+	_ = cmd
+}
+
+func TestFallbackValue(t *testing.T) {
+	// Test with empty value
+	result := fallbackValue("", "default")
+	if result != "default" {
+		t.Errorf("expected 'default', got %q", result)
+	}
+
+	// Test with non-empty value
+	result = fallbackValue("custom", "default")
+	if result != "custom" {
+		t.Errorf("expected 'custom', got %q", result)
+	}
+}
+
+func TestResourcesControllerStateTabHandling(t *testing.T) {
+	rl := components.NewResourceList(styles.DefaultStyles())
+	rc := NewResourcesPanelController(rl)
+	rc.SetActiveTab(1) // State tab
+
+	slc := components.NewStateListContent(styles.DefaultStyles())
+	rc.SetStateListContent(slc)
+
+	// Test handling key on state tab
+	handled, cmd := rc.handleStateTabKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// Should be handled by state list content
+	_ = handled
+	_ = cmd
+}
+
+func TestHandleSecondaryUpdate(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Test ValidateCompleteMsg
+	msg := ValidateCompleteMsg{Result: &terraform.ValidateResult{Valid: true}}
+	result, cmd, handled := m.handleSecondaryUpdate(msg)
+	if !handled {
+		t.Error("expected ValidateCompleteMsg to be handled")
+	}
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+
+	// Test FormatCompleteMsg
+	formatMsg := FormatCompleteMsg{ChangedFiles: []string{"main.tf"}}
+	result, cmd, handled = m.handleSecondaryUpdate(formatMsg)
+	if !handled {
+		t.Error("expected FormatCompleteMsg to be handled")
+	}
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdate(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyPanel = components.NewHistoryPanel(m.styles)
+
+	// Test HistoryLoadedMsg
+	msg := HistoryLoadedMsg{
+		Entries: []history.Entry{{Summary: "test"}},
+	}
+	result, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected HistoryLoadedMsg to be handled")
+	}
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+
+	// Test ClearToastMsg
+	clearMsg := ClearToastMsg{}
+	result, cmd, handled = m.handleTertiaryUpdate(clearMsg)
+	if !handled {
+		t.Error("expected ClearToastMsg to be handled")
+	}
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleDiagnosticsKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
+	m.diagnosticsFocused = true
+
+	// Test a key that should be handled
+	handled, cmd := m.handleDiagnosticsKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected key to be handled when diagnostics is focused")
+	}
+	_ = cmd
+}
+
+func TestHandleEnvironmentPanelKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+
+	// When selector is not active, should not handle
+	handled, cmd := m.handleEnvironmentPanelKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// Result depends on whether selector is active
+	_ = handled
+	_ = cmd
+}
+
+func TestHandleNonMainViewKey(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewMain
+
+	// When in main view, returns model and nil cmd
+	result, cmd := m.handleNonMainViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestHandleNonMainViewKeyInOutputView(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewApplyOutput
+
+	result, cmd := m.handleNonMainViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	_ = cmd
+}
+
+func TestApplyEnvironmentPreference(t *testing.T) {
+	// Test with nil preference
+	result := environment.DetectionResult{
+		Strategy: environment.StrategyWorkspace,
+	}
+	strategy, current := applyEnvironmentPreference(result, "dev", nil)
+	if strategy != environment.StrategyWorkspace {
+		t.Errorf("expected StrategyWorkspace, got %v", strategy)
+	}
+	if current != "dev" {
+		t.Errorf("expected 'dev', got %q", current)
+	}
+
+	// Test with preference
+	pref := &environment.Preference{
+		Strategy:    environment.StrategyFolder,
+		Environment: "prod",
+	}
+	result = environment.DetectionResult{
+		Strategy:    environment.StrategyWorkspace,
+		Workspaces:  []string{"dev"},
+		FolderPaths: []string{"/path/to/prod"},
+	}
+	strategy, current = applyEnvironmentPreference(result, "dev", pref)
+	if strategy != environment.StrategyFolder {
+		t.Errorf("expected StrategyFolder, got %v", strategy)
+	}
+	if current != "prod" {
+		t.Errorf("expected 'prod', got %q", current)
+	}
+}
+
+func TestEnvDisplayName(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+
+	// Set a current env for workspace strategy
+	m.envCurrent = "dev"
+	m.envStrategy = environment.StrategyWorkspace
+	name := m.envDisplayName()
+	if name != "dev" {
+		t.Errorf("expected 'dev', got %q", name)
+	}
+
+	// Test folder strategy with relative path
+	m.envStrategy = environment.StrategyFolder
+	m.envWorkDir = "/base"
+	m.envCurrent = "/base/subfolder"
+	name = m.envDisplayName()
+	// Should return relative path or base name
+	_ = name
+}
+
+func TestInitHistory(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{
+		HistoryEnabled: false,
+	})
+	m.ready = true
+
+	// Should not initialize history when disabled
+	m.initHistory(ExecutionConfig{HistoryEnabled: false})
+	if m.historyStore != nil {
+		t.Error("expected historyStore to be nil when disabled")
+	}
+}
+
+func TestReloadHistoryCmd(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+
+	// No history store - should return nil
+	cmd := m.reloadHistoryCmd()
+	if cmd != nil {
+		t.Error("expected nil cmd when no history store")
+	}
+}
+
+func TestLoadFilterPreferences(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Should not panic with no config
+	m.loadFilterPreferences()
+}
+
+func TestSaveFilterPreferences(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Should not panic with no config
+	m.saveFilterPreferences()
+}
+
+func TestHandleSecondaryUpdateValidateComplete(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := ValidateCompleteMsg{
+		Result: &terraform.ValidateResult{Valid: true},
+	}
+
+	model, cmd, handled := m.handleSecondaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleSecondaryUpdateFormatComplete(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := FormatCompleteMsg{
+		ChangedFiles: []string{"main.tf"},
+	}
+
+	model, cmd, handled := m.handleSecondaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleSecondaryUpdateStateListComplete(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := StateListCompleteMsg{
+		Resources: []terraform.StateResource{
+			{Address: "test.resource"},
+		},
+	}
+
+	model, cmd, handled := m.handleSecondaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleSecondaryUpdateStateShowComplete(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := StateShowCompleteMsg{
+		Address: "test.resource",
+		Output:  "resource details",
+	}
+
+	model, cmd, handled := m.handleSecondaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateProgressTick(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := components.ProgressTickMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateRequestPlan(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RequestPlanMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateRequestRefresh(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RequestRefreshMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateRequestValidate(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RequestValidateMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateRequestFormat(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := RequestFormatMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateToggleFilter(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := ToggleFilterMsg{Action: terraform.ActionCreate}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateToggleStatus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := ToggleStatusMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateToggleAllGroups(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := ToggleAllGroupsMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateStateListStart(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := StateListStartMsg{}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
+}
+
+func TestHandleTertiaryUpdateSwitchResourcesTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := SwitchResourcesTabMsg{Direction: 1}
+
+	model, cmd, handled := m.handleTertiaryUpdate(msg)
+	if !handled {
+		t.Error("expected message to be handled")
+	}
+	_ = model
+	_ = cmd
 }

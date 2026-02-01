@@ -1005,3 +1005,112 @@ func TestDiffViewerSetStyles(t *testing.T) {
 		t.Error("expected styles to be updated")
 	}
 }
+
+func TestDiffViewerScrollUp(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 10)
+	viewer.scrollOffset = 5
+
+	viewer.ScrollUp(2)
+	if viewer.scrollOffset != 3 {
+		t.Errorf("expected scrollOffset=3, got %d", viewer.scrollOffset)
+	}
+
+	// Scroll past top
+	viewer.ScrollUp(10)
+	if viewer.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset=0 after scrolling past top, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerScrollDown(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 10)
+	viewer.totalLines = 30
+	viewer.scrollOffset = 0
+
+	viewer.ScrollDown(5)
+	if viewer.scrollOffset != 5 {
+		t.Errorf("expected scrollOffset=5, got %d", viewer.scrollOffset)
+	}
+
+	// Scroll past maximum (totalLines - height = 20)
+	viewer.ScrollDown(30)
+	if viewer.scrollOffset != 20 {
+		t.Errorf("expected scrollOffset=20 (max), got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerScrollDownSmallContent(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 20)
+	viewer.totalLines = 5 // Less than height
+
+	viewer.ScrollDown(10)
+	// maxOffset should be 0 since content is smaller than viewport
+	if viewer.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset=0 for small content, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerScrollToTop(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.scrollOffset = 15
+
+	viewer.ScrollToTop()
+	if viewer.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset=0, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerScrollToBottom(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 10)
+	viewer.totalLines = 30
+
+	viewer.ScrollToBottom()
+	// maxOffset = 30 - 10 = 20
+	if viewer.scrollOffset != 20 {
+		t.Errorf("expected scrollOffset=20, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerScrollToBottomSmallContent(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 20)
+	viewer.totalLines = 5 // Less than height
+
+	viewer.ScrollToBottom()
+	// maxOffset should be 0 since content is smaller than viewport
+	if viewer.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset=0 for small content, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerResetScroll(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.scrollOffset = 25
+
+	viewer.ResetScroll()
+	if viewer.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset=0, got %d", viewer.scrollOffset)
+	}
+}
+
+func TestDiffViewerGetScrollInfo(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(80, 15)
+	viewer.scrollOffset = 5
+	viewer.totalLines = 50
+
+	offset, total, visible := viewer.GetScrollInfo()
+	if offset != 5 {
+		t.Errorf("expected offset=5, got %d", offset)
+	}
+	if total != 50 {
+		t.Errorf("expected total=50, got %d", total)
+	}
+	if visible != 15 {
+		t.Errorf("expected visible=15, got %d", visible)
+	}
+}

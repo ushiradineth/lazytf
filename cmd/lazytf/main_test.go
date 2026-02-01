@@ -1091,3 +1091,105 @@ func testConfig() config.Config {
 		Presets: []config.EnvironmentPreset{},
 	}
 }
+
+func TestRunWithConfigWorkDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldRunner := programRunner
+	oldConfigPath := configPath
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		programRunner = oldRunner
+		configPath = oldConfigPath
+	})
+
+	testMu.Lock()
+	defer testMu.Unlock()
+
+	// Create temp dirs
+	tempDir := t.TempDir()
+	customWorkDir := filepath.Join(tempDir, "custom")
+	if err := os.MkdirAll(customWorkDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	// Create config with working_dir
+	configPath = filepath.Join(tempDir, "config.yaml")
+	configContent := `
+terraform:
+  working_dir: "` + customWorkDir + `"
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	planFile = ""
+	workDir = "." // Will be overridden by config
+	noHistory = true
+	themeName = ""
+
+	programRunner = func(_ tea.Model) error {
+		return nil
+	}
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunConfigLoadError(t *testing.T) {
+	oldConfigPath := configPath
+	t.Cleanup(func() {
+		configPath = oldConfigPath
+	})
+
+	testMu.Lock()
+	defer testMu.Unlock()
+
+	// Create an invalid config file
+	tempDir := t.TempDir()
+	configPath = filepath.Join(tempDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("invalid: [yaml: content"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	err := run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid config")
+	}
+	if !strings.Contains(err.Error(), "load config") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunExecutionModeStylesError(t *testing.T) {
+	oldPlanFile := planFile
+	oldTheme := themeName
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		themeName = oldTheme
+	})
+	useTempConfig(t)
+
+	planFile = ""
+	themeName = "nonexistent-theme"
+
+	err := run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid theme in execution mode")
+	}
+}

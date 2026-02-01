@@ -574,3 +574,186 @@ func TestGetOperationByIDNotFound(t *testing.T) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
+
+func TestRecordApplyNilStore(t *testing.T) {
+	var store *Store
+	err := store.RecordApply(Entry{})
+	if err != nil {
+		t.Errorf("expected nil error for nil store, got %v", err)
+	}
+}
+
+func TestRecordOperationNilStore(t *testing.T) {
+	var store *Store
+	err := store.RecordOperation(OperationEntry{})
+	if err != nil {
+		t.Errorf("expected nil error for nil store, got %v", err)
+	}
+}
+
+func TestGetByIDNilStore(t *testing.T) {
+	var store *Store
+	entry, err := store.GetByID(1)
+	if err != nil {
+		t.Errorf("expected no error for nil store, got %v", err)
+	}
+	// Should return empty entry
+	if entry.ID != 0 {
+		t.Errorf("expected empty entry for nil store")
+	}
+}
+
+func TestGetOperationByIDNilStore(t *testing.T) {
+	var store *Store
+	entry, err := store.GetOperationByID(1)
+	if err != nil {
+		t.Errorf("expected no error for nil store, got %v", err)
+	}
+	// Should return empty entry
+	if entry.ID != 0 {
+		t.Errorf("expected empty entry for nil store")
+	}
+}
+
+func TestRecordApplyWithError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	entry := Entry{
+		StartedAt:  time.Now(),
+		FinishedAt: time.Now(),
+		Duration:   time.Second,
+		Status:     StatusFailed,
+		Error:      "something went wrong",
+	}
+	if err := store.RecordApply(entry); err != nil {
+		t.Fatalf("record apply with error: %v", err)
+	}
+
+	entries, err := store.ListRecent(1)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Status != StatusFailed {
+		t.Errorf("expected status failed, got %s", entries[0].Status)
+	}
+}
+
+func TestRecordOperationWithFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	entry := OperationEntry{
+		StartedAt:  time.Now(),
+		FinishedAt: time.Now(),
+		Duration:   time.Second,
+		Action:     "apply",
+		Command:    "terraform apply",
+		ExitCode:   1,
+		Status:     StatusFailed,
+	}
+	if err := store.RecordOperation(entry); err != nil {
+		t.Fatalf("record operation: %v", err)
+	}
+
+	entries, err := store.QueryOperations(OperationFilter{Action: "apply", Limit: 1})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].ExitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", entries[0].ExitCode)
+	}
+}
+
+func TestWithCompressionThresholdZero(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path, WithCompressionThreshold(0))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+	// Zero should not change the default
+	if store.compressionThreshold != defaultCompressionThreshold {
+		t.Errorf("expected default threshold, got %d", store.compressionThreshold)
+	}
+}
+
+func TestQueryOperationsWithDateFilter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	now := time.Now()
+	// Record entries at different times
+	oldEntry := OperationEntry{
+		StartedAt:  now.Add(-48 * time.Hour),
+		FinishedAt: now.Add(-48 * time.Hour),
+		Duration:   time.Second,
+		Action:     "plan",
+		Status:     StatusSuccess,
+	}
+	newEntry := OperationEntry{
+		StartedAt:  now.Add(-1 * time.Hour),
+		FinishedAt: now.Add(-1 * time.Hour),
+		Duration:   time.Second,
+		Action:     "plan",
+		Status:     StatusSuccess,
+	}
+	if err := store.RecordOperation(oldEntry); err != nil {
+		t.Fatalf("record old: %v", err)
+	}
+	if err := store.RecordOperation(newEntry); err != nil {
+		t.Fatalf("record new: %v", err)
+	}
+
+	// Query only entries after 24 hours ago
+	entries, err := store.QueryOperations(OperationFilter{After: now.Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 recent entry, got %d", len(entries))
+	}
+
+	// Query only entries before 24 hours ago
+	entries, err = store.QueryOperations(OperationFilter{Before: now.Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 old entry, got %d", len(entries))
+	}
+}

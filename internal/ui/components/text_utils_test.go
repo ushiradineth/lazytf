@@ -363,3 +363,49 @@ func containsVisibleText(styled, text string) bool {
 	}
 	return visible == text || len(visible) >= len(text)
 }
+
+func TestPadLineWithStyle(t *testing.T) {
+	paddingStyle := lipgloss.NewStyle().Background(lipgloss.Color("#333"))
+
+	tests := []struct {
+		name        string
+		input       string
+		width       int
+		wantVisible int
+	}{
+		{
+			name:        "needs padding",
+			input:       "hello",
+			width:       10,
+			wantVisible: 10,
+		},
+		{
+			name:        "exact width",
+			input:       "hello",
+			width:       5,
+			wantVisible: 5,
+		},
+		{
+			name:        "needs truncation",
+			input:       "hello world",
+			width:       5,
+			wantVisible: 5,
+		},
+		{
+			name:        "styled input needs padding",
+			input:       "\x1b[1mhi\x1b[0m",
+			width:       10,
+			wantVisible: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PadLineWithStyle(tt.input, tt.width, paddingStyle)
+			visible := lipgloss.Width(result)
+			if visible != tt.wantVisible {
+				t.Errorf("PadLineWithStyle visible width = %d, want %d", visible, tt.wantVisible)
+			}
+		})
+	}
+}
