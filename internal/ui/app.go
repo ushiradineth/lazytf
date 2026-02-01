@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1076,4 +1078,27 @@ func (m *Model) applyViewOverlays(view string) string {
 		view = m.toast.Overlay(view)
 	}
 	return view
+}
+
+// Cleanup performs graceful cleanup of model resources.
+func (m *Model) Cleanup() {
+	m.cancelExecution()
+
+	if m.historyStore != nil {
+		_ = m.historyStore.Close()
+		m.historyStore = nil
+	}
+}
+
+// CleanupTempFiles removes the .lazytf/tmp directory.
+func (m *Model) CleanupTempFiles() {
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	tmpDir := filepath.Join(workDir, ".lazytf", "tmp")
+	_ = os.RemoveAll(tmpDir)
 }

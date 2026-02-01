@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -31,23 +33,25 @@ type folderManager interface {
 
 type teaProgram interface {
 	Run() (tea.Model, error)
+	Send(msg tea.Msg)
 }
 
 var (
-	planFile            string
-	mouseEnabled        bool
-	tfFlags             string
-	workDir             string
-	envName             string
-	presetName          string
-	workspaceName       string
-	folderPath          string
-	configPath          string
-	themeName           string
-	noHistory           bool
-	programRunner       = runProgram
-	executorFactory     = terraform.NewExecutor
-	newWorkspaceManager = func(workDir string) (workspaceManager, error) {
+	planFile              string
+	mouseEnabled          bool
+	tfFlags               string
+	workDir               string
+	envName               string
+	presetName            string
+	workspaceName         string
+	folderPath            string
+	configPath            string
+	themeName             string
+	noHistory             bool
+	programRunner         = runProgram
+	executionModeRunner   = runProgramWithCleanup
+	executorFactory       = terraform.NewExecutor
+	newWorkspaceManager   = func(workDir string) (workspaceManager, error) {
 		return environment.NewWorkspaceManager(workDir)
 	}
 	newFolderManager = func(workDir string) (folderManager, error) {
@@ -135,6 +139,9 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
+	// Clean temp files from previous runs
+	cleanupTempFilesOnStartup()
+
 	flags, err := prepareExecutionFlags(cfg, overrideFlags)
 	if err != nil {
 		return err
@@ -155,6 +162,13 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 	if err != nil {
 		return err
 	}
+	// Ensure history store is closed if we fail before reaching executionModeRunner
+	var runErr error
+	defer func() {
+		if runErr != nil && historyStore != nil {
+			_ = historyStore.Close()
+		}
+	}()
 
 	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
 		Executor:       exec,
@@ -167,7 +181,8 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 		Config:         cfg,
 		ConfigManager:  configManager,
 	}, appStyles)
-	return programRunner(model)
+	runErr = executionModeRunner(model, historyStore)
+	return runErr
 }
 
 func prepareExecutionFlags(cfg *config.Config, overrideFlags []string) ([]string, error) {
@@ -330,6 +345,67 @@ func runProgram(model tea.Model) error {
 	}
 
 	return nil
+}
+
+func runProgramWithCleanup(model tea.Model, historyStore *history.Store) error {
+	options := []tea.ProgramOption{
+		tea.WithAltScreen(),
+	}
+	if mouseEnabled {
+		options = append(options, tea.WithMouseCellMotion())
+	}
+
+	p := newProgram(model, options...)
+
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Run program in goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := p.Run()
+		errChan <- err
+	}()
+
+	// Wait for completion or signal
+	var runErr error
+	select {
+	case runErr = <-errChan:
+		// Normal exit
+	case sig := <-sigChan:
+		// Signal received - quit program
+		p.Send(tea.Quit())
+		<-errChan // Wait for program to finish
+		runErr = fmt.Errorf("interrupted by signal: %v", sig)
+	}
+
+	// Cleanup phase - always runs
+	signal.Stop(sigChan)
+	close(sigChan)
+
+	if uiModel, ok := model.(*ui.Model); ok {
+		uiModel.Cleanup()
+	}
+
+	// Close history store (backup - Cleanup should have done this)
+	if historyStore != nil {
+		_ = historyStore.Close()
+	}
+
+	if runErr != nil && !strings.Contains(runErr.Error(), "interrupted") {
+		return fmt.Errorf("error running TUI: %w", runErr)
+	}
+	return nil
+}
+
+func cleanupTempFilesOnStartup() {
+	dir := workDir
+	if strings.TrimSpace(dir) == "" {
+		dir = "."
+	}
+	tmpDir := filepath.Join(dir, ".lazytf", "tmp")
+	_ = os.RemoveAll(tmpDir)
 }
 
 func splitFlags(flags string) []string {

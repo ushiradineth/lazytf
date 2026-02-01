@@ -450,7 +450,8 @@ func newExecutionResult() (*ExecutionResult, chan string, time.Time) {
 	result := &ExecutionResult{
 		done: make(chan struct{}),
 	}
-	outputChan := make(chan string, 100)
+	// Large buffer to prevent blocking when terraform outputs many lines quickly
+	outputChan := make(chan string, 1000)
 	return result, outputChan, time.Now()
 }
 

@@ -280,7 +280,8 @@ func (s *OperationState) ParseApplyLine(line string) {
 	// "Still creating..." lines don't change state, resource is already in progress
 }
 
-// markLastInProgressAsErrored marks the current in-progress resource as errored.
+// markLastInProgressAsErrored marks all in-progress resources as errored.
+// This is called when an error is detected in the apply output.
 func (s *OperationState) markLastInProgressAsErrored() {
 	if s == nil {
 		return
@@ -288,22 +289,20 @@ func (s *OperationState) markLastInProgressAsErrored() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find any in-progress resource and mark it as errored
+	now := time.Now()
+	// Mark all in-progress resources as errored
 	for _, op := range s.resources {
 		if op.Status == StatusInProgress {
 			op.Status = StatusErrored
-			op.EndTime = time.Now()
+			op.EndTime = now
 			if !op.StartTime.IsZero() {
 				op.ElapsedTime = op.EndTime.Sub(op.StartTime)
 			}
 			s.completed++
-			if s.currentAddress == op.Address {
-				s.currentAddress = ""
-				s.currentAction = ActionNoOp
-			}
-			return
 		}
 	}
+	s.currentAddress = ""
+	s.currentAction = ActionNoOp
 }
 
 // parseActionFromVerb converts terraform output verbs to ActionType.

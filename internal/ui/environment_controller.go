@@ -253,7 +253,7 @@ func (m *Model) envDisplayName() string {
 }
 
 func (m *Model) applyEnvironmentSelection(option environment.Environment) error {
-	if m.planRunning || m.applyRunning {
+	if m.planRunning || m.applyRunning || m.refreshRunning {
 		return errors.New("cannot change environment while a command is running")
 	}
 	switch option.Strategy {

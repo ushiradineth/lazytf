@@ -122,6 +122,10 @@ func Open(path string, opts ...StoreOption) (*Store, error) {
 		return nil, fmt.Errorf("open history db: %w", err)
 	}
 
+	// SQLite is single-writer, configure connection pool appropriately
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	store := &Store{
 		db:                   db,
 		compressionThreshold: defaultCompressionThreshold,

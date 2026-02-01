@@ -55,6 +55,8 @@ func (m *Model) beginPlan() tea.Cmd {
 	}
 	m.planRunFlags = planFlags
 	m.planFilePath = planFilePath
+	// Cancel any previous execution before starting new one
+	m.cancelExecution()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.planRunning = true
@@ -115,6 +117,8 @@ func (m *Model) beginApply() tea.Cmd {
 		m.err = err
 		return nil
 	}
+	// Cancel any previous execution before starting new one
+	m.cancelExecution()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.applyRunning = true
@@ -185,6 +189,8 @@ func (m *Model) beginRefresh() tea.Cmd {
 		m.err = err
 		return nil
 	}
+	// Cancel any previous execution before starting new one
+	m.cancelExecution()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 	m.refreshRunning = true
@@ -785,6 +791,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 		m.planFilePath = ""
 		m.planRunFlags = nil
+		// Clear operation state on plan failure to avoid stale resource states
+		if m.operationState != nil {
+			m.operationState.InitializeFromPlan(nil)
+		}
 		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
 		// Route logs to command log panel
 		if m.commandLogPanel != nil {
@@ -976,6 +986,10 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 }
 
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
+	// Clear plan-related state on apply failure
+	m.planFilePath = ""
+	m.planRunFlags = nil
+
 	// Set full output to applyView so [0] Operation Logs shows everything
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplyFailed)

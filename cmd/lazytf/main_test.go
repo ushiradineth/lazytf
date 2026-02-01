@@ -15,6 +15,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
+	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
@@ -84,11 +85,13 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	oldFlags := tfFlags
 	oldWorkDir := workDir
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		tfFlags = oldFlags
 		workDir = oldWorkDir
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 	})
 	useTempConfig(t)
 
@@ -107,7 +110,7 @@ func TestRun_ExecuteModeNoPlanFile(t *testing.T) {
 	planFile = "" // Ensure execution mode (no plan file)
 	tfFlags = ""
 
-	programRunner = func(_ tea.Model) error {
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		return nil
 	}
 
@@ -149,11 +152,13 @@ func TestRun_ExecuteModeWorkdirResolution(t *testing.T) {
 	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	oldFactory := executorFactory
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 		executorFactory = oldFactory
 	})
 	useTempConfig(t)
@@ -183,7 +188,7 @@ func TestRun_ExecuteModeWorkdirResolution(t *testing.T) {
 		captured = exec.WorkDir()
 		return exec, nil
 	}
-	programRunner = func(_ tea.Model) error {
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		return nil
 	}
 
@@ -534,6 +539,8 @@ type fakeTeaProgram struct {
 func (f fakeTeaProgram) Run() (tea.Model, error) {
 	return f.model, f.err
 }
+
+func (fakeTeaProgram) Send(_ tea.Msg) {}
 
 type fakeModel struct{}
 
@@ -1002,12 +1009,14 @@ func TestRunWithProjectOverride(t *testing.T) {
 	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	oldTheme := themeName
 	oldPreset := presetName
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 		themeName = oldTheme
 		presetName = oldPreset
 	})
@@ -1044,7 +1053,7 @@ presets:
 	planFile = "" // Ensure execution mode
 	themeName = ""
 	presetName = ""
-	programRunner = func(_ tea.Model) error {
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		return nil
 	}
 
@@ -1100,11 +1109,13 @@ func TestRunWithConfigWorkDir(t *testing.T) {
 	oldPlanFile := planFile
 	oldWorkDir := workDir
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	oldConfigPath := configPath
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		workDir = oldWorkDir
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 		configPath = oldConfigPath
 	})
 
@@ -1142,7 +1153,7 @@ terraform:
 	noHistory = true
 	themeName = ""
 
-	programRunner = func(_ tea.Model) error {
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		return nil
 	}
 
