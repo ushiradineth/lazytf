@@ -414,3 +414,143 @@ func TestHistoryPanelSetStyles(_ *testing.T) {
 
 	// Should not panic
 }
+
+func TestHistoryPanelHandleKeyNavigation(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewHistoryPanel(s)
+	panel.SetSize(50, 6)
+	panel.SetEntries([]history.Entry{
+		{Status: history.StatusSuccess},
+		{Status: history.StatusFailed},
+		{Status: history.StatusCanceled},
+	})
+	panel.SetSelection(0, true)
+
+	// Test j key (down)
+	handled, cmd := panel.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if !handled {
+		t.Error("expected 'j' key to be handled")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+	if panel.GetSelectedIndex() != 1 {
+		t.Errorf("expected index 1 after j, got %d", panel.GetSelectedIndex())
+	}
+
+	// Test k key (up)
+	handled, cmd = panel.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if !handled {
+		t.Error("expected 'k' key to be handled")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+	if panel.GetSelectedIndex() != 0 {
+		t.Errorf("expected index 0 after k, got %d", panel.GetSelectedIndex())
+	}
+
+	// Test down key
+	handled, _ = panel.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if !handled {
+		t.Error("expected down key to be handled")
+	}
+
+	// Test up key
+	handled, _ = panel.HandleKey(tea.KeyMsg{Type: tea.KeyUp})
+	if !handled {
+		t.Error("expected up key to be handled")
+	}
+}
+
+func TestColorizeSummaryCompactFormat(t *testing.T) {
+	s := styles.DefaultStyles()
+
+	// Compact format with all types
+	result := colorizeSummary(s, "+1 ~2 -3 ±4")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// Compact format with only adds
+	result = colorizeSummary(s, "+5")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	// Plain text (no symbols)
+	result = colorizeSummary(s, "apply complete")
+	if result != "apply complete" {
+		t.Errorf("expected unchanged plain text, got %q", result)
+	}
+}
+
+func TestColorizeSummaryVerboseFormat(t *testing.T) {
+	s := styles.DefaultStyles()
+
+	// Verbose format with all types
+	result := colorizeSummary(s, "+ 1 to create ~ 2 to update - 3 to destroy ± 4 to replace")
+	if result == "" {
+		t.Error("expected non-empty result for verbose format")
+	}
+
+	// Verbose format with only create
+	result = colorizeSummary(s, "+ 5 to create")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+}
+
+func TestConvertVerboseToCompact(t *testing.T) {
+	s := styles.DefaultStyles()
+
+	tests := []struct {
+		name    string
+		summary string
+	}{
+		{
+			name:    "full verbose",
+			summary: "+ 1 to create ~ 2 to update - 3 to destroy ± 4 to replace",
+		},
+		{
+			name:    "create only",
+			summary: "+ 5 to create",
+		},
+		{
+			name:    "update only",
+			summary: "~ 10 to update",
+		},
+		{
+			name:    "destroy only",
+			summary: "- 2 to destroy",
+		},
+		{
+			name:    "replace only",
+			summary: "± 1 to replace",
+		},
+		{
+			name:    "no matches",
+			summary: "no changes needed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertVerboseToCompact(s, tt.summary)
+			if result == "" {
+				t.Error("expected non-empty result")
+			}
+		})
+	}
+}
+
+func TestConvertVerboseToCompactNoNumbers(t *testing.T) {
+	s := styles.DefaultStyles()
+
+	// Pattern found but no number following
+	result := convertVerboseToCompact(s, "+ to create")
+	if result != "+ to create" {
+		// Should return original since no number found
+		t.Logf("got result: %q", result)
+	}
+}

@@ -360,3 +360,114 @@ func TestCommandLogPanelSetStyles(t *testing.T) {
 		t.Error("expected styles to be updated")
 	}
 }
+
+func TestCommandLogPanelExpandFillsContent(t *testing.T) {
+	panel := NewCommandLogPanel(styles.DefaultStyles())
+
+	// Add enough session logs to require scrolling
+	for i := 1; i <= 20; i++ {
+		panel.AppendSessionLog(
+			"Operation "+string(rune('A'+i%26)),
+			"terraform command "+string(rune('0'+i%10)),
+			"Output line 1\nOutput line 2\nOutput line 3",
+		)
+	}
+
+	// Start with a small size (like compact command log - 10 lines)
+	panel.SetSize(80, 10)
+	smallView := panel.View()
+
+	// Expand to a larger size (like focused command log - full height)
+	panel.SetSize(80, 40)
+	expandedView := panel.View()
+
+	// Count lines with actual content (not just whitespace or border chars)
+	countContentLines := func(view string) int {
+		lines := cmdLogTestSplitLines(view)
+		count := 0
+		for _, line := range lines {
+			trimmed := cmdLogTestTrimAnsi(line)
+			// Skip empty lines and lines that are just borders
+			if trimmed != "" && !cmdLogTestIsBorderLine(trimmed) {
+				count++
+			}
+		}
+		return count
+	}
+
+	smallContentLines := countContentLines(smallView)
+	expandedContentLines := countContentLines(expandedView)
+
+	// The expanded view should show significantly more content
+	if expandedContentLines <= smallContentLines {
+		t.Errorf("Expected expanded panel to show more content than small panel.\n"+
+			"Small panel content lines: %d\n"+
+			"Expanded panel content lines: %d",
+			smallContentLines, expandedContentLines)
+	}
+
+	// The expanded view should have content filling most of the height
+	minExpectedContentLines := 25 // At least 25 lines of content in a 40-line panel
+	if expandedContentLines < minExpectedContentLines {
+		t.Errorf("Expected at least %d content lines in expanded panel, got %d",
+			minExpectedContentLines, expandedContentLines)
+	}
+}
+
+// cmdLogTestSplitLines splits a string into lines (test helper)
+func cmdLogTestSplitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+// cmdLogTestTrimAnsi removes ANSI escape codes and trims spaces (test helper)
+func cmdLogTestTrimAnsi(s string) string {
+	// Simple ANSI removal - skip escape sequences
+	var result []byte
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			// Skip until we find the end of the escape sequence
+			i += 2
+			for i < len(s) && !((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+				i++
+			}
+			if i < len(s) {
+				i++ // Skip the final letter
+			}
+		} else {
+			result = append(result, s[i])
+			i++
+		}
+	}
+	// Trim spaces
+	str := string(result)
+	start, end := 0, len(str)
+	for start < end && (str[start] == ' ' || str[start] == '\t') {
+		start++
+	}
+	for end > start && (str[end-1] == ' ' || str[end-1] == '\t') {
+		end--
+	}
+	return str[start:end]
+}
+
+// cmdLogTestIsBorderLine checks if a line is just border characters (test helper)
+func cmdLogTestIsBorderLine(s string) bool {
+	for _, r := range s {
+		if r != '─' && r != '│' && r != '┌' && r != '┐' && r != '└' && r != '┘' && r != '├' && r != '┤' && r != '┬' && r != '┴' && r != '┼' && r != ' ' {
+			return false
+		}
+	}
+	return true
+}

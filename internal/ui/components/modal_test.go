@@ -410,3 +410,232 @@ func TestModalMoveSelectionSkipsHeaders(t *testing.T) {
 		t.Errorf("Expected selection 0 (skipping header), got %d", modal.GetSelectedIndex())
 	}
 }
+
+func TestModalScrollUpContentMode(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	// Create many lines of content
+	var lines []string
+	for i := 1; i <= 50; i++ {
+		lines = append(lines, fmt.Sprintf("Line %d", i))
+	}
+	modal.SetContent(strings.Join(lines, "\n"))
+	modal.Show()
+
+	// Scroll down first
+	modal.ScrollDown()
+	modal.ScrollDown()
+	modal.ScrollDown()
+
+	offset, _, _, _ := modal.GetScrollInfo()
+	if offset != 3 {
+		t.Errorf("Expected offset 3 after scroll down, got %d", offset)
+	}
+
+	// Now scroll up
+	modal.ScrollUp()
+	offset, _, _, _ = modal.GetScrollInfo()
+	if offset != 2 {
+		t.Errorf("Expected offset 2 after scroll up, got %d", offset)
+	}
+
+	// Scroll up to zero
+	modal.ScrollUp()
+	modal.ScrollUp()
+	offset, _, _, _ = modal.GetScrollInfo()
+	if offset != 0 {
+		t.Errorf("Expected offset 0, got %d", offset)
+	}
+
+	// Scroll up at zero should stay at zero
+	modal.ScrollUp()
+	offset, _, _, _ = modal.GetScrollInfo()
+	if offset != 0 {
+		t.Errorf("Expected offset to remain 0, got %d", offset)
+	}
+}
+
+func TestModalScrollDownItemMode(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "2", Description: "Item 2"},
+		{Key: "3", Description: "Item 3"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// In item mode, ScrollDown should move selection
+	modal.ScrollDown()
+	if modal.GetSelectedIndex() != 1 {
+		t.Errorf("Expected selection 1, got %d", modal.GetSelectedIndex())
+	}
+
+	// ScrollUp should also work in item mode
+	modal.ScrollUp()
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection 0, got %d", modal.GetSelectedIndex())
+	}
+}
+
+func TestModalEnsureSelectionVisibleScrollsDown(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 30)
+	modal.SetTitle("Test")
+
+	// Create many items
+	items := make([]HelpItem, 50)
+	for i := range items {
+		items[i] = HelpItem{Key: fmt.Sprintf("%d", i), Description: fmt.Sprintf("Item %d", i)}
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Jump to a low selection (should scroll down)
+	modal.SetSelectedIndex(30)
+	if modal.GetSelectedIndex() != 30 {
+		t.Errorf("Expected selection 30, got %d", modal.GetSelectedIndex())
+	}
+
+	// Scroll offset should have been adjusted
+	offset, _, _, _ := modal.GetScrollInfo()
+	if offset < 10 {
+		t.Errorf("Expected scroll offset to increase for far selection, got %d", offset)
+	}
+}
+
+func TestModalMaxScrollOffsetNoScroll(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 50) // Large height
+
+	// Only 3 lines of content (fits without scrolling)
+	modal.SetContent("Line 1\nLine 2\nLine 3")
+	modal.Show()
+
+	_, maxOffset, _, _ := modal.GetScrollInfo()
+	if maxOffset != 0 {
+		t.Errorf("Expected max scroll offset 0 for small content, got %d", maxOffset)
+	}
+}
+
+func TestModalOverlayNotVisible(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+	modal.SetContent("Content")
+	// Don't call Show()
+
+	baseView := "This is the base view"
+	result := modal.Overlay(baseView)
+
+	if result != baseView {
+		t.Error("Expected unchanged base view when modal is not visible")
+	}
+}
+
+func TestModalOverlayNilStyles(t *testing.T) {
+	modal := &Modal{}
+	modal.visible = true
+
+	baseView := "This is the base view"
+	result := modal.Overlay(baseView)
+
+	if result != baseView {
+		t.Error("Expected unchanged base view when styles are nil")
+	}
+}
+
+func TestModalOverlayZeroDimensions(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(0, 0)
+	modal.SetTitle("Test")
+	modal.SetContent("Content")
+	modal.Show()
+
+	baseView := "This is the base view"
+	result := modal.Overlay(baseView)
+
+	if result != baseView {
+		t.Error("Expected unchanged base view when dimensions are zero")
+	}
+}
+
+func TestModalOverlayShortBaseView(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+	modal.SetContent("Content")
+	modal.Show()
+
+	// Base view with fewer lines than modal height
+	baseView := "Line 1\nLine 2\nLine 3"
+	result := modal.Overlay(baseView)
+
+	// Should still work without crashing
+	if result == "" {
+		t.Error("Expected non-empty result")
+	}
+}
+
+func TestModalSetSelectedIndexSkipsHeaders(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "", Description: "Header", IsHeader: true},
+		{Key: "2", Description: "Item 2"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// Set index to 0 (valid)
+	modal.SetSelectedIndex(0)
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection 0, got %d", modal.GetSelectedIndex())
+	}
+
+	// Trying to set index to a header should be ignored
+	modal.SetSelectedIndex(1)
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection to remain 0 when trying to select header, got %d", modal.GetSelectedIndex())
+	}
+}
+
+func TestModalViewNotVisible(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetTitle("Test")
+	modal.SetContent("Content")
+	// Don't call Show()
+
+	view := modal.View()
+	if view != "" {
+		t.Error("Expected empty view when modal is not visible")
+	}
+}
+
+func TestModalViewNilStyles(t *testing.T) {
+	modal := &Modal{}
+	modal.visible = true
+
+	view := modal.View()
+	if view != "" {
+		t.Error("Expected empty view when styles are nil")
+	}
+}

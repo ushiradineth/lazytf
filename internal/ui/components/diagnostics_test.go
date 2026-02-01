@@ -174,3 +174,56 @@ func TestDiagnosticsPanelSetStyles(t *testing.T) {
 		t.Error("expected styles to be updated")
 	}
 }
+
+func TestDiagnosticsPanelExpandFillsContent(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+
+	// Add enough content to require scrolling in a small panel
+	var logs []string
+	for i := 1; i <= 50; i++ {
+		logs = append(logs, strings.Repeat("x", 40))
+	}
+	panel.SetLogText(strings.Join(logs, "\n"))
+
+	// Start with a small size (like compact command log)
+	panel.SetSize(80, 8)
+	smallView := panel.View()
+	smallLines := strings.Split(smallView, "\n")
+
+	// Expand to a larger size (like focused command log)
+	panel.SetSize(80, 40)
+	expandedView := panel.View()
+	expandedLines := strings.Split(expandedView, "\n")
+
+	// Count non-empty lines with actual content (not just whitespace)
+	countContentLines := func(lines []string) int {
+		count := 0
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				count++
+			}
+		}
+		return count
+	}
+
+	smallContentLines := countContentLines(smallLines)
+	expandedContentLines := countContentLines(expandedLines)
+
+	// The expanded view should show more content lines than the small view
+	if expandedContentLines <= smallContentLines {
+		t.Errorf("Expected expanded panel to show more content lines than small panel.\n"+
+			"Small panel content lines: %d\n"+
+			"Expanded panel content lines: %d\n"+
+			"Small view:\n%s\n\nExpanded view:\n%s",
+			smallContentLines, expandedContentLines, smallView, expandedView)
+	}
+
+	// The expanded view should have content filling most of the height
+	// (allowing some margin for the viewport behavior)
+	minExpectedContentLines := 30 // At least 30 lines of content in a 40-line panel
+	if expandedContentLines < minExpectedContentLines {
+		t.Errorf("Expected at least %d content lines in expanded panel, got %d.\n"+
+			"Expanded view:\n%s",
+			minExpectedContentLines, expandedContentLines, expandedView)
+	}
+}

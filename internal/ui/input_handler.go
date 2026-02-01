@@ -138,10 +138,10 @@ func (m *Model) focusCommandLog() tea.Cmd {
 	if m.panelManager == nil {
 		return nil
 	}
-	if m.panelManager.IsCommandLogVisible() {
-		return m.panelManager.SetFocus(PanelCommandLog)
+	if !m.panelManager.IsCommandLogVisible() {
+		m.panelManager.SetCommandLogVisible(true)
 	}
-	m.panelManager.SetCommandLogVisible(true)
+	cmd := m.panelManager.SetFocus(PanelCommandLog)
 	m.updateLayout()
-	return m.panelManager.SetFocus(PanelCommandLog)
+	return cmd
 }

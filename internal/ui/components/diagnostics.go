@@ -46,11 +46,16 @@ func NewDiagnosticsPanel(styles *styles.Styles) *DiagnosticsPanel {
 
 // SetSize updates the panel size.
 func (d *DiagnosticsPanel) SetSize(width, height int) {
+	wasAtBottom := d.viewport.AtBottom()
 	d.width = width
 	d.height = height
 	d.viewport.Width = width
 	d.viewport.Height = height
 	d.updateViewport()
+	// Keep scroll at bottom if user was viewing the latest content
+	if wasAtBottom {
+		d.viewport.GotoBottom()
+	}
 }
 
 // SetDiagnostics replaces the diagnostics list.
