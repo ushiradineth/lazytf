@@ -114,19 +114,27 @@ func TestFormatMetadataHeader(t *testing.T) {
 
 	result := FormatMetadataHeader(metadata)
 
-	if !strings.Contains(result, "● Success") {
+	// Verify section title
+	if !strings.Contains(result, "Details\n") {
+		t.Error("expected Details section title")
+	}
+	// Verify status with aligned key (Status:      ● Success)
+	if !strings.Contains(result, "Status:") || !strings.Contains(result, "● Success") {
 		t.Error("expected success status icon")
 	}
-	if !strings.Contains(result, "2024-01-30") {
+	// Verify time with aligned key (Time:        2024-01-30...)
+	if !strings.Contains(result, "Time:") || !strings.Contains(result, "2024-01-30") {
 		t.Error("expected date in header")
 	}
 	if !strings.Contains(result, "45s") {
 		t.Error("expected duration in header")
 	}
-	if !strings.Contains(result, "Environment: production") {
+	// Verify environment (no extra spaces needed)
+	if !strings.Contains(result, "Environment:") || !strings.Contains(result, "production") {
 		t.Error("expected environment in header")
 	}
-	if !strings.Contains(result, "Directory: /path/to/terraform") {
+	// Verify directory with aligned key (Directory:   /path/to/terraform)
+	if !strings.Contains(result, "Directory:") || !strings.Contains(result, "/path/to/terraform") {
 		t.Error("expected directory in header")
 	}
 }

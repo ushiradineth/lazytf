@@ -153,17 +153,21 @@ func (v *HistoryView) colorizeMetadataLine(line, trimmed string) string {
 }
 
 // colorizeStatusValue applies color to the status value based on its content.
+// Preserves leading whitespace for alignment.
 func (v *HistoryView) colorizeStatusValue(value string) string {
-	value = strings.TrimSpace(value)
+	// Preserve leading whitespace for alignment.
+	leadingSpaces := value[:len(value)-len(strings.TrimLeft(value, " \t"))]
+	trimmedValue := strings.TrimSpace(value)
+
 	switch {
-	case strings.HasPrefix(value, "●") || strings.Contains(value, "Success"):
-		return " " + v.styles.DiffAdd.Render(value)
-	case strings.HasPrefix(value, "✗") || strings.Contains(value, "Failed"):
-		return " " + v.styles.DiffRemove.Render(value)
-	case strings.HasPrefix(value, "○") || strings.Contains(value, "Canceled"):
-		return " " + v.styles.DiffChange.Render(value)
+	case strings.HasPrefix(trimmedValue, "●") || strings.Contains(trimmedValue, "Success"):
+		return leadingSpaces + v.styles.DiffAdd.Render(trimmedValue)
+	case strings.HasPrefix(trimmedValue, "✗") || strings.Contains(trimmedValue, "Failed"):
+		return leadingSpaces + v.styles.DiffRemove.Render(trimmedValue)
+	case strings.HasPrefix(trimmedValue, "○") || strings.Contains(trimmedValue, "Canceled"):
+		return leadingSpaces + v.styles.DiffChange.Render(trimmedValue)
 	default:
-		return " " + value
+		return value
 	}
 }
 

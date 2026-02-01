@@ -172,19 +172,9 @@ func (d *DiffViewer) renderHeader(resource *terraform.ResourceChange, diffs []di
 		headerText = utils.TruncateEnd(headerText, d.width)
 	}
 
-	// Style header with action color (same as diff lines)
+	// Use shared header rendering function
 	actionStyle := d.actionStyle(resource.Action)
-	styledHeader := actionStyle.Render(headerText)
-
-	// Create lines in border color
-	lineWidth := d.width
-	if lineWidth <= 0 {
-		lineWidth = lipgloss.Width(headerText)
-	}
-	borderStyle := lipgloss.NewStyle().Foreground(d.styles.Theme.BorderColor)
-	line := borderStyle.Render(strings.Repeat("─", lineWidth))
-
-	return line + "\n" + styledHeader + "\n" + line + "\n"
+	return RenderSectionHeader(headerText, d.width, actionStyle, d.styles.Theme.BorderColor) + "\n"
 }
 
 func (d *DiffViewer) actionStyle(action terraform.ActionType) lipgloss.Style {

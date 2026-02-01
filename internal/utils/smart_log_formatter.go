@@ -194,15 +194,18 @@ func FormatMetadataHeader(metadata *LogMetadata) string {
 
 	var builder strings.Builder
 
+	// Section title marker (will be styled by history view)
+	builder.WriteString("Details\n")
+
 	// Status line with icon
 	statusIcon := getStatusIcon(metadata.Status)
 	statusText := getStatusText(metadata.Status)
-	builder.WriteString(statusIcon + " " + statusText + "\n")
+	builder.WriteString("Status:      " + statusIcon + " " + statusText + "\n")
 
 	// Time and duration
 	timeStr := metadata.StartedAt.Format("2006-01-02 15:04:05")
 	durationStr := formatDuration(metadata.Duration)
-	builder.WriteString("Time: " + timeStr + " (" + durationStr + ")\n")
+	builder.WriteString("Time:        " + timeStr + " (" + durationStr + ")\n")
 
 	// Environment
 	if metadata.Environment != "" {
@@ -211,29 +214,26 @@ func FormatMetadataHeader(metadata *LogMetadata) string {
 
 	// Working directory
 	if metadata.WorkDir != "" {
-		builder.WriteString("Directory: " + metadata.WorkDir + "\n")
+		builder.WriteString("Directory:   " + metadata.WorkDir + "\n")
 	}
 
 	return builder.String()
 }
 
 // FormatSectionSeparator creates a visual separator with title.
+// Returns a three-line section header with horizontal lines above and below the centered title.
 func FormatSectionSeparator(title string, width int) string {
 	if width <= 0 {
 		width = 60
 	}
 
-	// Calculate padding for centered title
-	titleLen := len(title) + 2 // +2 for spaces around title
-	if titleLen >= width {
-		return "── " + title + " ──"
-	}
+	line := strings.Repeat("─", width)
 
-	sideLen := (width - titleLen) / 2
-	leftSide := strings.Repeat("─", sideLen)
-	rightSide := strings.Repeat("─", width-sideLen-titleLen)
+	// Center the title
+	padding := max((width-len(title))/2, 0)
+	centeredTitle := strings.Repeat(" ", padding) + title
 
-	return leftSide + " " + title + " " + rightSide
+	return line + "\n" + centeredTitle + "\n" + line
 }
 
 // FormatCombinedOutput combines plan and apply outputs with separators.
