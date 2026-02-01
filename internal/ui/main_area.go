@@ -21,6 +21,7 @@ const (
 	ModeLogs                              // Show operation logs
 	ModeHistoryDetail                     // Show history detail (formatted logs)
 	ModeStateShow                         // Show state resource details
+	ModeAbout                             // Show about/info screen
 )
 
 // MainArea is a wrapper component that switches between diff view and logs.
@@ -37,6 +38,7 @@ type MainArea struct {
 	planView     *views.PlanView
 	historyView  *views.HistoryView
 	stateView    *views.StateShowView
+	aboutView    *views.AboutView
 
 	// Current state for diff mode
 	selectedResource *terraform.ResourceChange
@@ -53,6 +55,7 @@ func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.App
 		planView:    planView,
 		historyView: views.NewHistoryView(s),
 		stateView:   views.NewStateShowView(s),
+		aboutView:   views.NewAboutView(s),
 	}
 }
 
@@ -88,6 +91,9 @@ func (m *MainArea) SetSize(width, height int) {
 	if m.stateView != nil {
 		m.stateView.SetSize(innerWidth, innerHeight)
 	}
+	if m.aboutView != nil {
+		m.aboutView.SetSize(innerWidth, innerHeight)
+	}
 }
 
 // SetFocused sets the focus state.
@@ -114,6 +120,9 @@ func (m *MainArea) SetStyles(s *styles.Styles) {
 	}
 	if m.stateView != nil {
 		m.stateView.SetStyles(s)
+	}
+	if m.aboutView != nil {
+		m.aboutView.SetStyles(s)
 	}
 }
 
@@ -190,6 +199,10 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 		if m.stateView != nil {
 			m.stateView, cmd = m.stateView.Update(msg)
 		}
+	case ModeAbout:
+		if m.aboutView != nil {
+			m.aboutView, cmd = m.aboutView.Update(msg)
+		}
 	}
 
 	return m, cmd
@@ -249,6 +262,15 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	case ModeStateShow:
 		// State view handles scrolling
 		if m.stateView != nil {
+			switch msg.String() {
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
+				_, cmd := m.Update(msg)
+				return true, cmd
+			}
+		}
+	case ModeAbout:
+		// About view handles scrolling
+		if m.aboutView != nil {
 			switch msg.String() {
 			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
 				_, cmd := m.Update(msg)
@@ -323,12 +345,22 @@ func (m *MainArea) View() string {
 			content = m.styles.Dimmed.Render("No state data available")
 		}
 		tabs = []string{title}
+
+	case ModeAbout:
+		// Show about/info screen
+		title = "About"
+		tabs = []string{title}
+		if m.aboutView != nil {
+			content = m.aboutView.ViewContent()
+		} else {
+			content = m.styles.Dimmed.Render("lazytf")
+		}
 	}
 
 	// Set footer text based on mode
 	var footerText string
 	switch m.mode {
-	case ModeDiff, ModeLogs, ModeHistoryDetail, ModeStateShow:
+	case ModeDiff, ModeLogs, ModeHistoryDetail, ModeStateShow, ModeAbout:
 		footerText = ""
 	}
 

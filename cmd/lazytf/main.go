@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ushiradineth/lazytf/internal/config"
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/styles"
@@ -33,7 +34,6 @@ type teaProgram interface {
 }
 
 var (
-	version             = "0.1.0"
 	planFile            string
 	mouseEnabled        bool
 	tfFlags             string
@@ -77,7 +77,7 @@ func newRootCommand() *cobra.Command {
 		Long: `lazytf is a Terminal User Interface for reviewing Terraform plans.
 It displays plan changes in a clean, minimal interface inspired by Terraform Cloud,
 showing only changed attributes in a git-style diff format.`,
-		Version: version,
+		Version: consts.Version,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    run,
 	}

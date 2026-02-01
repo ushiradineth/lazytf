@@ -190,9 +190,9 @@ func (m *Model) handleActionFocusWorkspace(_ *keybinds.Context) tea.Cmd {
 	if m.panelManager == nil {
 		return nil
 	}
-	// Reset main area to diff mode when leaving history
-	if m.historyFocused && m.mainArea != nil {
-		m.mainArea.SetMode(ModeDiff)
+	// Switch main area to about mode when focusing workspace
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeAbout)
 	}
 	m.historyFocused = false
 	m.updateLayout()
@@ -203,9 +203,12 @@ func (m *Model) handleActionFocusResources(_ *keybinds.Context) tea.Cmd {
 	if m.panelManager == nil {
 		return nil
 	}
-	// Reset main area to diff mode when leaving history detail
-	if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
-		m.mainArea.SetMode(ModeDiff)
+	// Reset main area to diff mode when leaving history detail or about
+	if m.mainArea != nil {
+		mode := m.mainArea.GetMode()
+		if mode == ModeHistoryDetail || mode == ModeAbout {
+			m.mainArea.SetMode(ModeDiff)
+		}
 	}
 	m.historyFocused = false
 	m.updateLayout()
@@ -234,9 +237,12 @@ func (m *Model) handleActionFocusMain(_ *keybinds.Context) tea.Cmd {
 }
 
 func (m *Model) handleActionFocusCommandLog(_ *keybinds.Context) tea.Cmd {
-	// Reset main area to diff mode when leaving history detail
-	if m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
-		m.mainArea.SetMode(ModeDiff)
+	// Reset main area to diff mode when leaving history detail or about
+	if m.mainArea != nil {
+		mode := m.mainArea.GetMode()
+		if mode == ModeHistoryDetail || mode == ModeAbout {
+			m.mainArea.SetMode(ModeDiff)
+		}
 	}
 	m.historyFocused = false
 	return m.focusCommandLog()
@@ -262,14 +268,23 @@ func (m *Model) cycleFocusWithDirection(reverse bool) tea.Cmd {
 	focusedPanel := m.panelManager.GetFocusedPanel()
 	m.historyFocused = focusedPanel == PanelHistory
 
+	// When workspace panel gains focus, show the about screen
+	if focusedPanel == PanelWorkspace && m.mainArea != nil {
+		m.mainArea.SetMode(ModeAbout)
+		return cmd
+	}
+
 	// When history panel gains focus, show the selected history detail
 	if m.historyFocused && !wasHistoryFocused {
 		historyCmd := m.showSelectedHistoryDetail()
 		return tea.Batch(cmd, historyCmd)
 	}
-	// When leaving history, switch back to diff mode
-	if !m.historyFocused && m.mainArea != nil && m.mainArea.GetMode() == ModeHistoryDetail {
-		m.mainArea.SetMode(ModeDiff)
+	// When leaving history or about, switch back to diff mode
+	if m.mainArea != nil {
+		mode := m.mainArea.GetMode()
+		if !m.historyFocused && (mode == ModeHistoryDetail || mode == ModeAbout) {
+			m.mainArea.SetMode(ModeDiff)
+		}
 	}
 	return cmd
 }

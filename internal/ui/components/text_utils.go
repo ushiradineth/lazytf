@@ -7,6 +7,21 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
+// RenderSectionHeader renders a section header with border lines above and below.
+// The title is styled with titleStyle, and lines are styled with borderColor.
+// Width determines the full width of the header.
+func RenderSectionHeader(title string, width int, titleStyle lipgloss.Style, borderColor lipgloss.AdaptiveColor) string {
+	if width <= 0 {
+		width = lipgloss.Width(title)
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	line := borderStyle.Render(strings.Repeat("─", width))
+	styledTitle := titleStyle.Render(title)
+
+	return line + "\n" + styledTitle + "\n" + line
+}
+
 // TruncateWithANSI truncates a string that may contain ANSI codes to the given visible width.
 // Unlike runewidth.Truncate, this properly handles ANSI escape sequences.
 func TruncateWithANSI(s string, width int) string {

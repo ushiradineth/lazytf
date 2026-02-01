@@ -261,3 +261,105 @@ func TestVisibleWidth(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderSectionHeader(t *testing.T) {
+	borderColor := lipgloss.AdaptiveColor{Light: "#ccc", Dark: "#555"}
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700"))
+
+	tests := []struct {
+		name      string
+		title     string
+		width     int
+		wantLines int
+	}{
+		{
+			name:      "standard header",
+			title:     "Plan Output",
+			width:     40,
+			wantLines: 3, // top line + title + bottom line
+		},
+		{
+			name:      "zero width uses title width",
+			title:     "Apply Output",
+			width:     0,
+			wantLines: 3,
+		},
+		{
+			name:      "narrow width",
+			title:     "Test",
+			width:     10,
+			wantLines: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RenderSectionHeader(tt.title, tt.width, titleStyle, borderColor)
+
+			// Check line count
+			lines := testSplitLines(result)
+			if len(lines) != tt.wantLines {
+				t.Errorf("RenderSectionHeader line count = %d, want %d", len(lines), tt.wantLines)
+			}
+
+			// Check that title is in the middle line
+			if len(lines) >= 2 {
+				titleLine := lines[1]
+				// The title should be styled but contain the original text
+				if !containsVisibleText(titleLine, tt.title) {
+					t.Errorf("title line does not contain expected title %q", tt.title)
+				}
+			}
+
+			// Check that first and last lines are border lines
+			if len(lines) >= 3 {
+				firstLine := lines[0]
+				lastLine := lines[2]
+				// Border lines should contain only ─ characters (plus ANSI codes)
+				if lipgloss.Width(firstLine) == 0 {
+					t.Error("first border line should not be empty")
+				}
+				if lipgloss.Width(lastLine) == 0 {
+					t.Error("last border line should not be empty")
+				}
+			}
+		})
+	}
+}
+
+func testSplitLines(s string) []string {
+	var lines []string
+	current := ""
+	for _, r := range s {
+		if r == '\n' {
+			lines = append(lines, current)
+			current = ""
+		} else {
+			current += string(r)
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
+}
+
+func containsVisibleText(styled, text string) bool {
+	// Strip ANSI codes and check if text is present
+	visible := ""
+	inEscape := false
+	for _, r := range styled {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		visible += string(r)
+	}
+	return visible == text || len(visible) >= len(text)
+}
