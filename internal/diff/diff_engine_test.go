@@ -67,11 +67,6 @@ func TestCalculateDiffs_KnownAfterApplyDiff(t *testing.T) {
 	if _, ok := diffs[0].NewValue.(UnknownValue); !ok {
 		t.Fatalf("expected new value to be UnknownValue, got %T", diffs[0].NewValue)
 	}
-
-	formatted := FormatDiff(diffs[0])
-	if formatted == "" || !strings.Contains(formatted, "(known after apply)") {
-		t.Fatalf("unexpected formatted diff: %q", formatted)
-	}
 }
 
 func TestCalculateDiffs_StringListLCS(t *testing.T) {
@@ -232,32 +227,6 @@ func TestCalculateDiffs_UnknownNilAfter(t *testing.T) {
 	}
 }
 
-func TestFormatValue_PrimitivesAndContainers(t *testing.T) {
-	if got := formatValue(nil); got != "(null)" {
-		t.Fatalf("expected null, got %q", got)
-	}
-	if got := formatValue("hi"); got != "\"hi\"" {
-		t.Fatalf("expected quoted string, got %q", got)
-	}
-	if got := formatValue(UnknownValue{}); got != "(known after apply)" {
-		t.Fatalf("expected known after apply, got %q", got)
-	}
-	if got := formatValue(map[string]any{"a": 1}); got != "{...}" {
-		t.Fatalf("expected map placeholder, got %q", got)
-	}
-	if got := formatValue([]any{"one"}); got != "\"one\"" {
-		t.Fatalf("expected single string list to format to string, got %q", got)
-	}
-	if got := formatValue([]any{"one", "two"}); got != "[...]" {
-		t.Fatalf("expected list placeholder, got %q", got)
-	}
-
-	long := strings.Repeat("a", 205)
-	if got := formatValue(long); !strings.HasSuffix(got, "...") {
-		t.Fatalf("expected long string to be truncated, got %q", got)
-	}
-}
-
 func TestOrderedKeys_RespectsOrderMaps(t *testing.T) {
 	before := map[string]any{"b": 1}
 	after := map[string]any{"a": 2, "d": 4}
@@ -304,15 +273,6 @@ func TestStringListDiffs_AddRemove(t *testing.T) {
 	}
 	if diffs[1].Action != DiffAdd || diffs[1].Path[0] != "list[2]" {
 		t.Fatalf("expected add at list[2], got %s %v", diffs[1].Action, diffs[1].Path)
-	}
-}
-
-func TestFormatPath(t *testing.T) {
-	if got := formatPath([]string{"a", "b", "c"}); got != "a.b.c" {
-		t.Fatalf("unexpected path: %q", got)
-	}
-	if got := formatPath([]string{"root", "list[0]"}); got != "root.list[0]" {
-		t.Fatalf("unexpected path: %q", got)
 	}
 }
 

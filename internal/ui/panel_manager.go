@@ -277,7 +277,7 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 			workspaceRatio = 0.20
 		}
 		workspaceHeight := int(math.Round(float64(panelsHeight) * workspaceRatio))
-		minHeight := 3
+		minHeight := MinPanelHeight
 		if workspaceHeight < minHeight {
 			workspaceHeight = minHeight
 		}
@@ -301,7 +301,7 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 		current = ratios{workspace: 0.20, resources: 0.60, history: 0.20}
 	}
 
-	minHeight := 3
+	minHeight := MinPanelHeight
 	workspaceHeight := int(math.Round(float64(panelsHeight) * current.workspace))
 	resourcesHeight := int(math.Round(float64(panelsHeight) * current.resources))
 	historyHeight := int(math.Round(float64(panelsHeight) * current.history))

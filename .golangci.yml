@@ -82,6 +82,10 @@ linters:
     - reassign        # Package variable reassignment
     - wastedassign    # Wasted assignments
 
+    # ===== Unused Code Detection =====
+    - dogsled         # Check for too many blank identifiers (_, _, _ = ...)
+    - nolintlint      # Validates nolint directives are necessary
+
   exclusions:
     rules:
       - linters:
@@ -103,6 +107,11 @@ linters:
       # Allow duplication in test files (test cases often similar)
       - linters:
           - dupl
+        path: (.+)_test\.go
+
+      # Allow repeated strings in test files (test data)
+      - linters:
+          - goconst
         path: (.+)_test\.go
 
       # Allow utils package name (common Go pattern)
@@ -349,6 +358,9 @@ linters:
 
         - name: useless-break
 
+        - name: unused-receiver
+          disabled: false
+
         - name: var-declaration
 
         - name: var-naming
@@ -373,7 +385,15 @@ linters:
     # ===== unused Settings =====
     unused:
       field-writes-are-uses: false
+      post-statements-are-reads: false
       exported-fields-are-used: false
+      parameters-are-used: true
+      local-variables-are-used: true
+      generated-is-used: false
+
+    # ===== dogsled Settings =====
+    dogsled:
+      max-blank-identifiers: 4  # Allow at most 4 blank identifiers (lipgloss.GetBorder returns 5 values)
 
     # ===== usetesting Settings =====
     usetesting:

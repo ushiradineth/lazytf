@@ -345,7 +345,7 @@ func (m *Model) renderLegacyMainContent() string {
 	if m.executionMode && m.showHistory && m.historyPanel != nil && m.historyPanel.View() != "" {
 		leftContent = lipgloss.JoinVertical(lipgloss.Left, leftContent, m.historyPanel.View())
 	}
-	if m.showSplit && m.width >= 100 {
+	if m.showSplit && m.width >= MinSplitWidth {
 		right := lipgloss.NewStyle().MarginLeft(1).Render(
 			m.diffViewer.View(m.resourceList.GetSelectedResource()),
 		)
@@ -465,7 +465,7 @@ func (m *Model) updateLegacyLayout() {
 	if m.executionMode && m.diagnosticsPanel != nil {
 		diagnosticsHeight = m.diagnosticsHeight
 		if m.diagnosticsFocused {
-			diagnosticsHeight = utils.MaxInt(diagnosticsHeight, utils.MinInt(m.height/2, 12))
+			diagnosticsHeight = utils.MaxInt(diagnosticsHeight, utils.MinInt(m.height/2, MaxFocusedDiagnosticsHeight))
 		}
 		if diagnosticsHeight >= listHeight {
 			diagnosticsHeight = 0
@@ -477,7 +477,7 @@ func (m *Model) updateLegacyLayout() {
 		listHeight = 1
 	}
 
-	if m.showSplit && m.width >= 100 {
+	if m.showSplit && m.width >= MinSplitWidth {
 		m.updateLegacyLayoutSplit(listHeight, historyHeight, diagnosticsHeight)
 		return
 	}
@@ -485,10 +485,10 @@ func (m *Model) updateLegacyLayout() {
 }
 
 func (m *Model) updateLegacyLayoutSplit(listHeight, historyHeight, diagnosticsHeight int) {
-	listWidth := utils.MaxInt(40, int(float64(m.width)*0.45))
+	listWidth := utils.MaxInt(MinListWidth, int(float64(m.width)*ListWidthRatio))
 	diffWidth := m.width - listWidth - 1
-	if diffWidth < 20 {
-		diffWidth = 20
+	if diffWidth < MinDiffWidth {
+		diffWidth = MinDiffWidth
 		listWidth = m.width - diffWidth - 1
 	}
 	m.resourceList.SetSize(listWidth, listHeight)

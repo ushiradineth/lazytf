@@ -306,7 +306,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	}
 
 	m.historyEnabled = cfg.HistoryEnabled
-	m.historyHeight = 6
+	m.historyHeight = DefaultHistoryHeight
 	m.showHistory = false
 	if m.historyEnabled {
 		m.historyPanel = components.NewHistoryPanel(m.styles)

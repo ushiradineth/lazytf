@@ -54,33 +54,6 @@ func TestIsList(t *testing.T) {
 	}
 }
 
-func TestToMap(t *testing.T) {
-	tests := []struct {
-		name      string
-		val       any
-		expectNil bool
-	}{
-		{"map[string]any", map[string]any{"key": "value"}, false},
-		{"empty map", map[string]any{}, false},
-		{"nil", nil, true},
-		{"map[string]string", map[string]string{"key": "value"}, true},
-		{"slice", []string{"a"}, true},
-		{"string", "not a map", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ToMap(tt.val)
-			if tt.expectNil && result != nil {
-				t.Errorf("ToMap(%v) = %v; want nil", tt.val, result)
-			}
-			if !tt.expectNil && result == nil {
-				t.Errorf("ToMap(%v) = nil; want non-nil", tt.val)
-			}
-		})
-	}
-}
-
 func TestInterfaceToList(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -111,34 +84,6 @@ func TestInterfaceToList(t *testing.T) {
 			}
 			if len(result) != tt.expectedLen {
 				t.Errorf("InterfaceToList(%v) has len %d; want %d", tt.val, len(result), tt.expectedLen)
-			}
-		})
-	}
-}
-
-func TestDeepEqual(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     any
-		expected bool
-	}{
-		{"equal ints", 5, 5, true},
-		{"different ints", 5, 6, false},
-		{"equal strings", "hello", "hello", true},
-		{"different strings", "hello", "world", false},
-		{"equal slices", []int{1, 2, 3}, []int{1, 2, 3}, true},
-		{"different slices", []int{1, 2, 3}, []int{1, 2, 4}, false},
-		{"equal maps", map[string]int{"a": 1}, map[string]int{"a": 1}, true},
-		{"different maps", map[string]int{"a": 1}, map[string]int{"a": 2}, false},
-		{"nil values", nil, nil, true},
-		{"nil and non-nil", nil, "something", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := DeepEqual(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("DeepEqual(%v, %v) = %v; want %v", tt.a, tt.b, result, tt.expected)
 			}
 		})
 	}

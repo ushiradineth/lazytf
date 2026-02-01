@@ -53,8 +53,6 @@ type RenderResult struct {
 
 	// Height is the configured render height.
 	Height int
-
-	t *testing.T
 }
 
 // cleaner is a reusable ANSI cleaner instance.
@@ -84,7 +82,6 @@ func RenderCapture(t *testing.T, view func() string, width, height int) *RenderR
 		MaxLineWidth: maxWidth,
 		Width:        width,
 		Height:       height,
-		t:            t,
 	}
 }
 
@@ -176,7 +173,6 @@ func RenderOverlay(t *testing.T, o Overlayer, width, height int) *RenderResult {
 		MaxLineWidth: maxWidth,
 		Width:        width,
 		Height:       height,
-		t:            t,
 	}
 }
 

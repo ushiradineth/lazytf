@@ -49,28 +49,3 @@ func TestMaxInt(t *testing.T) {
 		})
 	}
 }
-
-func TestClamp(t *testing.T) {
-	tests := []struct {
-		name            string
-		val, minV, maxV int
-		expected        int
-	}{
-		{"within range", 5, 0, 10, 5},
-		{"below min", -5, 0, 10, 0},
-		{"above max", 15, 0, 10, 10},
-		{"at min", 0, 0, 10, 0},
-		{"at max", 10, 0, 10, 10},
-		{"negative range", -5, -10, -1, -5},
-		{"negative below", -15, -10, -1, -10},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := Clamp(tt.val, tt.minV, tt.maxV)
-			if result != tt.expected {
-				t.Errorf("Clamp(%d, %d, %d) = %d; want %d", tt.val, tt.minV, tt.maxV, result, tt.expected)
-			}
-		})
-	}
-}
