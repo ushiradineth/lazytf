@@ -144,8 +144,9 @@ func (t *Toast) Overlay(baseView string) string {
 	toastLines := strings.Split(toastBox, "\n")
 
 	// Ensure we have enough lines
+	emptyLine := GetPadding(t.width)
 	for len(baseLines) < t.height {
-		baseLines = append(baseLines, strings.Repeat(" ", t.width))
+		baseLines = append(baseLines, emptyLine)
 	}
 
 	// Calculate position based on ToastPosition
@@ -163,7 +164,7 @@ func (t *Toast) Overlay(baseView string) string {
 		// Ensure base line is wide enough (visual width)
 		baseLineWidth := ansi.StringWidth(baseLine)
 		if baseLineWidth < t.width {
-			baseLine = baseLine + strings.Repeat(" ", t.width-baseLineWidth)
+			baseLine = baseLine + GetPadding(t.width-baseLineWidth)
 		}
 
 		// Build the new line using ANSI-aware functions:

@@ -50,7 +50,7 @@ func (m *Model) renderStatusBar() string {
 		statusWidth := lipgloss.Width(statusText)
 		gap := m.width - statusWidth - progressWidth
 		if gap > 0 {
-			statusText = statusText + strings.Repeat(" ", gap) + progressView
+			statusText = statusText + components.GetPadding(gap) + progressView
 		}
 	}
 
@@ -150,10 +150,11 @@ func enforceDimensions(view string, width, height int) string {
 		return ""
 	}
 	lines := strings.Split(view, "\n")
+	emptyLine := components.GetPadding(width) // Cache for reuse
 	for i, line := range lines {
 		lineWidth := lipgloss.Width(line)
 		if lineWidth < width {
-			lines[i] = line + strings.Repeat(" ", width-lineWidth)
+			lines[i] = line + components.GetPadding(width-lineWidth)
 			continue
 		}
 		if lineWidth > width {
@@ -164,7 +165,7 @@ func enforceDimensions(view string, width, height int) string {
 		lines = lines[:height]
 	}
 	for len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, emptyLine)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -299,11 +300,13 @@ func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
 
 	// Pad content lines to fill panel
 	result := make([]string, contentHeight)
+	contentW := frame.ContentWidth()
+	emptyLine := components.GetPadding(contentW)
 	for i := range contentHeight {
 		if i < len(contentLines) {
-			result[i] = components.PadLine(contentLines[i], frame.ContentWidth())
+			result[i] = components.PadLine(contentLines[i], contentW)
 		} else {
-			result[i] = strings.Repeat(" ", frame.ContentWidth())
+			result[i] = emptyLine
 		}
 	}
 

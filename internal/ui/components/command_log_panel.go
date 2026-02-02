@@ -180,11 +180,13 @@ func (c *CommandLogPanel) View() string {
 
 	// Pad content lines to fill panel
 	result := make([]string, contentHeight)
+	contentW := c.frame.ContentWidth()
+	emptyLine := GetPadding(contentW)
 	for i := range contentHeight {
 		if i < len(contentLines) {
-			result[i] = c.padLine(contentLines[i], c.frame.ContentWidth())
+			result[i] = c.padLine(contentLines[i], contentW)
 		} else {
-			result[i] = strings.Repeat(" ", c.frame.ContentWidth())
+			result[i] = emptyLine
 		}
 	}
 
@@ -212,7 +214,7 @@ func (c *CommandLogPanel) padLine(line string, width int) string {
 		}
 		return line
 	}
-	return line + strings.Repeat(" ", width-len(runes))
+	return line + GetPadding(width-len(runes))
 }
 
 // GetDiagnosticsPanel returns the underlying diagnostics panel.

@@ -498,8 +498,9 @@ func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
 			msg = "No matches"
 		}
 		lines = append(lines, e.padLine(e.styles.Dimmed.Render(msg), width))
+		emptyLine := GetPadding(width)
 		for len(lines) < totalHeight {
-			lines = append(lines, strings.Repeat(" ", width))
+			lines = append(lines, emptyLine)
 		}
 		return lines
 	}
@@ -515,8 +516,9 @@ func (e *EnvironmentPanel) renderContent(width, totalHeight int) []string {
 	}
 
 	// Pad remaining lines
+	emptyLine := GetPadding(width)
 	for len(lines) < totalHeight {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, emptyLine)
 	}
 
 	return lines
@@ -548,8 +550,9 @@ func (e *EnvironmentPanel) renderUnfocusedContent(width, totalHeight int) []stri
 	}
 
 	// Pad remaining lines
+	emptyLine := GetPadding(width)
 	for len(lines) < totalHeight {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, emptyLine)
 	}
 
 	return lines

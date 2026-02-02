@@ -16,7 +16,7 @@ func RenderSectionHeader(title string, width int, titleStyle lipgloss.Style, bor
 	}
 
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-	line := borderStyle.Render(strings.Repeat("─", width))
+	line := borderStyle.Render(GetRepeatedChar("─", width))
 	styledTitle := titleStyle.Render(title)
 
 	return line + "\n" + styledTitle + "\n" + line
@@ -71,7 +71,7 @@ func PadLine(line string, width int) string {
 		// Need to truncate - use ANSI-aware truncation
 		return TruncateWithANSI(line, width)
 	}
-	return line + strings.Repeat(" ", width-visibleWidth)
+	return line + GetPadding(width-visibleWidth)
 }
 
 // PadLineWithBg pads a styled string to width with the given background color.
@@ -82,7 +82,7 @@ func PadLineWithBg(styled string, width int, bg lipgloss.AdaptiveColor) string {
 		// Use ANSI-aware truncation if needed
 		return TruncateWithANSI(styled, width)
 	}
-	padding := strings.Repeat(" ", width-visible)
+	padding := GetPadding(width - visible)
 	return styled + lipgloss.NewStyle().Background(bg).Render(padding)
 }
 
@@ -93,7 +93,7 @@ func PadLineWithStyle(styled string, width int, paddingStyle lipgloss.Style) str
 	if visible >= width {
 		return TruncateWithANSI(styled, width)
 	}
-	padding := strings.Repeat(" ", width-visible)
+	padding := GetPadding(width - visible)
 	return styled + paddingStyle.Render(padding)
 }
 

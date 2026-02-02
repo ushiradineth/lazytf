@@ -97,11 +97,12 @@ func (f *PanelFrame) RenderWithContent(contentLines []string) string {
 	// Ensure we have exactly contentHeight lines
 	lines := make([]string, contentHeight)
 	contentWidth := f.ContentWidth()
+	emptyLine := GetPadding(contentWidth) // Cache empty line for reuse
 	for i := range contentHeight {
 		if i < len(contentLines) {
 			lines[i] = f.padLine(contentLines[i], contentWidth)
 		} else {
-			lines[i] = strings.Repeat(" ", contentWidth)
+			lines[i] = emptyLine
 		}
 	}
 
@@ -199,11 +200,11 @@ func (f *PanelFrame) buildTitleLine(topLeft, topRight, horizontal, title string,
 
 	if titleWidth > availableWidth {
 		// Title too wide - just render border
-		return borderLine(borderStyle).Render(topLeft + strings.Repeat(horizontal, availableWidth) + topRight)
+		return borderLine(borderStyle).Render(topLeft + GetRepeatedChar(horizontal, availableWidth) + topRight)
 	}
 
 	paddingNeeded := availableWidth - titleWidth
-	return borderLine(borderStyle).Render(topLeft) + title + borderLine(borderStyle).Render(strings.Repeat(horizontal, paddingNeeded)+topRight)
+	return borderLine(borderStyle).Render(topLeft) + title + borderLine(borderStyle).Render(GetRepeatedChar(horizontal, paddingNeeded)+topRight)
 }
 
 // buildFooter builds the footer string.
@@ -221,11 +222,11 @@ func (f *PanelFrame) buildFooterLine(bottomLeft, bottomRight, horizontal, footer
 
 	if footer == "" || footerWidth > availableWidth {
 		// No footer or too wide - just render border
-		return borderLine(borderStyle).Render(bottomLeft + strings.Repeat(horizontal, availableWidth) + bottomRight)
+		return borderLine(borderStyle).Render(bottomLeft + GetRepeatedChar(horizontal, availableWidth) + bottomRight)
 	}
 
 	leftPadding := availableWidth - footerWidth
-	return borderLine(borderStyle).Render(bottomLeft+strings.Repeat(horizontal, leftPadding)) + footer + borderLine(borderStyle).Render(bottomRight)
+	return borderLine(borderStyle).Render(bottomLeft+GetRepeatedChar(horizontal, leftPadding)) + footer + borderLine(borderStyle).Render(bottomRight)
 }
 
 // calculateScrollbar returns the scrollbar characters for each content line.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/ui/components"
 )
 
 // StateListView renders the terraform state list.
@@ -123,8 +124,9 @@ func (v *StateListView) View() string {
 	}
 
 	// Pad if needed
+	emptyLine := components.GetPadding(v.width)
 	for len(lines) < visibleRows {
-		lines = append(lines, strings.Repeat(" ", v.width))
+		lines = append(lines, emptyLine)
 	}
 
 	body := strings.Join(lines, "\n")

@@ -275,8 +275,9 @@ func (m *Modal) Overlay(baseView string) string {
 	modalLines := strings.Split(modalBox, "\n")
 
 	// Ensure we have enough lines in base view
+	emptyLine := GetPadding(m.width)
 	for len(baseLines) < m.height {
-		baseLines = append(baseLines, strings.Repeat(" ", m.width))
+		baseLines = append(baseLines, emptyLine)
 	}
 
 	// Overlay modal on base view
@@ -291,7 +292,7 @@ func (m *Modal) Overlay(baseView string) string {
 		// Ensure base line is wide enough (visual width)
 		baseLineWidth := ansi.StringWidth(baseLine)
 		if baseLineWidth < m.width {
-			baseLine = baseLine + strings.Repeat(" ", m.width-baseLineWidth)
+			baseLine = baseLine + GetPadding(m.width-baseLineWidth)
 		}
 
 		// Build the new line using ANSI-aware functions:
@@ -455,7 +456,7 @@ func (m *Modal) renderHelpItem(item HelpItem, keyWidth, contentWidth int, isSele
 		fullLine := keyText + "  " + item.Description
 		// Pad to content width
 		if len(fullLine) < contentWidth {
-			fullLine += strings.Repeat(" ", contentWidth-len(fullLine))
+			fullLine += GetPadding(contentWidth - len(fullLine))
 		}
 		return m.styles.SelectedLine.Render(fullLine)
 	}

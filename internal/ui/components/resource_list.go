@@ -275,11 +275,13 @@ func (r *ResourceList) View() string {
 
 	// Pad content lines to fill panel
 	result := make([]string, contentHeight)
+	contentW := r.frame.ContentWidth()
+	emptyLine := GetPadding(contentW)
 	for i := range contentHeight {
 		if i < len(contentLines) {
-			result[i] = r.padLineToWidth(contentLines[i], r.frame.ContentWidth())
+			result[i] = r.padLineToWidth(contentLines[i], contentW)
 		} else {
-			result[i] = strings.Repeat(" ", r.frame.ContentWidth())
+			result[i] = emptyLine
 		}
 	}
 
@@ -484,7 +486,7 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 	// Render the header line
 	prefix := ""
 	if indent > 0 {
-		prefix = strings.Repeat(" ", indent)
+		prefix = GetPadding(indent)
 	}
 	address := resource.Address
 	if indent > 0 {
@@ -1003,7 +1005,7 @@ func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded
 	}
 	prefix := ""
 	if indent > 0 {
-		prefix = strings.Repeat(" ", indent)
+		prefix = GetPadding(indent)
 	}
 	line := fmt.Sprintf("%s%s %s (%d)", prefix, indicator, group, count)
 	if contentWidth > 0 {

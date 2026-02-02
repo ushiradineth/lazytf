@@ -391,11 +391,13 @@ func (m *MainArea) View() string {
 
 	// Pad content lines to fill panel
 	result := make([]string, contentHeight)
+	contentW := m.frame.ContentWidth()
+	emptyLine := components.GetPadding(contentW)
 	for i := range contentHeight {
 		if i < len(contentLines) {
-			result[i] = m.padLine(contentLines[i], m.frame.ContentWidth())
+			result[i] = m.padLine(contentLines[i], contentW)
 		} else {
-			result[i] = strings.Repeat(" ", m.frame.ContentWidth())
+			result[i] = emptyLine
 		}
 	}
 

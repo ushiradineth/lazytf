@@ -1,8 +1,6 @@
 package components
 
 import (
-	"strings"
-
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
@@ -303,11 +301,12 @@ func (l *ListPanel) adjustScrollOffset() {
 func (l *ListPanel) renderContent(width, height int) []string {
 	lines := make([]string, height)
 
+	emptyLine := GetPadding(width)
 	if len(l.items) == 0 {
 		emptyMsg := l.styles.Dimmed.Render("No items")
 		lines[0] = l.padLine(emptyMsg, width)
 		for i := range height - 1 {
-			lines[i+1] = strings.Repeat(" ", width)
+			lines[i+1] = emptyLine
 		}
 		return lines
 	}
@@ -322,7 +321,7 @@ func (l *ListPanel) renderContent(width, height int) []string {
 			rendered := item.Render(l.styles, width, isSelected)
 			lines[i] = l.padLine(rendered, width)
 		} else {
-			lines[i] = strings.Repeat(" ", width)
+			lines[i] = emptyLine
 		}
 	}
 
