@@ -114,6 +114,17 @@ linters:
           - goconst
         path: (.+)_test\.go
 
+      # Allow unused parameters/receivers in test files (common pattern for test helpers)
+      - linters:
+          - revive
+        path: (.+)_test\.go
+        text: "unused-parameter|unused-receiver"
+
+      # Allow test helper functions without t.Helper() in test files
+      - linters:
+          - thelper
+        path: (.+)_test\.go
+
       # Allow utils package name (common Go pattern)
       - linters:
           - revive
@@ -359,7 +370,7 @@ linters:
         - name: useless-break
 
         - name: unused-receiver
-          disabled: false
+          disabled: true  # Many methods implement interfaces but don't use receiver
 
         - name: var-declaration
 

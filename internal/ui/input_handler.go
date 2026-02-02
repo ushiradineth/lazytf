@@ -1,10 +1,6 @@
 package ui
 
-import (
-	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/ushiradineth/lazytf/internal/consts"
-)
+import tea "github.com/charmbracelet/bubbletea"
 
 func (m *Model) inputCaptured() bool {
 	return false
@@ -38,10 +34,10 @@ func (m *Model) handleLegacyOutputKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		m.quitting = true
 		return true, tea.Quit
-	case consts.KeyCtrlC:
+	case "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
 		m.cancelExecution()
 		return true, nil
-	case consts.KeyEsc:
+	case "esc": //nolint:goconst // keyboard keys are clearer as literals
 		if !m.planRunning && !m.applyRunning {
 			m.execView = viewMain
 			return true, nil
@@ -57,7 +53,7 @@ func (m *Model) handleCommandLogKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case consts.KeyEsc:
+	case "esc": //nolint:goconst // keyboard keys are clearer as literals
 		m.execView = viewMain
 		return true, nil
 	default:
@@ -70,7 +66,7 @@ func (m *Model) handleStateListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case consts.KeyEsc:
+	case "esc": //nolint:goconst // keyboard keys are clearer as literals
 		m.execView = viewMain
 		return true, nil
 	case "up", "k":
@@ -78,12 +74,12 @@ func (m *Model) handleStateListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			m.stateListView.MoveUp()
 		}
 		return true, nil
-	case consts.KeyDown, "j":
+	case "down", "j": //nolint:goconst // keyboard keys are clearer as literals
 		if m.stateListView != nil {
 			m.stateListView.MoveDown()
 		}
 		return true, nil
-	case consts.KeyEnter:
+	case "enter": //nolint:goconst // keyboard keys are clearer as literals
 		if m.stateListView != nil {
 			if res := m.stateListView.GetSelected(); res != nil {
 				return true, m.beginStateShow(res.Address)
@@ -100,7 +96,7 @@ func (m *Model) handleStateShowKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case consts.KeyEsc:
+	case "esc": //nolint:goconst // keyboard keys are clearer as literals
 		m.execView = viewStateList
 		return true, nil
 	default:

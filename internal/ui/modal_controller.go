@@ -60,8 +60,8 @@ func (m *Model) updateSettingsModalContent() {
 		// Terraform section
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "Terraform", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "binary", Description: fallbackValue(cfg.Terraform.Binary, "default")})
-		items = append(items, components.HelpItem{Key: "working dir", Description: fallbackValue(cfg.Terraform.WorkingDir, "default")})
+		items = append(items, components.HelpItem{Key: "binary", Description: fallbackValue(cfg.Terraform.Binary)})
+		items = append(items, components.HelpItem{Key: "working dir", Description: fallbackValue(cfg.Terraform.WorkingDir)})
 		items = append(items, components.HelpItem{Key: "timeout", Description: cfg.Terraform.Timeout.String()})
 		items = append(items, components.HelpItem{Key: "parallelism", Description: strconv.Itoa(cfg.Terraform.Parallelism)})
 		items = append(items, components.HelpItem{Key: "default flags", Description: strings.Join(cfg.Terraform.DefaultFlags, " ")})
@@ -80,7 +80,7 @@ func (m *Model) updateSettingsModalContent() {
 		items = append(items, components.HelpItem{Key: "History", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "enabled", Description: strconv.FormatBool(cfg.History.Enabled)})
 		items = append(items, components.HelpItem{Key: "level", Description: cfg.History.Level})
-		items = append(items, components.HelpItem{Key: "path", Description: fallbackValue(cfg.History.Path, "default")})
+		items = append(items, components.HelpItem{Key: "path", Description: fallbackValue(cfg.History.Path)})
 		items = append(items, components.HelpItem{Key: "retention days", Description: strconv.Itoa(cfg.History.RetentionDays)})
 		items = append(items, components.HelpItem{Key: "max entries", Description: strconv.Itoa(cfg.History.MaxEntries)})
 
@@ -95,9 +95,12 @@ func (m *Model) updateSettingsModalContent() {
 	m.settingsModal.Show()
 }
 
-func fallbackValue(value, defaultValue string) string {
+// defaultThemeName is the name of the default theme.
+const defaultThemeName = "default"
+
+func fallbackValue(value string) string {
 	if strings.TrimSpace(value) == "" {
-		return defaultValue
+		return defaultThemeName
 	}
 	return value
 }
@@ -106,7 +109,7 @@ func fallbackValue(value, defaultValue string) string {
 
 // availableThemes returns the list of available theme names.
 var availableThemes = []string{
-	"default",
+	defaultThemeName,
 	"terraform-cloud",
 	"monokai",
 	"nord",
@@ -116,7 +119,7 @@ var availableThemes = []string{
 // themeDisplayName returns a user-friendly display name for a theme.
 func themeDisplayName(name string) string {
 	switch name {
-	case "default":
+	case defaultThemeName:
 		return "Default"
 	case "terraform-cloud":
 		return "Terraform Cloud"
@@ -158,7 +161,7 @@ func (m *Model) updateThemeModalContent() {
 	}
 
 	currentTheme := m.styles.Theme.Name
-	var items []components.HelpItem
+	items := make([]components.HelpItem, 0, len(availableThemes)+2) // Pre-allocate for themes + footer hints
 	currentIndex := 0
 
 	for i, themeName := range availableThemes {
@@ -213,6 +216,8 @@ func (m *Model) previewSelectedTheme() {
 }
 
 // applyStyles updates all components with new styles.
+//
+//nolint:gocyclo // Updating all components requires many nil checks
 func (m *Model) applyStyles(newStyles *styles.Styles) {
 	if newStyles == nil {
 		return

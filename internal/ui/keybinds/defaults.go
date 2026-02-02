@@ -223,6 +223,7 @@ func registerNavigationBindings(r *Registry) {
 	})
 }
 
+//nolint:funlen // Keybind registration is naturally verbose
 func registerResourcesPanelBindings(r *Registry) {
 	// Filter toggles - registered as global in non-execution mode, panel-scoped in execution mode
 	// The execution mode variant (ScopePanelTab) has higher priority and will take precedence
@@ -416,6 +417,7 @@ func registerExecutionBindings(r *Registry) {
 	})
 }
 
+//nolint:funlen // Keybind registration is naturally verbose
 func registerModalBindings(r *Registry) {
 	// Help modal
 	r.Register(Binding{

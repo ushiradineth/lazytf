@@ -59,7 +59,7 @@ func (r *Registry) Handle(msg tea.KeyMsg, ctx *Context) (tea.Cmd, bool) {
 
 	// When a modal is open, only process modal-scoped bindings
 	// All other keys are consumed but not executed (blocking other handlers)
-	if ctx.ActiveModal != ModalNone {
+	if ctx.ActiveModal != ModalNone { //nolint:nestif // Modal handling requires nested checks
 		// Always allow q and ctrl+c to quit
 		if key == "q" || key == "ctrl+c" {
 			binding := r.Resolve(key, ctx)

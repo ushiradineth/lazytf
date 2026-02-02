@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -494,7 +495,7 @@ func TestModalEnsureSelectionVisibleScrollsDown(t *testing.T) {
 	// Create many items
 	items := make([]HelpItem, 50)
 	for i := range items {
-		items[i] = HelpItem{Key: fmt.Sprintf("%d", i), Description: fmt.Sprintf("Item %d", i)}
+		items[i] = HelpItem{Key: strconv.Itoa(i), Description: fmt.Sprintf("Item %d", i)}
 	}
 	modal.SetItems(items)
 	modal.Show()
@@ -681,7 +682,7 @@ func TestModalEnsureSelectionVisibleScrollsUp(t *testing.T) {
 	// Create many items
 	items := make([]HelpItem, 50)
 	for i := range items {
-		items[i] = HelpItem{Key: fmt.Sprintf("%d", i), Description: fmt.Sprintf("Item %d", i)}
+		items[i] = HelpItem{Key: strconv.Itoa(i), Description: fmt.Sprintf("Item %d", i)}
 	}
 	modal.SetItems(items)
 	modal.Show()

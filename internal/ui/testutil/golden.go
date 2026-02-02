@@ -91,7 +91,7 @@ func (g *Golden) update(t *testing.T, path string, content string) {
 	}
 
 	normalized := normalizeGolden(content)
-	if err := os.WriteFile(path, []byte(normalized), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(normalized), 0o600); err != nil {
 		t.Fatalf("failed to write golden file: %v", err)
 	}
 
@@ -104,9 +104,9 @@ func shouldUpdate() bool {
 }
 
 // normalizeGolden normalizes content for golden file comparison.
-// - Trims trailing whitespace from each line
-// - Ensures consistent line endings
-// - Trims trailing newlines
+// - Trims trailing whitespace from each line.
+// - Ensures consistent line endings.
+// - Trims trailing newlines.
 func normalizeGolden(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {

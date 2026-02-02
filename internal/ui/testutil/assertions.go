@@ -18,20 +18,20 @@ func (r *RenderResult) AssertHeight(t *testing.T, expected int) *RenderResult {
 	return r
 }
 
-// AssertHeightAtMost asserts that the output has at most max lines.
-func (r *RenderResult) AssertHeightAtMost(t *testing.T, max int) *RenderResult {
+// AssertHeightAtMost asserts that the output has at most maxLines lines.
+func (r *RenderResult) AssertHeightAtMost(t *testing.T, maxLines int) *RenderResult {
 	t.Helper()
-	if r.LineCount > max {
-		t.Errorf("height overflow: got %d lines, want at most %d", r.LineCount, max)
+	if r.LineCount > maxLines {
+		t.Errorf("height overflow: got %d lines, want at most %d", r.LineCount, maxLines)
 	}
 	return r
 }
 
-// AssertHeightAtLeast asserts that the output has at least min lines.
-func (r *RenderResult) AssertHeightAtLeast(t *testing.T, min int) *RenderResult {
+// AssertHeightAtLeast asserts that the output has at least minLines lines.
+func (r *RenderResult) AssertHeightAtLeast(t *testing.T, minLines int) *RenderResult {
 	t.Helper()
-	if r.LineCount < min {
-		t.Errorf("height underflow: got %d lines, want at least %d", r.LineCount, min)
+	if r.LineCount < minLines {
+		t.Errorf("height underflow: got %d lines, want at least %d", r.LineCount, minLines)
 	}
 	return r
 }
@@ -375,21 +375,25 @@ func (r *RenderResult) AssertHasActionIndicator(t *testing.T, indicator string) 
 
 // AssertHasCreateIndicator asserts the output shows a create (+) indicator.
 func (r *RenderResult) AssertHasCreateIndicator(t *testing.T) *RenderResult {
+	t.Helper()
 	return r.AssertContainsAny(t, "+", "create", "C")
 }
 
 // AssertHasUpdateIndicator asserts the output shows an update (~) indicator.
 func (r *RenderResult) AssertHasUpdateIndicator(t *testing.T) *RenderResult {
+	t.Helper()
 	return r.AssertContainsAny(t, "~", "update", "U")
 }
 
 // AssertHasDeleteIndicator asserts the output shows a delete (-) indicator.
 func (r *RenderResult) AssertHasDeleteIndicator(t *testing.T) *RenderResult {
+	t.Helper()
 	return r.AssertContainsAny(t, "-", "delete", "D")
 }
 
 // AssertHasReplaceIndicator asserts the output shows a replace (±) indicator.
 func (r *RenderResult) AssertHasReplaceIndicator(t *testing.T) *RenderResult {
+	t.Helper()
 	return r.AssertContainsAny(t, "±", "replace", "R")
 }
 
@@ -403,7 +407,7 @@ func (r *RenderResult) AssertIsCentered(t *testing.T) *RenderResult {
 	}
 	// Check middle lines for leading whitespace (indication of centering)
 	middleLine := r.Lines[len(r.Lines)/2]
-	if len(middleLine) > 0 && middleLine[0] != ' ' {
+	if middleLine != "" && middleLine[0] != ' ' {
 		// Content might still be centered if using full width
 		// Check if there's significant padding
 		trimmed := strings.TrimLeft(middleLine, " ")
@@ -503,10 +507,9 @@ func (r *RenderResult) AssertNoSelection(t *testing.T) *RenderResult {
 	t.Helper()
 	// Check that there's no background color for selection
 	// This is a weak check - selection might use specific colors
-	if strings.Contains(r.Raw, "\x1b[48;") {
-		// Has 256/true color background - might be selection
-		// For now, we just note this might be present
-	}
+	// Note: \x1b[48; is 256/true color background - might indicate selection
+	// but we can't definitively check without knowing the exact selection color
+	_ = strings.Contains(r.Raw, "\x1b[48;")
 	return r
 }
 

@@ -23,7 +23,7 @@ func TestMetadataFromState(t *testing.T) {
 			{"type": "aws_vpc", "name": "main"}
 		]
 	}`
-	if err := os.WriteFile(stateFile, []byte(stateContent), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte(stateContent), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 
@@ -59,7 +59,7 @@ func TestMetadataFromStateInvalidJSON(t *testing.T) {
 
 	// Create a file with invalid JSON
 	stateFile := filepath.Join(tmpDir, "terraform.tfstate")
-	if err := os.WriteFile(stateFile, []byte("not valid json"), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte("not valid json"), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestMetadataForWorkspace(t *testing.T) {
 		"terraform_version": "1.4.0",
 		"resources": [{"type": "aws_s3_bucket", "name": "data"}]
 	}`
-	if err := os.WriteFile(stateFile, []byte(stateContent), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte(stateContent), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 
@@ -118,7 +118,7 @@ func TestMetadataForWorkspaceDefault(t *testing.T) {
 	// Create default state file
 	stateFile := filepath.Join(tmpDir, "terraform.tfstate")
 	stateContent := `{"terraform_version": "1.3.0", "resources": []}`
-	if err := os.WriteFile(stateFile, []byte(stateContent), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte(stateContent), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestMetadataForFolder(t *testing.T) {
 			{"type": "null_resource", "name": "test"}
 		]
 	}`
-	if err := os.WriteFile(stateFile, []byte(stateContent), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte(stateContent), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 
@@ -265,7 +265,7 @@ func TestFolderStateFile(t *testing.T) {
 
 	// Create state file and test again
 	stateFile := filepath.Join(tmpDir, "terraform.tfstate")
-	if err := os.WriteFile(stateFile, []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(stateFile, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("Failed to write state file: %v", err)
 	}
 

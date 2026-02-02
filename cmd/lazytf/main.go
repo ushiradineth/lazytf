@@ -101,7 +101,7 @@ showing only changed attributes in a git-style diff format.`,
 	return rootCmd
 }
 
-func run(cmd *cobra.Command, args []string) error {
+func run(_ *cobra.Command, args []string) error {
 	configManager, err := config.NewManager(configPath)
 	if err != nil {
 		return fmt.Errorf("config manager: %w", err)

@@ -5,7 +5,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
@@ -132,10 +131,10 @@ func (s *StateListContent) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 	case "up", "k":
 		s.MoveUp()
 		return true, nil
-	case consts.KeyDown, "j":
+	case "down", "j": //nolint:goconst // keyboard keys are clearer as literals
 		s.MoveDown()
 		return true, nil
-	case consts.KeyEnter:
+	case "enter": //nolint:goconst // keyboard keys are clearer as literals
 		if res := s.GetSelected(); res != nil && s.OnSelect != nil {
 			return true, s.OnSelect(res.Address)
 		}

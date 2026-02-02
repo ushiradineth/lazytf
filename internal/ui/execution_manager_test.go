@@ -1729,7 +1729,10 @@ func TestBeginValidateExecuteCommandInvalid(t *testing.T) {
 
 	cmd := m.beginValidate()
 	msg := cmd()
-	completeMsg := msg.(ValidateCompleteMsg)
+	completeMsg, ok := msg.(ValidateCompleteMsg)
+	if !ok {
+		t.Fatalf("expected ValidateCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Result == nil {
 		t.Fatal("expected non-nil result")
@@ -1756,7 +1759,10 @@ func TestBeginValidateExecuteCommandExecutorError(t *testing.T) {
 
 	cmd := m.beginValidate()
 	msg := cmd()
-	completeMsg := msg.(ValidateCompleteMsg)
+	completeMsg, ok := msg.(ValidateCompleteMsg)
+	if !ok {
+		t.Fatalf("expected ValidateCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Error == nil {
 		t.Error("expected error")
@@ -1777,7 +1783,10 @@ func TestBeginValidateExecuteCommandParseError(t *testing.T) {
 
 	cmd := m.beginValidate()
 	msg := cmd()
-	completeMsg := msg.(ValidateCompleteMsg)
+	completeMsg, ok := msg.(ValidateCompleteMsg)
+	if !ok {
+		t.Fatalf("expected ValidateCompleteMsg, got %T", msg)
+	}
 
 	// Parse error should be in the Error field
 	if completeMsg.Error == nil {
@@ -1861,7 +1870,10 @@ func TestBeginFormatExecuteCommandNoChanges(t *testing.T) {
 
 	cmd := m.beginFormat()
 	msg := cmd()
-	completeMsg := msg.(FormatCompleteMsg)
+	completeMsg, ok := msg.(FormatCompleteMsg)
+	if !ok {
+		t.Fatalf("expected FormatCompleteMsg, got %T", msg)
+	}
 
 	if len(completeMsg.ChangedFiles) != 0 {
 		t.Errorf("expected 0 changed files, got %d", len(completeMsg.ChangedFiles))
@@ -1882,7 +1894,10 @@ func TestBeginFormatExecuteCommandError(t *testing.T) {
 
 	cmd := m.beginFormat()
 	msg := cmd()
-	completeMsg := msg.(FormatCompleteMsg)
+	completeMsg, ok := msg.(FormatCompleteMsg)
+	if !ok {
+		t.Fatalf("expected FormatCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Error == nil {
 		t.Error("expected error")
@@ -1938,7 +1953,10 @@ func TestBeginStateListExecuteCommandEmpty(t *testing.T) {
 
 	cmd := m.beginStateList()
 	msg := cmd()
-	completeMsg := msg.(StateListCompleteMsg)
+	completeMsg, ok := msg.(StateListCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateListCompleteMsg, got %T", msg)
+	}
 
 	if len(completeMsg.Resources) != 0 {
 		t.Errorf("expected 0 resources, got %d", len(completeMsg.Resources))
@@ -1959,7 +1977,10 @@ func TestBeginStateListExecuteCommandError(t *testing.T) {
 
 	cmd := m.beginStateList()
 	msg := cmd()
-	completeMsg := msg.(StateListCompleteMsg)
+	completeMsg, ok := msg.(StateListCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateListCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Error == nil {
 		t.Error("expected error")
@@ -1980,7 +2001,10 @@ func TestBeginStateListExecuteCommandResultError(t *testing.T) {
 
 	cmd := m.beginStateList()
 	msg := cmd()
-	completeMsg := msg.(StateListCompleteMsg)
+	completeMsg, ok := msg.(StateListCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateListCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Error == nil {
 		t.Error("expected error from result.Error")
@@ -2128,7 +2152,10 @@ func TestWaitPlanCompleteCmdWithErrorExec(t *testing.T) {
 
 	cmd := m.waitPlanCompleteCmd(result)
 	msg := cmd()
-	completeMsg := msg.(PlanCompleteMsg)
+	completeMsg, ok := msg.(PlanCompleteMsg)
+	if !ok {
+		t.Fatalf("expected PlanCompleteMsg, got %T", msg)
+	}
 
 	if completeMsg.Error == nil {
 		t.Error("expected non-nil error")
@@ -2307,7 +2334,10 @@ Plan: 1 to add, 0 to change, 0 to destroy.`
 
 	cmd := m.waitPlanCompleteCmd(result)
 	msg := cmd()
-	completeMsg := msg.(PlanCompleteMsg)
+	completeMsg, ok := msg.(PlanCompleteMsg)
+	if !ok {
+		t.Fatalf("expected PlanCompleteMsg, got %T", msg)
+	}
 
 	// Should have called Show to get plan details
 	if mock.ShowCalls != 1 {
@@ -2371,7 +2401,10 @@ func TestBeginPlanExecuteCommandError(t *testing.T) {
 
 	cmd := m.beginPlan()
 	msg := cmd()
-	startMsg := msg.(PlanStartMsg)
+	startMsg, ok := msg.(PlanStartMsg)
+	if !ok {
+		t.Fatalf("expected PlanStartMsg, got %T", msg)
+	}
 
 	if startMsg.Error == nil {
 		t.Error("expected error")
@@ -2453,7 +2486,10 @@ func TestBeginApplyExecuteCommandError(t *testing.T) {
 
 	cmd := m.beginApply()
 	msg := cmd()
-	startMsg := msg.(ApplyStartMsg)
+	startMsg, ok := msg.(ApplyStartMsg)
+	if !ok {
+		t.Fatalf("expected ApplyStartMsg, got %T", msg)
+	}
 
 	if startMsg.Error == nil {
 		t.Error("expected error")
@@ -2535,7 +2571,10 @@ func TestBeginRefreshExecuteCommandError(t *testing.T) {
 
 	cmd := m.beginRefresh()
 	msg := cmd()
-	startMsg := msg.(RefreshStartMsg)
+	startMsg, ok := msg.(RefreshStartMsg)
+	if !ok {
+		t.Fatalf("expected RefreshStartMsg, got %T", msg)
+	}
 
 	if startMsg.Error == nil {
 		t.Error("expected error")

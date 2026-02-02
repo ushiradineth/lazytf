@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -793,7 +794,7 @@ func TestWriteFileAtomicSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
 	}
-	if string(content) != string(data) {
+	if !bytes.Equal(content, data) {
 		t.Errorf("expected %q, got %q", string(data), string(content))
 	}
 
@@ -935,7 +936,7 @@ func TestExpandConfigPathsWithHistoryPath(t *testing.T) {
 	if err := expandConfigPaths(cfg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expectedPath := filepath.Join(homeDir, ".lazytf/history.db")
+	expectedPath := filepath.Join(homeDir, ".lazytf", "history.db")
 	if cfg.History.Path != expectedPath {
 		t.Errorf("expected %q, got %q", expectedPath, cfg.History.Path)
 	}
@@ -963,7 +964,7 @@ func TestExpandPathWithTildeExpands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(homeDir, "config/file.yaml")
+	expected := filepath.Join(homeDir, "config", "file.yaml")
 	if expanded != expected {
 		t.Errorf("expected %q, got %q", expected, expanded)
 	}

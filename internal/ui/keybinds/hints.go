@@ -5,6 +5,9 @@ import (
 	"strings"
 )
 
+// categoryExecution is the name of the Execution category.
+const categoryExecution = "Execution"
+
 // HintOptions configures hint generation.
 type HintOptions struct {
 	// MaxPrimary is the maximum number of primary hints to show.
@@ -110,14 +113,14 @@ type HelpItem struct {
 
 // ForHelpModal returns all bindings formatted for the help modal.
 func (r *Registry) ForHelpModal(executionMode bool) []HelpItem {
-	var items []HelpItem
+	items := make([]HelpItem, 0, 32) // Pre-allocate with reasonable capacity
 
 	// Define category order
 	categoryOrder := []string{
 		"Panel Navigation",
 		"Navigation",
 		"Resources Panel",
-		"Execution",
+		categoryExecution,
 		"Search",
 		"General",
 	}
@@ -131,7 +134,7 @@ func (r *Registry) ForHelpModal(executionMode bool) []HelpItem {
 		}
 
 		// Filter execution bindings when not in execution mode
-		if !executionMode && category == "Execution" {
+		if !executionMode && category == categoryExecution {
 			continue
 		}
 

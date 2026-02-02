@@ -544,7 +544,7 @@ func (fakeTeaProgram) Send(_ tea.Msg) {}
 
 type fakeModel struct{}
 
-func (f *fakeModel) Init() tea.Cmd {
+func (*fakeModel) Init() tea.Cmd {
 	return nil
 }
 
@@ -552,7 +552,7 @@ func (f *fakeModel) Update(_ tea.Msg) (tea.Model, tea.Cmd) {
 	return f, nil
 }
 
-func (f *fakeModel) View() string {
+func (*fakeModel) View() string {
 	return ""
 }
 

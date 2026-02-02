@@ -4,12 +4,6 @@ package consts
 var Version = "0.1.0"
 
 const (
-	KeyCtrlC = "ctrl+c"
-	KeyDown  = "down"
-	KeyEnter = "enter"
-	KeyEsc   = "esc"
-	KeyUp    = "up"
-
 	DefaultName = "default"
 	EnvDev      = "dev"
 	EnvDevPath  = "envs/dev"

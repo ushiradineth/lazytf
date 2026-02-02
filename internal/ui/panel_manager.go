@@ -4,8 +4,6 @@ import (
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 // PanelManager manages panel registration, focus, and layout.
@@ -219,7 +217,7 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	// Calculate command log height if visible (only in execution mode)
 	commandLogHeight := 0
 	mainAreaHeight := availableHeight
-	if pm.executionMode && pm.commandLogVisible {
+	if pm.executionMode && pm.commandLogVisible { //nolint:nestif // Layout calculation requires nested checks
 		if pm.commandLogFocused {
 			// Full screen mode: command log takes 100%, main area hidden
 			commandLogHeight = availableHeight
@@ -337,6 +335,8 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 
 // HandleNavigation handles navigation keys (number keys, tab)
 // Returns true if the key was handled.
+//
+//nolint:gocyclo // Navigation logic has inherent complexity from multiple panels
 func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "1":
@@ -371,7 +371,7 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, pm.SetFocus(PanelResources)
 		}
 		return true, nil
-	case consts.KeyEsc:
+	case "esc": //nolint:goconst // keyboard keys are clearer as literals
 		// Return to resource list
 		if pm.focusedPanel != PanelResources || pm.commandLogFocused {
 			return true, pm.SetFocus(PanelResources)

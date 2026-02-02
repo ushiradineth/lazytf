@@ -294,7 +294,7 @@ func TestCheckWalkContextCanceled(t *testing.T) {
 	cancel() // Cancel immediately
 
 	err := checkWalkContext(ctx, nil)
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
@@ -304,12 +304,12 @@ func TestCheckWalkContextWithError(t *testing.T) {
 	walkErr := errors.New("walk error")
 
 	err := checkWalkContext(ctx, walkErr)
-	if err != walkErr {
+	if !errors.Is(err, walkErr) {
 		t.Errorf("expected walk error, got %v", err)
 	}
 }
 
-// mockDirEntry is a mock implementation of fs.DirEntry for testing
+// mockDirEntry is a mock implementation of fs.DirEntry for testing.
 type mockDirEntry struct {
 	name  string
 	isDir bool
@@ -318,4 +318,4 @@ type mockDirEntry struct {
 func (m mockDirEntry) Name() string               { return m.name }
 func (m mockDirEntry) IsDir() bool                { return m.isDir }
 func (m mockDirEntry) Type() os.FileMode          { return 0 }
-func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
+func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, os.ErrNotExist }

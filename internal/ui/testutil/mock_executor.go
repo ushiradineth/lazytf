@@ -132,29 +132,38 @@ func (m *MockExecutor) Init(_ context.Context) (*terraform.ExecutionResult, erro
 	return result, nil
 }
 
-// Plan implements ExecutorInterface.
-func (m *MockExecutor) Plan(_ context.Context, opts terraform.PlanOptions) (*terraform.ExecutionResult, <-chan string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.PlanCalls++
-	m.LastPlanOpts = opts
-
-	if m.PlanErr != nil {
-		return nil, nil, m.PlanErr
+// streamingOpResult returns a result, output channel, and error for streaming operations.
+func (m *MockExecutor) streamingOpResult(
+	configuredResult *terraform.ExecutionResult,
+	configuredOutput chan string,
+	configuredErr error,
+	defaultMsg string,
+) (*terraform.ExecutionResult, <-chan string, error) {
+	if configuredErr != nil {
+		return nil, nil, configuredErr
 	}
 
-	result := m.PlanResult
+	result := configuredResult
 	if result == nil {
-		result = NewMockResult("Plan: 1 to add, 0 to change, 0 to destroy.", 0)
+		result = NewMockResult(defaultMsg, 0)
 	}
 
-	output := m.PlanOutput
+	output := configuredOutput
 	if output == nil {
 		output = make(chan string)
 		close(output)
 	}
 
 	return result, output, nil
+}
+
+// Plan implements ExecutorInterface.
+func (m *MockExecutor) Plan(_ context.Context, opts terraform.PlanOptions) (*terraform.ExecutionResult, <-chan string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.PlanCalls++
+	m.LastPlanOpts = opts
+	return m.streamingOpResult(m.PlanResult, m.PlanOutput, m.PlanErr, "Plan: 1 to add, 0 to change, 0 to destroy.")
 }
 
 // Apply implements ExecutorInterface.
@@ -163,23 +172,7 @@ func (m *MockExecutor) Apply(_ context.Context, opts terraform.ApplyOptions) (*t
 	defer m.mu.Unlock()
 	m.ApplyCalls++
 	m.LastApplyOpts = opts
-
-	if m.ApplyErr != nil {
-		return nil, nil, m.ApplyErr
-	}
-
-	result := m.ApplyResult
-	if result == nil {
-		result = NewMockResult("Apply complete! Resources: 1 added, 0 changed, 0 destroyed.", 0)
-	}
-
-	output := m.ApplyOutput
-	if output == nil {
-		output = make(chan string)
-		close(output)
-	}
-
-	return result, output, nil
+	return m.streamingOpResult(m.ApplyResult, m.ApplyOutput, m.ApplyErr, "Apply complete! Resources: 1 added, 0 changed, 0 destroyed.")
 }
 
 // Refresh implements ExecutorInterface.
@@ -188,23 +181,7 @@ func (m *MockExecutor) Refresh(_ context.Context, opts terraform.RefreshOptions)
 	defer m.mu.Unlock()
 	m.RefreshCalls++
 	m.LastRefreshOpts = opts
-
-	if m.RefreshErr != nil {
-		return nil, nil, m.RefreshErr
-	}
-
-	result := m.RefreshResult
-	if result == nil {
-		result = NewMockResult("Refresh complete.", 0)
-	}
-
-	output := m.RefreshOutput
-	if output == nil {
-		output = make(chan string)
-		close(output)
-	}
-
-	return result, output, nil
+	return m.streamingOpResult(m.RefreshResult, m.RefreshOutput, m.RefreshErr, "Refresh complete.")
 }
 
 // Validate implements ExecutorInterface.
@@ -323,7 +300,7 @@ func (m *MockExecutor) WorkDir() string {
 // CloneWithWorkDir implements ExecutorInterface.
 // Returns nil for mock - tests typically don't need the actual clone behavior.
 func (m *MockExecutor) CloneWithWorkDir(_ string) (*terraform.Executor, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil // Intentional for mock - callers check if result is nil
 }
 
 // Reset clears all call counts and last arguments.

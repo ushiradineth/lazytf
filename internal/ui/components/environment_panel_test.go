@@ -943,11 +943,11 @@ func TestFormatEnvAge(t *testing.T) {
 		})
 	}
 
-	// Test old dates (> 7 days)
+	// Test old dates (> 7 days) - just verify it returns something
 	oldDate := now.Add(-30 * 24 * time.Hour)
 	result := formatEnvAge(oldDate)
-	if strings.Contains(result, "d") && !strings.Contains(result, "Jan") {
-		// Either showing days or formatted date is fine
+	if result == "" {
+		t.Error("expected non-empty result for old date")
 	}
 }
 

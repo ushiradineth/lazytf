@@ -16,7 +16,7 @@ func TestNewGolden(t *testing.T) {
 func TestGoldenPath(t *testing.T) {
 	g := NewGolden("testdata/golden/component")
 	path := g.path("test_case")
-	expected := filepath.Join("testdata/golden/component", "test_case.txt")
+	expected := filepath.Join("testdata", "golden", "component", "test_case.txt")
 	if path != expected {
 		t.Errorf("expected path %q, got %q", expected, path)
 	}
@@ -34,7 +34,7 @@ func TestGoldenExists(t *testing.T) {
 
 	// Create the file
 	path := g.path("test")
-	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("content"), 0o600); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestGoldenAssertMatch(t *testing.T) {
 
 	// Create a golden file
 	path := g.path("matching")
-	if err := os.WriteFile(path, []byte("expected content"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("expected content"), 0o600); err != nil {
 		t.Fatalf("failed to create golden file: %v", err)
 	}
 
@@ -142,27 +142,20 @@ func TestGoldenAssertMatch(t *testing.T) {
 }
 
 func TestShouldUpdate(t *testing.T) {
-	// Save and restore env
-	original := os.Getenv(UpdateEnv)
-	defer func() {
-		if original == "" {
-			os.Unsetenv(UpdateEnv)
-		} else {
-			os.Setenv(UpdateEnv, original)
-		}
-	}()
-
-	os.Unsetenv(UpdateEnv)
+	// Test with env not set
+	t.Setenv(UpdateEnv, "")
 	if shouldUpdate() {
 		t.Error("expected shouldUpdate() = false when env not set")
 	}
 
-	os.Setenv(UpdateEnv, "0")
+	// Test with env = "0"
+	t.Setenv(UpdateEnv, "0")
 	if shouldUpdate() {
 		t.Error("expected shouldUpdate() = false when env = '0'")
 	}
 
-	os.Setenv(UpdateEnv, "1")
+	// Test with env = "1"
+	t.Setenv(UpdateEnv, "1")
 	if !shouldUpdate() {
 		t.Error("expected shouldUpdate() = true when env = '1'")
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ushiradineth/lazytf/internal/config"
-	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
@@ -415,6 +414,7 @@ func (m *Model) handleSecondaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 }
 
+//nolint:gocyclo,funlen // Message routing requires many cases
 func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case HistoryLoadedMsg:
@@ -447,15 +447,19 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	// Action request messages from panels
 	case RequestPlanMsg:
-		return m, m.beginPlan(), true
+		cmd := m.beginPlan()
+		return m, cmd, true
 	case RequestApplyMsg:
 		return m.handleRequestApply()
 	case RequestRefreshMsg:
-		return m, m.beginRefresh(), true
+		cmd := m.beginRefresh()
+		return m, cmd, true
 	case RequestValidateMsg:
-		return m, m.beginValidate(), true
+		cmd := m.beginValidate()
+		return m, cmd, true
 	case RequestFormatMsg:
-		return m, m.beginFormat(), true
+		cmd := m.beginFormat()
+		return m, cmd, true
 	case ToggleFilterMsg:
 		m.handleToggleFilter(msg.Action)
 		return m, nil, true
@@ -466,7 +470,8 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.resourceList.ToggleAllGroups()
 		return m, nil, true
 	case StateListStartMsg:
-		return m, m.beginStateList(), true
+		cmd := m.beginStateList()
+		return m, cmd, true
 	case SwitchResourcesTabMsg:
 		return m.handleSwitchResourcesTab(msg.Direction)
 
@@ -754,10 +759,10 @@ func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return false, nil
 	}
 	switch msg.String() {
-	case "q", consts.KeyCtrlC:
+	case "q", "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
 		m.quitting = true
 		return true, tea.Quit
-	case consts.KeyEsc, "D":
+	case "esc", "D": //nolint:goconst // keyboard keys are clearer as literals
 		m.diagnosticsFocused = false
 		return true, nil
 	default:
@@ -778,10 +783,10 @@ func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "y", "Y":
 		m.modalState = ModalNone
 		return true, m.beginApply()
-	case "n", "N", consts.KeyEsc:
+	case "n", "N", "esc": //nolint:goconst // keyboard keys are clearer as literals
 		m.modalState = ModalNone
 		return true, nil
-	case consts.KeyCtrlC:
+	case "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
 		m.cancelExecution()
 		m.modalState = ModalNone
 		return true, nil

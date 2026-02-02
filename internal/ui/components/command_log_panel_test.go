@@ -414,7 +414,7 @@ func TestCommandLogPanelExpandFillsContent(t *testing.T) {
 	}
 }
 
-// cmdLogTestSplitLines splits a string into lines (test helper)
+// cmdLogTestSplitLines splits a string into lines (test helper).
 func cmdLogTestSplitLines(s string) []string {
 	var lines []string
 	start := 0
@@ -430,7 +430,7 @@ func cmdLogTestSplitLines(s string) []string {
 	return lines
 }
 
-// cmdLogTestTrimAnsi removes ANSI escape codes and trims spaces (test helper)
+// cmdLogTestTrimAnsi removes ANSI escape codes and trims spaces (test helper).
 func cmdLogTestTrimAnsi(s string) string {
 	// Simple ANSI removal - skip escape sequences
 	var result []byte
@@ -439,7 +439,7 @@ func cmdLogTestTrimAnsi(s string) string {
 		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
 			// Skip until we find the end of the escape sequence
 			i += 2
-			for i < len(s) && !((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+			for i < len(s) && !isLetter(s[i]) {
 				i++
 			}
 			if i < len(s) {
@@ -462,7 +462,11 @@ func cmdLogTestTrimAnsi(s string) string {
 	return str[start:end]
 }
 
-// cmdLogTestIsBorderLine checks if a line is just border characters (test helper)
+func isLetter(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
+// cmdLogTestIsBorderLine checks if a line is just border characters (test helper).
 func cmdLogTestIsBorderLine(s string) bool {
 	for _, r := range s {
 		if r != '─' && r != '│' && r != '┌' && r != '┐' && r != '└' && r != '┘' && r != '├' && r != '┤' && r != '┬' && r != '┴' && r != '┼' && r != ' ' {

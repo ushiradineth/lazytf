@@ -381,6 +381,7 @@ func (m *Model) beginValidate() tea.Cmd {
 	return validateCmd
 }
 
+//nolint:gocognit,gocyclo // Validation result handling has inherent complexity
 func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
 	// Log to session history
 	output := msg.RawOutput
@@ -437,7 +438,7 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	}
 
 	var cmd tea.Cmd
-	if msg.Result.Valid {
+	if msg.Result.Valid { //nolint:nestif // Validation logic requires nested checks
 		// Reset progress indicator on success
 		if m.progressIndicator != nil {
 			m.progressIndicator.Reset()
@@ -457,6 +458,7 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	return m, cmd
 }
 
+//nolint:gocognit // Command setup with error handling has inherent complexity
 func (m *Model) beginFormat() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
@@ -514,11 +516,12 @@ func (m *Model) beginFormat() tea.Cmd {
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
 	// Log to session history
 	var formatOutput string
-	if msg.Error != nil {
+	switch {
+	case msg.Error != nil:
 		formatOutput = msg.Error.Error()
-	} else if len(msg.ChangedFiles) == 0 {
+	case len(msg.ChangedFiles) == 0:
 		formatOutput = "No files changed"
-	} else {
+	default:
 		formatOutput = fmt.Sprintf("Formatted %d file(s):\n%s", len(msg.ChangedFiles), strings.Join(msg.ChangedFiles, "\n"))
 	}
 	if m.commandLogPanel != nil {
@@ -550,6 +553,7 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
+//nolint:gocognit // State list setup has inherent complexity
 func (m *Model) beginStateList() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
@@ -664,7 +668,8 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 
 	// Automatically show the first item's details if we have resources
 	if len(msg.Resources) > 0 {
-		return m, m.showSelectedStateDetail()
+		cmd := m.showSelectedStateDetail()
+		return m, cmd
 	}
 
 	return m, nil
@@ -770,6 +775,7 @@ func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 	)
 }
 
+//nolint:gocognit,gocyclo // Plan completion handling has inherent complexity
 func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planRunning = false
 	m.cancelFunc = nil
@@ -780,7 +786,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.commandLogPanel.AppendSessionLog("Planned", m.buildCommand("plan", m.planRunFlags, false), msg.Output)
 	}
 
-	if msg.Error != nil {
+	if msg.Error != nil { //nolint:nestif // Plan error handling requires nested checks
 		// Mark progress indicator as failed
 		if m.progressIndicator != nil {
 			m.progressIndicator.Fail()
@@ -985,6 +991,7 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 	return m, cmd
 }
 
+//nolint:gocognit,gocyclo // Apply failure handling has inherent complexity
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Clear plan-related state on apply failure
 	m.planFilePath = ""
@@ -998,7 +1005,7 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	// Route logs to command log panel.
-	if msg.Result != nil {
+	if msg.Result != nil { //nolint:nestif // Apply failure logging requires nested checks
 		if m.commandLogPanel != nil {
 			m.commandLogPanel.SetLogText(msg.Result.Output)
 			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))

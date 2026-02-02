@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -346,7 +347,7 @@ func testSplitLines(s string) []string {
 
 func containsVisibleText(styled, text string) bool {
 	// Strip ANSI codes and check if text is present
-	visible := ""
+	var visible strings.Builder
 	inEscape := false
 	for _, r := range styled {
 		if r == '\x1b' {
@@ -359,9 +360,10 @@ func containsVisibleText(styled, text string) bool {
 			}
 			continue
 		}
-		visible += string(r)
+		visible.WriteRune(r)
 	}
-	return visible == text || len(visible) >= len(text)
+	result := visible.String()
+	return result == text || len(result) >= len(text)
 }
 
 func TestPadLineWithStyle(t *testing.T) {

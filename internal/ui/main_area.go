@@ -209,15 +209,16 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 }
 
 // HandleKey handles key events.
+//
+//nolint:gocognit,gocyclo // TUI key handling has inherent complexity from multiple modes
 func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	// Forward key events to appropriate child based on mode
-	switch m.mode {
-	case ModeLogs:
+	if m.mode == ModeLogs {
 		// Apply/Plan views handle scrolling (allow even when not focused,
 		// so users can scroll logs while on Resources panel during operations)
 		if m.applyView != nil {
 			switch msg.String() {
-			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j": //nolint:goconst // keyboard keys are clearer as literals
 				_, cmd := m.Update(msg)
 				return true, cmd
 			}
@@ -230,6 +231,8 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	}
 
 	switch m.mode {
+	case ModeLogs:
+		// Already handled above for unfocused state
 	case ModeDiff:
 		// Diff viewer scrolling
 		if m.diffViewer != nil {
@@ -287,6 +290,8 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 }
 
 // View renders the main area.
+//
+//nolint:gocognit,gocyclo,funlen // Rendering multiple view modes requires branching
 func (m *MainArea) View() string {
 	if m.styles == nil {
 		return "[DEBUG: styles nil]"

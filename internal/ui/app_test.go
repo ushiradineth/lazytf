@@ -1021,7 +1021,7 @@ func TestCommandLogExpandFillsContent(t *testing.T) {
 	}
 }
 
-// isPureBorderLine checks if a line contains only border characters
+// isPureBorderLine checks if a line contains only border characters.
 func isPureBorderLine(s string) bool {
 	for _, r := range s {
 		switch r {
@@ -1034,7 +1034,7 @@ func isPureBorderLine(s string) bool {
 	return true
 }
 
-// truncateForTest truncates a string for test output
+// truncateForTest truncates a string for test output.
 func truncateForTest(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -2083,7 +2083,7 @@ func TestHandleErrorMsg(t *testing.T) {
 	if !ok {
 		t.Fatal("expected *Model result")
 	}
-	if model.err != testErr {
+	if !errors.Is(model.err, testErr) {
 		t.Errorf("expected error to be set, got %v", model.err)
 	}
 }
@@ -3400,13 +3400,13 @@ func TestHandleActionConfirmNo(t *testing.T) {
 
 func TestFallbackValue(t *testing.T) {
 	// Test with empty value
-	result := fallbackValue("", "default")
-	if result != "default" {
-		t.Errorf("expected 'default', got %q", result)
+	result := fallbackValue("")
+	if result != defaultThemeName {
+		t.Errorf("expected %q, got %q", defaultThemeName, result)
 	}
 
 	// Test with non-empty value
-	result = fallbackValue("custom", "default")
+	result = fallbackValue("custom")
 	if result != "custom" {
 		t.Errorf("expected 'custom', got %q", result)
 	}
@@ -5810,8 +5810,8 @@ func TestEnvDisplayNameWithFolderStrategyEmptyWorkDir(t *testing.T) {
 	// When workDir is empty, use current working dir (".")
 	// The result depends on current dir, so just check it doesn't panic
 	if name == "" {
-		// Either returns basename or empty is acceptable
-		name = m.envDisplayName()
+		// Either returns basename or empty is acceptable - call again just to ensure no panic
+		_ = m.envDisplayName()
 	}
 }
 

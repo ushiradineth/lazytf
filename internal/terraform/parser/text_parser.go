@@ -346,20 +346,22 @@ func parseHeaderLine(line string) (string, terraform.ActionType, bool) {
 	}
 
 	for _, action := range actions {
-		if idx := strings.Index(content, action.suffix); idx != -1 {
-			addressPart := strings.TrimSpace(content[:idx])
-			if addressPart == "" {
-				return "", terraform.ActionNoOp, false
-			}
-			// Extract just the resource address (first space-separated token)
-			// This handles cases like "null_resource.foo is tainted, so must be replaced"
-			// where we only want "null_resource.foo"
-			address := extractResourceAddress(addressPart)
-			if address == "" {
-				return "", terraform.ActionNoOp, false
-			}
-			return address, action.action, true
+		idx := strings.Index(content, action.suffix)
+		if idx == -1 {
+			continue
 		}
+		addressPart := strings.TrimSpace(content[:idx])
+		if addressPart == "" {
+			return "", terraform.ActionNoOp, false
+		}
+		// Extract just the resource address (first space-separated token)
+		// This handles cases like "null_resource.foo is tainted, so must be replaced"
+		// where we only want "null_resource.foo"
+		address := extractResourceAddress(addressPart)
+		if address == "" {
+			return "", terraform.ActionNoOp, false
+		}
+		return address, action.action, true
 	}
 
 	return "", terraform.ActionNoOp, false

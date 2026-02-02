@@ -460,6 +460,8 @@ func (m *Model) sendKeyToPanel(panel keybinds.PanelID, keyType tea.KeyType) tea.
 }
 
 // handleVerticalNavigation handles up/down navigation within panels.
+//
+//nolint:gocognit,gocyclo // Panel navigation has inherent complexity from multiple panels and modes
 func (m *Model) handleVerticalNavigation(panel keybinds.PanelID, moveUp bool) tea.Cmd {
 	// When an operation is running (ModeLogs), redirect scroll to MainArea
 	// so user can scroll the logs while staying on Resources panel
@@ -474,7 +476,7 @@ func (m *Model) handleVerticalNavigation(panel keybinds.PanelID, moveUp bool) te
 
 	switch panel {
 	case keybinds.PanelResources:
-		if m.resourcesActiveTab == 0 {
+		if m.resourcesActiveTab == 0 { //nolint:nestif // Tab switching requires nested checks
 			if moveUp {
 				m.resourceList.MoveUp()
 			} else {

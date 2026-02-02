@@ -267,8 +267,9 @@ func TestHistoryLine(t *testing.T) {
 	if !strings.Contains(line, "10:30") || !strings.Contains(line, "ok") || !strings.Contains(line, "summary") {
 		t.Errorf("unexpected line format: %q", line)
 	}
+	// Verify no double spaces from empty duration
 	if strings.Contains(line, "  ") {
-		// Should not have double spaces from empty duration
+		t.Errorf("line should not have double spaces: %q", line)
 	}
 }
 

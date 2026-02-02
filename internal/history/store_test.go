@@ -858,7 +858,7 @@ func TestOpenWithTildePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open with tilde path: %v", err)
 	}
-	defer store.Close()
+	store.Close()
 	// Store should be opened successfully
 }
 
@@ -903,7 +903,7 @@ func TestOpenWithAbsolutePathSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	defer store.Close()
+	store.Close()
 }
 
 func TestListRecentForEnvironmentMultipleEntries(t *testing.T) {
