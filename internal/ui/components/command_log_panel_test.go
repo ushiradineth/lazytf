@@ -471,3 +471,104 @@ func cmdLogTestIsBorderLine(s string) bool {
 	}
 	return true
 }
+
+func TestCommandLogPanelUpdateNilDiagnosticsPanel(t *testing.T) {
+	panel := &CommandLogPanel{}
+	panel.diagnosticsPanel = nil
+	panel.styles = styles.DefaultStyles()
+
+	result, cmd := panel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when diagnosticsPanel is nil")
+	}
+}
+
+func TestCommandLogPanelHandleKeyPgUpPgDown(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewCommandLogPanel(s)
+	panel.SetSize(80, 20)
+	panel.SetFocused(true)
+
+	// Add content
+	panel.AppendSessionLog("Test", "cmd", "output")
+
+	// Test page up
+	handled, _ := panel.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	if handled {
+		t.Error("expected 'p' key not to be handled")
+	}
+
+	// Test pgup
+	handled, _ = panel.HandleKey(tea.KeyMsg{Type: tea.KeyPgUp})
+	if !handled {
+		t.Error("expected pgup to be handled")
+	}
+
+	// Test pgdown
+	handled, _ = panel.HandleKey(tea.KeyMsg{Type: tea.KeyPgDown})
+	if !handled {
+		t.Error("expected pgdown to be handled")
+	}
+}
+
+func TestCommandLogPanelHandleKeyHomeEnd(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewCommandLogPanel(s)
+	panel.SetSize(80, 20)
+	panel.SetFocused(true)
+
+	// Add content
+	panel.AppendSessionLog("Test", "cmd", "output")
+
+	// Test home
+	handled, _ := panel.HandleKey(tea.KeyMsg{Type: tea.KeyHome})
+	if !handled {
+		t.Error("expected home to be handled")
+	}
+
+	// Test end
+	handled, _ = panel.HandleKey(tea.KeyMsg{Type: tea.KeyEnd})
+	if !handled {
+		t.Error("expected end to be handled")
+	}
+}
+
+func TestCommandLogPanelCalculateThumbSizeSmallContent(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewCommandLogPanel(s)
+	panel.SetSize(80, 40)
+
+	// Small content - thumb should be large
+	thumbSize := panel.calculateThumbSize(40, 5)
+	// With small content, thumb should be 1.0
+	if thumbSize != 1.0 {
+		t.Errorf("expected thumb size 1.0 for small content, got %f", thumbSize)
+	}
+}
+
+func TestCommandLogPanelCalculateThumbSizeLargeContent(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewCommandLogPanel(s)
+	panel.SetSize(80, 10)
+
+	// Large content
+	thumbSize := panel.calculateThumbSize(10, 100)
+	// With large content, thumb should be small
+	if thumbSize > 0.2 {
+		t.Errorf("expected small thumb size for large content, got %f", thumbSize)
+	}
+}
+
+func TestCommandLogPanelCalculateThumbSizeZeroHeight(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewCommandLogPanel(s)
+
+	// Zero height should return 1.0
+	thumbSize := panel.calculateThumbSize(0, 100)
+	if thumbSize != 1.0 {
+		t.Errorf("expected thumb size 1.0 for zero height, got %f", thumbSize)
+	}
+}

@@ -118,3 +118,68 @@ func TestApplyViewHeaderStates(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyViewSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+
+	newStyles := styles.DefaultStyles()
+	view.SetStyles(newStyles)
+
+	if view.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestApplyViewTick(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+
+	cmd := view.Tick()
+	if cmd == nil {
+		t.Error("expected non-nil Tick command")
+	}
+}
+
+func TestApplyViewTickNil(t *testing.T) {
+	var view *ApplyView
+	cmd := view.Tick()
+	if cmd != nil {
+		t.Error("expected nil cmd for nil view")
+	}
+}
+
+func TestApplyViewSetOutputEmpty(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+	view.SetSize(40, 6)
+	view.SetOutput("some content")
+
+	// Set empty output
+	view.SetOutput("")
+	if len(view.outputLines) != 0 {
+		t.Error("expected empty output lines for empty string")
+	}
+}
+
+func TestApplyViewSetOutputCapped(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+	view.maxLines = 3
+	view.SetSize(40, 6)
+
+	// Set output with more lines than maxLines
+	view.SetOutput("one\ntwo\nthree\nfour\nfive")
+	if len(view.outputLines) != 3 {
+		t.Errorf("expected 3 lines (capped), got %d", len(view.outputLines))
+	}
+}
+
+func TestApplyViewSetSizeSmall(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewApplyView(s)
+
+	// Set size with height that would make bodyHeight < 1
+	view.SetSize(40, 1)
+	// Should not panic and bodyHeight should be at least 1
+}

@@ -236,3 +236,137 @@ func TestPanelFrame_SetStyles(t *testing.T) {
 		t.Error("expected styles to be updated")
 	}
 }
+
+func TestNewPanelFrameNilStyles(t *testing.T) {
+	// NewPanelFrame should use DefaultStyles when passed nil
+	frame := NewPanelFrame(nil)
+	if frame == nil {
+		t.Fatal("expected non-nil frame")
+	}
+	if frame.styles == nil {
+		t.Error("expected styles to be set to DefaultStyles")
+	}
+}
+
+func TestPanelFrame_ContentWidthMinimum(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+	// Set very small size
+	frame.SetSize(1, 1)
+	frame.SetConfig(PanelFrameConfig{
+		ShowScrollbar: true,
+	})
+
+	// ContentWidth should return at least 1
+	if frame.ContentWidth() < 1 {
+		t.Errorf("ContentWidth should be at least 1, got %d", frame.ContentWidth())
+	}
+}
+
+func TestPanelFrame_ContentHeightMinimum(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+	// Set very small size
+	frame.SetSize(1, 1)
+	frame.SetConfig(PanelFrameConfig{
+		FooterText: "footer",
+	})
+
+	// ContentHeight should return at least 1
+	if frame.ContentHeight() < 1 {
+		t.Errorf("ContentHeight should be at least 1, got %d", frame.ContentHeight())
+	}
+}
+
+func TestCalculateScrollParamsZeroVisibleHeight(t *testing.T) {
+	// When visibleHeight is 0, should return defaults
+	pos, size := CalculateScrollParams(0, 0, 10)
+	if pos != 0 || size != 1.0 {
+		t.Errorf("expected (0, 1.0) for zero visible height, got (%v, %v)", pos, size)
+	}
+}
+
+func TestCalculateScrollParamsNegativeVisibleHeight(t *testing.T) {
+	// When visibleHeight is negative, should return defaults
+	pos, size := CalculateScrollParams(0, -5, 10)
+	if pos != 0 || size != 1.0 {
+		t.Errorf("expected (0, 1.0) for negative visible height, got (%v, %v)", pos, size)
+	}
+}
+
+func TestCalculateScrollParamsExcessiveScrollOffset(t *testing.T) {
+	// When scrollOffset exceeds scroll range, scrollPos should be capped at 1.0
+	pos, size := CalculateScrollParams(100, 5, 20)
+	if pos != 1.0 {
+		t.Errorf("expected scrollPos capped at 1.0, got %v", pos)
+	}
+	if size != 0.25 {
+		t.Errorf("expected thumbSize 0.25, got %v", size)
+	}
+}
+
+func TestCalculateScrollParamsEqualItemsAndHeight(t *testing.T) {
+	// When totalItems equals visibleHeight
+	pos, size := CalculateScrollParams(0, 10, 10)
+	if pos != 0 || size != 1.0 {
+		t.Errorf("expected (0, 1.0) when items equal height, got (%v, %v)", pos, size)
+	}
+}
+
+func TestPanelFrame_RenderWithEmptyBorderChars(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+	frame.SetSize(40, 10)
+	frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[1]",
+		ShowScrollbar: true,
+		ScrollPos:     0.5,
+		ThumbSize:     0.3,
+	})
+
+	// Render should work with default styles (which may have empty border chars)
+	view := frame.RenderWithContent([]string{"line1", "line2"})
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+	// View should contain border characters
+	if !strings.Contains(view, "╭") || !strings.Contains(view, "╯") {
+		t.Error("expected default border characters to be used")
+	}
+}
+
+func TestPanelFrame_RenderScrollbarAtMiddle(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+	frame.SetSize(40, 8)
+	frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[1]",
+		ShowScrollbar: true,
+		ScrollPos:     0.5,
+		ThumbSize:     0.2,
+	})
+
+	view := frame.RenderWithContent([]string{"line1", "line2", "line3", "line4", "line5", "line6"})
+	// Should contain scrollbar thumb
+	if !strings.Contains(view, "▐") {
+		t.Error("expected scrollbar thumb in middle position")
+	}
+}
+
+func TestPanelFrame_RenderScrollbarAtBottom(t *testing.T) {
+	s := styles.DefaultStyles()
+	frame := NewPanelFrame(s)
+	frame.SetSize(40, 6)
+	frame.SetConfig(PanelFrameConfig{
+		PanelID:       "[1]",
+		ShowScrollbar: true,
+		ScrollPos:     1.0,
+		ThumbSize:     0.25,
+	})
+
+	view := frame.RenderWithContent([]string{"line1", "line2", "line3", "line4"})
+	// Should render without error
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
+	"github.com/ushiradineth/lazytf/internal/ui/testutil"
 )
 
 func TestConvertPanelID(t *testing.T) {
@@ -345,4 +346,994 @@ func TestHandleActionSelectHistoryPanel(t *testing.T) {
 		t.Error("expected historyFocused to be false after select")
 	}
 	_ = cmd // May or may not be nil
+}
+
+// ============================================================================
+// handleActionCancelOp tests
+// ============================================================================
+
+func TestHandleActionCancelOpWithOperationRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{OperationRunning: true}
+	cancelCalled := false
+	m.cancelFunc = func() { cancelCalled = true }
+
+	cmd := m.handleActionCancelOp(ctx)
+
+	if !cancelCalled {
+		t.Error("expected cancelFunc to be called")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when canceling operation")
+	}
+	if m.quitting {
+		t.Error("expected quitting to be false")
+	}
+}
+
+func TestHandleActionCancelOpNoOperationRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+
+	ctx := &keybinds.Context{OperationRunning: false}
+	cmd := m.handleActionCancelOp(ctx)
+
+	if !m.quitting {
+		t.Error("expected quitting to be true when no operation running")
+	}
+	// cmd should be tea.Quit
+	if cmd == nil {
+		t.Error("expected non-nil cmd (tea.Quit)")
+	}
+}
+
+// ============================================================================
+// handleActionEscapeBack tests
+// ============================================================================
+
+func TestHandleActionEscapeBackInExecutionMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.executionMode = true
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionEscapeBack(ctx)
+
+	// Should return to resource list if not already focused
+	_ = cmd
+}
+
+func TestHandleActionEscapeBackOnResourcesPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Set focus to resources panel
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelResources)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionEscapeBack(ctx)
+
+	// When already on resources panel, should return nil
+	if cmd != nil {
+		t.Error("expected nil cmd when already on resources panel")
+	}
+}
+
+func TestHandleActionEscapeBackFromOtherPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Set focus to main panel
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelMain)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionEscapeBack(ctx)
+
+	// Should return a cmd to switch to resources panel
+	_ = cmd // May or may not be nil depending on panel state
+}
+
+// ============================================================================
+// sendKeyToPanel tests
+// ============================================================================
+
+func TestSendKeyToPanelMainWithValidArea(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// mainArea should be initialized
+	if m.mainArea != nil {
+		cmd := m.sendKeyToPanel(keybinds.PanelMain, 0)
+		_ = cmd // May be nil or a command
+	}
+}
+
+func TestSendKeyToPanelCommandLogWithValidPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// commandLogPanel may or may not be initialized
+	if m.commandLogPanel != nil {
+		cmd := m.sendKeyToPanel(keybinds.PanelCommandLog, 0)
+		_ = cmd // May be nil or a command
+	}
+}
+
+func TestSendKeyToPanelResourcesReturnsNil(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Resources panel doesn't support this navigation
+	cmd := m.sendKeyToPanel(keybinds.PanelResources, 0)
+	if cmd != nil {
+		t.Error("expected nil cmd for resources panel")
+	}
+}
+
+func TestSendKeyToPanelHistoryReturnsNil(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// History panel doesn't support this navigation
+	cmd := m.sendKeyToPanel(keybinds.PanelHistory, 0)
+	if cmd != nil {
+		t.Error("expected nil cmd for history panel")
+	}
+}
+
+// ============================================================================
+// handleActionScrollUp/Down with initialized modals tests
+// ============================================================================
+
+func TestHandleActionScrollUpWithInitializedHelpModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Help modal should be initialized after updateLayout
+	if m.helpModal != nil {
+		ctx := &keybinds.Context{ActiveModal: keybinds.ModalHelp}
+		cmd := m.handleActionScrollUp(ctx)
+		if cmd != nil {
+			t.Error("expected nil cmd for help modal scroll")
+		}
+	}
+}
+
+func TestHandleActionScrollDownWithInitializedHelpModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.helpModal != nil {
+		ctx := &keybinds.Context{ActiveModal: keybinds.ModalHelp}
+		cmd := m.handleActionScrollDown(ctx)
+		if cmd != nil {
+			t.Error("expected nil cmd for help modal scroll")
+		}
+	}
+}
+
+func TestHandleActionScrollUpWithInitializedSettingsModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.settingsModal != nil {
+		ctx := &keybinds.Context{ActiveModal: keybinds.ModalSettings}
+		cmd := m.handleActionScrollUp(ctx)
+		if cmd != nil {
+			t.Error("expected nil cmd for settings modal scroll")
+		}
+	}
+}
+
+func TestHandleActionScrollDownWithInitializedSettingsModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.settingsModal != nil {
+		ctx := &keybinds.Context{ActiveModal: keybinds.ModalSettings}
+		cmd := m.handleActionScrollDown(ctx)
+		if cmd != nil {
+			t.Error("expected nil cmd for settings modal scroll")
+		}
+	}
+}
+
+func TestHandleActionScrollUpWithConfirmApplyModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{ActiveModal: keybinds.ModalConfirmApply}
+	cmd := m.handleActionScrollUp(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd for confirm apply modal")
+	}
+}
+
+func TestHandleActionScrollDownWithConfirmApplyModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{ActiveModal: keybinds.ModalConfirmApply}
+	cmd := m.handleActionScrollDown(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd for confirm apply modal")
+	}
+}
+
+// ============================================================================
+// handleVerticalNavigation additional tests
+// ============================================================================
+
+func TestHandleVerticalNavigationResourcesInLogsMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+
+	// Set main area to logs mode
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeLogs)
+	}
+
+	// When in logs mode, scroll should be redirected to MainArea
+	cmd := m.handleVerticalNavigation(keybinds.PanelResources, true)
+	_ = cmd
+}
+
+func TestHandleVerticalNavigationResourcesStateTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1 // State tab
+
+	// Test with stateListContent
+	if m.stateListContent != nil {
+		cmd := m.handleVerticalNavigation(keybinds.PanelResources, true)
+		_ = cmd // Should return showSelectedStateDetail command
+	}
+}
+
+func TestHandleVerticalNavigationResourcesStateTabMoveDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1 // State tab
+
+	if m.stateListContent != nil {
+		cmd := m.handleVerticalNavigation(keybinds.PanelResources, false) // Move down
+		_ = cmd
+	}
+}
+
+// ============================================================================
+// handleActionSelect additional tests
+// ============================================================================
+
+func TestHandleActionSelectStateTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1 // State tab
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionSelect(ctx)
+	_ = cmd
+}
+
+func TestHandleActionSelectMainPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelMain}
+	cmd := m.handleActionSelect(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd for main panel")
+	}
+}
+
+func TestHandleActionSelectCommandLogPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelCommandLog}
+	cmd := m.handleActionSelect(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd for command log panel")
+	}
+}
+
+func TestHandleActionSelectWorkspacePanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelWorkspace}
+	cmd := m.handleActionSelect(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd for workspace panel")
+	}
+}
+
+// ============================================================================
+// cycleFocusWithDirection tests
+// ============================================================================
+
+func TestCycleFocusWithDirectionForward(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.cycleFocusWithDirection(false) // Forward
+	_ = cmd
+}
+
+func TestCycleFocusWithDirectionReverse(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.cycleFocusWithDirection(true) // Reverse
+	_ = cmd
+}
+
+func TestCycleFocusWithDirectionNilPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+
+	cmd := m.cycleFocusWithDirection(false)
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+func TestCycleFocusWithDirectionToWorkspace(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Cycle until we get to workspace panel
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelWorkspace)
+	}
+
+	cmd := m.cycleFocusWithDirection(false)
+	_ = cmd
+}
+
+func TestCycleFocusWithDirectionFromHistory(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.historyFocused = true
+	m.showHistory = true // Required to have history panel in cycle
+
+	// Cycle away from history - just test it doesn't panic
+	cmd := m.cycleFocusWithDirection(false)
+	_ = cmd
+}
+
+func TestCycleFocusWithDirectionToHistory(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.historyFocused = false
+	m.showHistory = true
+
+	cmd := m.cycleFocusWithDirection(false)
+	_ = cmd
+}
+
+func TestCycleFocusWithDirectionRestoresMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Set main area to history detail mode
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeHistoryDetail)
+	}
+	m.historyFocused = false
+
+	cmd := m.cycleFocusWithDirection(false)
+	_ = cmd
+}
+
+// ============================================================================
+// handleActionFocusWorkspace tests
+// ============================================================================
+
+func TestHandleActionFocusWorkspaceBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusWorkspace(ctx)
+
+	if m.historyFocused {
+		t.Error("expected historyFocused to be false")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusWorkspaceNilPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusWorkspace(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+func TestHandleActionFocusWorkspaceNilMainArea(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.mainArea = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusWorkspace(ctx)
+	_ = cmd // Should still return a command
+}
+
+// ============================================================================
+// handleActionFocusResources tests
+// ============================================================================
+
+func TestHandleActionFocusResourcesBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusResources(ctx)
+
+	if m.historyFocused {
+		t.Error("expected historyFocused to be false")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusResourcesWhenOperationRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.planRunning = true
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusResources(ctx)
+
+	// Should set mode to ModeLogs when operation is running
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeLogs {
+		t.Error("expected main area mode to be ModeLogs when operation running")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusResourcesFromHistoryMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeHistoryDetail)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusResources(ctx)
+
+	// Should restore mode to ModeDiff
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
+		t.Error("expected main area mode to be ModeDiff")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusResourcesFromAboutMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeAbout)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusResources(ctx)
+
+	// Should restore mode to ModeDiff
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
+		t.Error("expected main area mode to be ModeDiff")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusResourcesNilPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusResources(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+// ============================================================================
+// handleActionFocusHistory tests
+// ============================================================================
+
+func TestHandleActionFocusHistoryBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusHistory(ctx)
+
+	if !m.historyFocused {
+		t.Error("expected historyFocused to be true")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusHistoryNilPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusHistory(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+// ============================================================================
+// handleActionFocusMain tests
+// ============================================================================
+
+func TestHandleActionFocusMainBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyFocused = true
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusMain(ctx)
+
+	if m.historyFocused {
+		t.Error("expected historyFocused to be false")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusMainNilPanelManager(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.panelManager = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusMain(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd when panelManager is nil")
+	}
+}
+
+// ============================================================================
+// handleActionFocusCommandLog tests
+// ============================================================================
+
+func TestHandleActionFocusCommandLogBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.historyFocused = true
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusCommandLog(ctx)
+
+	if m.historyFocused {
+		t.Error("expected historyFocused to be false")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusCommandLogFromHistoryMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeHistoryDetail)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusCommandLog(ctx)
+
+	// Should restore mode to ModeDiff
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
+		t.Error("expected main area mode to be ModeDiff")
+	}
+	_ = cmd
+}
+
+func TestHandleActionFocusCommandLogFromAboutMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea != nil {
+		m.mainArea.SetMode(ModeAbout)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusCommandLog(ctx)
+
+	// Should restore mode to ModeDiff
+	if m.mainArea != nil && m.mainArea.GetMode() != ModeDiff {
+		t.Error("expected main area mode to be ModeDiff")
+	}
+	_ = cmd
+}
+
+// ============================================================================
+// handleActionToggleLog tests
+// ============================================================================
+
+func TestHandleActionToggleLogBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleLog(ctx)
+	_ = cmd
+}
+
+func TestHandleActionToggleLogWhenFocusedAndHidden(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Set focus to command log and toggle it off
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelCommandLog)
+	}
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleLog(ctx)
+	_ = cmd // Should return focus change command
+}
+
+// ============================================================================
+// handleActionSelectEnv tests
+// ============================================================================
+
+func TestHandleActionSelectEnvBasic(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionSelectEnv(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+func TestHandleActionSelectEnvNilEnvironmentPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.environmentPanel = nil
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionSelectEnv(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd when environmentPanel is nil")
+	}
+}
+
+// ============================================================================
+// handleActionConfirmYes/No tests (keybind specific)
+// ============================================================================
+
+func TestHandleActionConfirmYesKeybind(t *testing.T) {
+	mock := testutil.NewMockExecutor()
+	mock.MockWorkDir = t.TempDir()
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.modalState = ModalConfirmApply
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionConfirmYes(ctx)
+
+	if m.modalState != ModalNone {
+		t.Error("expected modalState to be ModalNone")
+	}
+	_ = cmd // Should return beginApply command
+}
+
+func TestHandleActionConfirmNoKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.modalState = ModalConfirmApply
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionConfirmNo(ctx)
+
+	if m.modalState != ModalNone {
+		t.Error("expected modalState to be ModalNone")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+// ============================================================================
+// handleActionToggleAllGroups tests (keybind specific)
+// ============================================================================
+
+func TestHandleActionToggleAllGroupsKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleAllGroups(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+// ============================================================================
+// handleActionToggleStatus tests (keybind specific)
+// ============================================================================
+
+func TestHandleActionToggleStatusKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	initialStatus := m.resourceList.ShowStatus()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleStatus(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+
+	if m.resourceList.ShowStatus() == initialStatus {
+		t.Error("expected showStatus to be toggled")
+	}
+}
+
+// ============================================================================
+// handleActionQuit tests (keybind specific)
+// ============================================================================
+
+func TestHandleActionQuitKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionQuit(ctx)
+
+	if !m.quitting {
+		t.Error("expected quitting to be true")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd (tea.Quit)")
+	}
+}
+
+// ============================================================================
+// handleActionToggleHelp/Config/Theme tests (keybind specific)
+// ============================================================================
+
+func TestHandleActionToggleHelpKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleHelp(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+func TestHandleActionToggleConfigKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleConfig(ctx)
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+func TestHandleActionToggleThemeKeybind(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionToggleTheme(ctx)
+	_ = cmd // May or may not be nil
+}
+
+// ============================================================================
+// handlePageNavigation tests
+// ============================================================================
+
+func TestHandlePageNavigationUp(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handlePageNavigation(keybinds.PanelMain, true)
+	_ = cmd
+}
+
+func TestHandlePageNavigationDown(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handlePageNavigation(keybinds.PanelMain, false)
+	_ = cmd
+}
+
+// ============================================================================
+// handleScrollEdge tests
+// ============================================================================
+
+func TestHandleScrollEdgeTop(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleScrollEdge(keybinds.PanelMain, true)
+	_ = cmd
+}
+
+func TestHandleScrollEdgeBottom(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleScrollEdge(keybinds.PanelMain, false)
+	_ = cmd
 }

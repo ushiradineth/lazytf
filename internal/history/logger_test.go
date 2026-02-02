@@ -98,3 +98,54 @@ func TestLoggerDefaultLevelAndNilHandling(t *testing.T) {
 		t.Fatalf("expected nil store to be ignored")
 	}
 }
+
+func TestTruncateOutput(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		maxBytes int
+		expected string
+	}{
+		{"empty output", "", 100, ""},
+		{"short output", "hello", 100, "hello"},
+		{"exact length", "hello", 5, "hello"},
+		{"truncated", "hello world", 5, "hello"},
+		{"zero max", "hello", 0, "hello"},
+		{"negative max", "hello", -1, "hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncateOutput(tt.output, tt.maxBytes)
+			if result != tt.expected {
+				t.Errorf("truncateOutput(%q, %d) = %q, want %q", tt.output, tt.maxBytes, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPrepareOutputLevels(t *testing.T) {
+	// Large output to test truncation
+	output := strings.Repeat("x", 3*1024*1024) // 3MB
+
+	// Test with minimal level
+	minimalLogger := &Logger{level: LevelMinimal}
+	result := minimalLogger.prepareOutput(output)
+	if result != "" {
+		t.Error("minimal output should be empty")
+	}
+
+	// Test with verbose level
+	verboseLogger := &Logger{level: LevelVerbose}
+	result = verboseLogger.prepareOutput(output)
+	if len(result) > maxOutputVerbose {
+		t.Error("verbose output should be truncated")
+	}
+
+	// Test with standard level
+	standardLogger := &Logger{level: LevelStandard}
+	result = standardLogger.prepareOutput(output)
+	if len(result) > maxOutputStandard {
+		t.Error("standard output should be truncated")
+	}
+}

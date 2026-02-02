@@ -37,21 +37,21 @@ type teaProgram interface {
 }
 
 var (
-	planFile              string
-	mouseEnabled          bool
-	tfFlags               string
-	workDir               string
-	envName               string
-	presetName            string
-	workspaceName         string
-	folderPath            string
-	configPath            string
-	themeName             string
-	noHistory             bool
-	programRunner         = runProgram
-	executionModeRunner   = runProgramWithCleanup
-	executorFactory       = terraform.NewExecutor
-	newWorkspaceManager   = func(workDir string) (workspaceManager, error) {
+	planFile            string
+	mouseEnabled        bool
+	tfFlags             string
+	workDir             string
+	envName             string
+	presetName          string
+	workspaceName       string
+	folderPath          string
+	configPath          string
+	themeName           string
+	noHistory           bool
+	programRunner       = runProgram
+	executionModeRunner = runProgramWithCleanup
+	executorFactory     = terraform.NewExecutor
+	newWorkspaceManager = func(workDir string) (workspaceManager, error) {
 		return environment.NewWorkspaceManager(workDir)
 	}
 	newFolderManager = func(workDir string) (folderManager, error) {

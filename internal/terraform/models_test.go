@@ -203,3 +203,71 @@ func TestActionTypeDisplayHelpers(t *testing.T) {
 		t.Fatalf("unexpected verb for unknown: %q", got)
 	}
 }
+
+func TestBuildOrderMap_DeepNested(t *testing.T) {
+	// Test deeper nesting
+	raw := []byte(`{"a":{"b":{"c":{"d":1}}}}`)
+	order := buildOrderMap(raw)
+	if order == nil {
+		t.Fatal("expected non-nil order map")
+	}
+	// Check nested paths
+	if _, ok := order["/a"]; !ok {
+		t.Error("expected /a in order map")
+	}
+	if _, ok := order["/a/b"]; !ok {
+		t.Error("expected /a/b in order map")
+	}
+}
+
+func TestBuildOrderMap_NestedArrayWithObjects(t *testing.T) {
+	// Array with nested objects
+	raw := []byte(`{"items":[{"nested":{"key":"value"}},{"other":"data"}],"end":1}`)
+	order := buildOrderMap(raw)
+	root := order[""]
+	if len(root) != 2 || root[0] != "items" || root[1] != "end" {
+		t.Fatalf("unexpected root order: %#v", root)
+	}
+}
+
+func TestGetActionType_CreateRead(t *testing.T) {
+	// Test create+read combination returns update (since both are non-no-op)
+	actions := []string{"create", "read"}
+	got := GetActionType(actions)
+	// The function returns update if multiple non-delete actions
+	if got != ActionUpdate {
+		t.Errorf("expected ActionUpdate for create+read, got %v", got)
+	}
+}
+
+func TestGetActionType_Empty(t *testing.T) {
+	got := GetActionType([]string{})
+	if got != ActionNoOp {
+		t.Errorf("expected ActionNoOp for empty actions, got %v", got)
+	}
+}
+
+func TestResourceChangeOrderFields(t *testing.T) {
+	// Test that order fields are preserved
+	raw := []byte(`{
+		"address": "test",
+		"mode": "managed",
+		"change": {
+			"actions": ["update"],
+			"before": {"y": 1, "x": 2},
+			"after": {"a": 1, "b": 2}
+		}
+	}`)
+
+	var rc ResourceChange
+	if err := json.Unmarshal(raw, &rc); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if rc.Change == nil {
+		t.Fatal("expected non-nil change")
+	}
+	if len(rc.Change.AfterOrder) == 0 {
+		t.Error("expected after order to be populated")
+	}
+}

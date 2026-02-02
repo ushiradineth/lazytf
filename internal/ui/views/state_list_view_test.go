@@ -270,3 +270,15 @@ func TestStateListViewScrolling(t *testing.T) {
 		t.Errorf("expected offset > 0 for scrolled view, got %d", view.offset)
 	}
 }
+
+func TestStateListViewSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewStateListView(s)
+
+	newStyles := styles.DefaultStyles()
+	view.SetStyles(newStyles)
+
+	if view.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}

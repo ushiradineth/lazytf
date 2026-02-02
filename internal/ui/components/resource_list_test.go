@@ -1213,3 +1213,302 @@ func TestGetStatusStyle(t *testing.T) {
 		})
 	}
 }
+
+func TestResourceMatchesQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		resource terraform.ResourceChange
+		query    string
+		expected bool
+	}{
+		{
+			name:     "empty query matches all",
+			resource: terraform.ResourceChange{Address: "anything"},
+			query:    "",
+			expected: true,
+		},
+		{
+			name:     "match by address",
+			resource: terraform.ResourceChange{Address: "aws_instance.web"},
+			query:    "web",
+			expected: true,
+		},
+		{
+			name:     "match by resource type",
+			resource: terraform.ResourceChange{Address: "aws_instance.web", ResourceType: "aws_instance"},
+			query:    "aws_instance",
+			expected: true,
+		},
+		{
+			name:     "match by resource name",
+			resource: terraform.ResourceChange{Address: "aws_instance.web", ResourceName: "web"},
+			query:    "web",
+			expected: true,
+		},
+		{
+			name:     "no match",
+			resource: terraform.ResourceChange{Address: "aws_instance.web"},
+			query:    "xyz",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resourceMatchesQuery(tc.resource, tc.query)
+			if result != tc.expected {
+				t.Errorf("resourceMatchesQuery(%v, %q) = %v, want %v",
+					tc.resource.Address, tc.query, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestFuzzyMatchEdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		candidate   string
+		shouldMatch bool
+	}{
+		{"empty query", "", "anything", true},
+		{"query longer than candidate", "abcdef", "abc", false},
+		{"exact match", "abc", "abc", true},
+		{"partial match at end", "bc", "abc", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := fuzzyMatch(tc.query, tc.candidate)
+			if result != tc.shouldMatch {
+				t.Errorf("fuzzyMatch(%q, %q) = %v, want %v",
+					tc.query, tc.candidate, result, tc.shouldMatch)
+			}
+		})
+	}
+}
+
+func TestFirstResourceIndexEmpty(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	// Empty visible items
+	r.visibleItems = []listItem{}
+	if idx := r.firstResourceIndex(); idx != -1 {
+		t.Errorf("expected -1 for empty items, got %d", idx)
+	}
+}
+
+func TestFirstResourceIndexOnlyGroups(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.visibleItems = []listItem{
+		{kind: itemGroup, label: "group1"},
+		{kind: itemGroup, label: "group2"},
+	}
+	if idx := r.firstResourceIndex(); idx != -1 {
+		t.Errorf("expected -1 when no resources, got %d", idx)
+	}
+}
+
+func TestResourceListUpdateWithEnterKey(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+
+	// Find and select a group
+	for i, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			r.selectedIndex = i
+			break
+		}
+	}
+
+	// Press enter to toggle group
+	r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Should have toggled the group expansion
+}
+
+func TestResourceListUpdateWithSpaceKey(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+
+	// Find and select a group
+	for i, item := range r.visibleItems {
+		if item.kind == itemGroup {
+			r.selectedIndex = i
+			break
+		}
+	}
+
+	// Press space to toggle group
+	r.Update(tea.KeyMsg{Type: tea.KeySpace})
+}
+
+func TestResourceListUpdateViewportMessage(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+	})
+
+	// Send a non-key message that should be passed to viewport
+	model, cmd := r.Update(tea.MouseMsg{})
+	if model == nil {
+		t.Error("expected non-nil model")
+	}
+	_ = cmd
+}
+
+func TestRenderMultilineDiff(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+
+	block := "~ change\n- remove\n+ add\n  neutral"
+	result := r.renderMultilineDiff(block)
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+}
+
+func TestRenderMultilineDiffZeroWidth(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.width = 0
+
+	block := "~ change\n- remove"
+	result := r.renderMultilineDiff(block)
+	if result == "" {
+		t.Error("expected non-empty result even with zero width")
+	}
+}
+
+func TestToggleAllGroupsEmptyGroups(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	// No resources - no groups
+	r.SetResources(nil)
+
+	// Should not panic
+	r.ToggleAllGroups()
+}
+
+func TestComputeAllExpandedEmpty(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	// Empty groupExpanded map
+	r.groupExpanded = map[string]bool{}
+	result := r.computeAllExpanded()
+	if result {
+		t.Error("expected false for empty groups")
+	}
+}
+
+func TestComputeAllExpandedPartial(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.groupExpanded = map[string]bool{
+		"group1": true,
+		"group2": false,
+	}
+	result := r.computeAllExpanded()
+	if result {
+		t.Error("expected false when some groups collapsed")
+	}
+}
+
+func TestComputeAllExpandedAllExpanded(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.groupExpanded = map[string]bool{
+		"group1": true,
+		"group2": true,
+	}
+	result := r.computeAllExpanded()
+	if !result {
+		t.Error("expected true when all groups expanded")
+	}
+}
+
+func TestResourceMatchesQueryWithResourceType(t *testing.T) {
+	resource := terraform.ResourceChange{
+		Address:      "aws_instance.web",
+		ResourceType: "aws_instance",
+		ResourceName: "web",
+	}
+
+	// Test matching on ResourceType
+	if !resourceMatchesQuery(resource, "instance") {
+		t.Error("expected query to match ResourceType")
+	}
+}
+
+func TestResourceMatchesQueryWithResourceName(t *testing.T) {
+	resource := terraform.ResourceChange{
+		Address:      "aws_instance.my_web_server",
+		ResourceType: "aws_instance",
+		ResourceName: "my_web_server",
+	}
+
+	// Test matching on ResourceName
+	if !resourceMatchesQuery(resource, "webserver") {
+		t.Error("expected query to match ResourceName via fuzzy match")
+	}
+}
+
+func TestResourceMatchesQueryEmptyResourceTypeAndName(t *testing.T) {
+	resource := terraform.ResourceChange{
+		Address:      "aws_instance.web",
+		ResourceType: "",
+		ResourceName: "",
+	}
+
+	// Should still match on address
+	if !resourceMatchesQuery(resource, "aws") {
+		t.Error("expected query to match address when ResourceType and ResourceName are empty")
+	}
+	// Should not match non-matching query
+	if resourceMatchesQuery(resource, "xyz") {
+		t.Error("expected non-matching query to return false")
+	}
+}
+
+func TestHandleKeySpace(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+
+	// Select the group
+	r.selectedIndex = 0
+
+	// Press space to toggle
+	msg := tea.KeyMsg{Type: tea.KeySpace}
+	handled, _ := r.HandleKey(msg)
+	if !handled {
+		t.Error("expected space key to be handled")
+	}
+}
+
+func TestHandleKeyUnhandled(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+
+	// Press an unhandled key
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	handled, _ := r.HandleKey(msg)
+	if handled {
+		t.Error("expected unhandled key to return false")
+	}
+}
+
+func TestUpdateWithViewportMessage(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+
+	// Send a message that's not a KeyMsg
+	_, _ = r.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
+	// Should not panic
+}

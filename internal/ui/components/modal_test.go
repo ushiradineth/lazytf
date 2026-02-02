@@ -639,3 +639,219 @@ func TestModalViewNilStyles(t *testing.T) {
 		t.Error("Expected empty view when styles are nil")
 	}
 }
+
+func TestModalSetContentEmpty(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetContent("some content")
+
+	// Set empty content
+	modal.SetContent("")
+
+	if modal.contentLines != nil {
+		t.Error("Expected nil content lines for empty content")
+	}
+}
+
+func TestModalSetItemsWithAllHeaders(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+
+	// All items are headers
+	items := []HelpItem{
+		{Key: "H1", Description: "Header 1", IsHeader: true},
+		{Key: "H2", Description: "Header 2", IsHeader: true},
+	}
+	modal.SetItems(items)
+
+	// Selection should start at 0 (even though it's a header)
+	if modal.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selection 0, got %d", modal.GetSelectedIndex())
+	}
+}
+
+func TestModalEnsureSelectionVisibleScrollsUp(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 30)
+	modal.SetTitle("Test")
+
+	// Create many items
+	items := make([]HelpItem, 50)
+	for i := range items {
+		items[i] = HelpItem{Key: fmt.Sprintf("%d", i), Description: fmt.Sprintf("Item %d", i)}
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	// First scroll down far
+	modal.SetSelectedIndex(40)
+
+	// Then set a low selection - should scroll up
+	modal.selectedIndex = 5
+	modal.scrollOffset = 30 // Artificially high
+	modal.ensureSelectionVisible()
+
+	offset, _, _, _ := modal.GetScrollInfo()
+	if offset > 5 {
+		t.Errorf("Expected scroll offset to decrease when selection is above viewport, got %d", offset)
+	}
+}
+
+func TestModalRenderTextContentEmpty(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetContent("") // Empty content
+	modal.Show()
+
+	// Manually call renderTextContent
+	result := modal.renderTextContent(10)
+	if result != nil {
+		t.Error("Expected nil for empty content lines")
+	}
+}
+
+func TestModalRenderItemContentEmpty(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetItems([]HelpItem{}) // Empty items
+	modal.Show()
+
+	// Manually call renderItemContent
+	result := modal.renderItemContent(10, 60)
+	if result != nil {
+		t.Error("Expected nil for empty items")
+	}
+}
+
+func TestModalRenderItemContentWithHeaders(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+
+	items := []HelpItem{
+		{Key: "Section 1", Description: "", IsHeader: true},
+		{Key: "a", Description: "Action A"},
+		{Key: "Section 2", Description: "", IsHeader: true},
+		{Key: "b", Description: "Action B"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	view := modal.View()
+	if !strings.Contains(view, "Section 1") {
+		t.Error("Expected header 'Section 1' in view")
+	}
+}
+
+func TestModalOverlayNegativeStartPosition(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(20, 5) // Very small size
+	modal.SetTitle("Very Long Modal Title That Won't Fit")
+	modal.SetContent("Content with much more text than can fit in width")
+	modal.Show()
+
+	baseView := "Short base"
+	result := modal.Overlay(baseView)
+
+	// Should not panic and should produce some output
+	if result == "" {
+		t.Error("Expected non-empty result")
+	}
+}
+
+func TestModalTotalLinesItemMode(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+
+	items := []HelpItem{
+		{Key: "1", Description: "Item 1"},
+		{Key: "2", Description: "Item 2"},
+	}
+	modal.SetItems(items)
+
+	_, _, _, total := modal.GetScrollInfo()
+	if total != 2 {
+		t.Errorf("Expected 2 total lines in item mode, got %d", total)
+	}
+}
+
+func TestModalTotalLinesContentMode(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+
+	modal.SetContent("Line 1\nLine 2\nLine 3")
+
+	_, _, _, total := modal.GetScrollInfo()
+	if total != 3 {
+		t.Errorf("Expected 3 total lines in content mode, got %d", total)
+	}
+}
+
+func TestModalViewportHeightWithTitle(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 50)
+	modal.SetTitle("Title")
+
+	vpWithTitle := modal.viewportHeight()
+
+	modal.SetTitle("")
+	vpWithoutTitle := modal.viewportHeight()
+
+	// Viewport heights are capped at 20, so they may be equal
+	// Just verify both are valid (positive and <= 20)
+	if vpWithTitle <= 0 || vpWithTitle > 20 {
+		t.Errorf("Expected viewport with title between 1-20, got %d", vpWithTitle)
+	}
+	if vpWithoutTitle <= 0 || vpWithoutTitle > 20 {
+		t.Errorf("Expected viewport without title between 1-20, got %d", vpWithoutTitle)
+	}
+}
+
+func TestModalMoveSelectionWithEmptyItems(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetItems([]HelpItem{}) // Empty items
+	modal.Show()
+
+	// Should not panic
+	modal.moveSelectionDown()
+	modal.moveSelectionUp()
+}
+
+func TestModalSetSelectedIndexWithEmptyItems(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(80, 20)
+	modal.SetItems([]HelpItem{}) // Empty items
+	modal.Show()
+
+	// Should not panic
+	modal.SetSelectedIndex(0)
+}
+
+func TestModalRenderHelpItemWithLongDescription(t *testing.T) {
+	s := styles.DefaultStyles()
+	modal := NewModal(s)
+	modal.SetSize(40, 20) // Narrow width
+
+	items := []HelpItem{
+		{Key: "k", Description: "This is a very long description that will exceed the content width"},
+	}
+	modal.SetItems(items)
+	modal.Show()
+
+	view := modal.View()
+	if view == "" {
+		t.Error("Expected non-empty view")
+	}
+}

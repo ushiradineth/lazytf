@@ -44,3 +44,24 @@ func TestPlanViewSetSummary(t *testing.T) {
 		t.Fatalf("expected updated summary")
 	}
 }
+
+func TestPlanViewSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewPlanView("", s)
+
+	newStyles := styles.DefaultStyles()
+	view.SetStyles(newStyles)
+
+	if view.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
+
+func TestPlanViewViewSmallHeight(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewPlanView("summary", s)
+	view.SetSize(40, 0)
+
+	// Should handle zero height gracefully
+	_ = view.View()
+}

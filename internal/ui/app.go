@@ -49,7 +49,7 @@ type Model struct {
 
 	// Execution mode
 	executionMode    bool
-	executor         *terraform.Executor
+	executor         terraform.ExecutorInterface
 	applyView        *views.ApplyView
 	planView         *views.PlanView
 	planFlags        []string
@@ -285,7 +285,11 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	keybinds.RegisterDefaults(m.keybindRegistry, true)
 	keybinds.RegisterWorkspacePanelBindings(m.keybindRegistry)
 	m.registerKeybindHandlers()
-	m.executor = cfg.Executor
+	// Only assign executor if non-nil to avoid Go interface nil gotcha
+	// (typed nil pointer assigned to interface creates non-nil interface)
+	if cfg.Executor != nil {
+		m.executor = cfg.Executor
+	}
 	m.planFlags = append([]string{}, cfg.Flags...)
 	m.applyFlags = append([]string{}, cfg.Flags...)
 	m.envWorkDir = cfg.WorkDir

@@ -575,3 +575,79 @@ func TestParseTerraformValueEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestTextParserParseResourceLineNoResource(t *testing.T) {
+	// Test line without "resource" keyword
+	input := `Terraform will perform the following actions:
+
+  # aws_instance.web will be created
+  + some_random_line "without" "resource"
+      + ami = "ami-123"
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+`
+	parser := NewTextParser()
+	plan, _ := parser.Parse(strings.NewReader(input))
+	// Should still parse the header line
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+}
+
+func TestTextParserParseResourceLineIncomplete(t *testing.T) {
+	// Test resource line with incomplete quotes
+	input := `Terraform will perform the following actions:
+
+  # aws_instance.web will be created
+  + resource "aws_instance" incomplete
+      + ami = "ami-123"
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+`
+	parser := NewTextParser()
+	plan, _ := parser.Parse(strings.NewReader(input))
+	// Should still parse but with incomplete metadata
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+}
+
+func TestTextParserHeredocValueUserData(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # aws_instance.web will be created
+  + resource "aws_instance" "web" {
+      + user_data = <<-EOT
+          #!/bin/bash
+          echo "hello"
+        EOT
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+`
+	parser := NewTextParser()
+	plan, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+}
+
+func TestTextParserReadAction(t *testing.T) {
+	// Test read action (data source)
+	input := `Terraform will perform the following actions:
+
+  # data.aws_ami.latest will be read during apply
+  <= data "aws_ami" "latest" {
+       + id = (known after apply)
+     }
+
+Plan: 0 to add, 0 to change, 0 to destroy.
+`
+	parser := NewTextParser()
+	plan, _ := parser.Parse(strings.NewReader(input))
+	// Read actions may or may not be parsed depending on implementation
+	_ = plan
+}

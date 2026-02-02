@@ -194,3 +194,128 @@ func TestFolderManagerSwitchNil(t *testing.T) {
 		t.Fatalf("expected error for nil manager")
 	}
 }
+
+func TestFolderManagerListNilManager(t *testing.T) {
+	var manager *FolderManager
+	if _, err := manager.List(context.Background()); err == nil {
+		t.Fatal("expected error for nil manager")
+	}
+}
+
+func TestFolderManagerValidateEmptyPath(t *testing.T) {
+	manager, err := NewFolderManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	if err := manager.Validate(context.Background(), ""); err == nil {
+		t.Fatal("expected error for empty path")
+	}
+	if err := manager.Validate(context.Background(), "   "); err == nil {
+		t.Fatal("expected error for whitespace path")
+	}
+}
+
+func TestFolderManagerValidateNotDirectory(t *testing.T) {
+	root := t.TempDir()
+	filePath := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(filePath, []byte("content"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	manager, err := NewFolderManager(root)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	if err := manager.Validate(context.Background(), filePath); err == nil {
+		t.Fatal("expected error for non-directory")
+	}
+}
+
+func TestContainsEnvSegmentVariations(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/projects/envs/dev", true},
+		{"/projects/environments/prod", true},
+		{"/projects/env/dev", false},
+		{"/projects/dev", false},
+		{"/envs", true},
+		{"/environments", true},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		got := containsEnvSegment(tt.path)
+		if got != tt.want {
+			t.Errorf("containsEnvSegment(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestHandleFolderFileNonTfFile(t *testing.T) {
+	folders := make(map[string]FolderInfo)
+	// Create a mock DirEntry for a non-.tf file
+	entry := mockDirEntry{name: "readme.md"}
+	err := handleFolderFile(entry, "/path/envs/dev/readme.md", folders)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(folders) != 0 {
+		t.Fatalf("expected no folders, got %d", len(folders))
+	}
+}
+
+func TestSortFolderInfosByScoreAndPath(t *testing.T) {
+	folders := []FolderInfo{
+		{Path: "/a/envs/dev", Score: 10},
+		{Path: "/a/envs/prod", Score: 20},
+		{Path: "/a/envs/staging", Score: 10},
+	}
+	sortFolderInfos(folders)
+
+	// prod (score 20) should be first
+	if folders[0].Path != "/a/envs/prod" {
+		t.Errorf("expected prod first, got %s", folders[0].Path)
+	}
+	// dev and staging both have score 10, should be alphabetical
+	if folders[1].Path != "/a/envs/dev" {
+		t.Errorf("expected dev second, got %s", folders[1].Path)
+	}
+	if folders[2].Path != "/a/envs/staging" {
+		t.Errorf("expected staging third, got %s", folders[2].Path)
+	}
+}
+
+func TestCheckWalkContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := checkWalkContext(ctx, nil)
+	if err != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+func TestCheckWalkContextWithError(t *testing.T) {
+	ctx := context.Background()
+	walkErr := errors.New("walk error")
+
+	err := checkWalkContext(ctx, walkErr)
+	if err != walkErr {
+		t.Errorf("expected walk error, got %v", err)
+	}
+}
+
+// mockDirEntry is a mock implementation of fs.DirEntry for testing
+type mockDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (m mockDirEntry) Name() string               { return m.name }
+func (m mockDirEntry) IsDir() bool                { return m.isDir }
+func (m mockDirEntry) Type() os.FileMode          { return 0 }
+func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }

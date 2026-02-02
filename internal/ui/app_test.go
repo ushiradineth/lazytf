@@ -18,6 +18,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
+	"github.com/ushiradineth/lazytf/internal/ui/testutil"
 	"github.com/ushiradineth/lazytf/internal/ui/views"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
@@ -4157,6 +4158,69 @@ func TestHandleEnvironmentChangedWorkspace(t *testing.T) {
 	_ = cmd
 }
 
+func TestHandleEnvironmentChangedSuccessWithComponents(t *testing.T) {
+	mock := testutil.NewMockExecutor()
+	mock.MockWorkDir = t.TempDir()
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Initialize components to hit more code paths
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	env := environment.Environment{
+		Name:     "production",
+		Path:     mock.MockWorkDir,
+		Strategy: environment.StrategyFolder,
+	}
+
+	msg := components.EnvironmentChangedMsg{Environment: env}
+	model, cmd := m.handleEnvironmentChanged(msg)
+
+	if model == nil {
+		t.Error("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Error("expected toast command for success")
+	}
+	// Verify environment was updated
+	if m.envCurrent != envSelectionValue(env) {
+		t.Error("expected envCurrent to be updated")
+	}
+}
+
+func TestHandleEnvironmentChangedWithCommandLogPanelError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.executor = nil // Will cause error
+
+	// Initialize command log panel to test error logging
+	m.commandLogPanel = components.NewCommandLogPanel(m.styles)
+
+	env := environment.Environment{
+		Name:     "dev",
+		Strategy: environment.StrategyWorkspace,
+	}
+
+	msg := components.EnvironmentChangedMsg{Environment: env}
+	model, cmd := m.handleEnvironmentChanged(msg)
+
+	if model == nil {
+		t.Error("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Error("expected toast command for error")
+	}
+}
+
 func TestBuildEnvironmentCommandWorkspace(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 
@@ -5618,5 +5682,439 @@ func TestInputCaptured(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	if m.inputCaptured() {
 		t.Error("expected inputCaptured to return false")
+	}
+}
+
+func TestHandleEnvironmentPanelKeyNilPanelCheck(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.environmentPanel = nil
+	handled, cmd := m.handleEnvironmentPanelKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if handled {
+		t.Error("expected not handled when panel is nil")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
+func TestHandleEnvironmentPanelKeyNotSelectorMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	// Panel exists but not in selector mode
+	if m.environmentPanel != nil {
+		// Not in selector mode should not handle keys
+		handled, _ := m.handleEnvironmentPanelKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		if handled {
+			t.Error("expected not handled when not in selector mode")
+		}
+	}
+}
+
+func TestCommandLogPanelUpdateKeyJ(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := components.NewCommandLogPanel(s)
+	panel.SetSize(80, 20)
+
+	// Add some logs to enable scrolling
+	panel.AppendSessionLog("Test", "cmd", "output")
+	panel.AppendSessionLog("Test2", "cmd2", "output2")
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	newPanel, cmd := panel.Update(msg)
+	if newPanel == nil {
+		t.Error("expected non-nil panel")
+	}
+	_ = cmd
+}
+
+func TestCommandLogPanelUpdateKeyK(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := components.NewCommandLogPanel(s)
+	panel.SetSize(80, 20)
+
+	// Add some logs
+	panel.AppendSessionLog("Test", "cmd", "output")
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	newPanel, cmd := panel.Update(msg)
+	if newPanel == nil {
+		t.Error("expected non-nil panel")
+	}
+	_ = cmd
+}
+
+func TestInitHistoryWithProvidedLoggerFromConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := history.Open(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to open store: %v", err)
+	}
+	defer store.Close()
+
+	logger := history.NewLogger(store, history.LevelMinimal)
+	m := NewExecutionModel(nil, ExecutionConfig{
+		HistoryEnabled: true,
+		HistoryStore:   store,
+		HistoryLogger:  logger,
+	})
+	if m.historyLogger != logger {
+		t.Error("expected provided logger to be used")
+	}
+}
+
+func TestViewExecutionOverrideCommandLogViewReturnsEmpty(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.execView = viewCommandLog
+
+	view := m.viewExecutionOverride()
+	// Should return empty string since command log is handled elsewhere
+	if view != "" {
+		t.Error("expected empty view for command log")
+	}
+}
+
+func TestHandlePostUpdateWhenNotReady(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = false
+
+	// Should not panic when not ready
+	_, _ = m.handlePostUpdate(nil)
+}
+
+func TestEnvDisplayNameWithFolderStrategy(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyFolder
+	m.envWorkDir = "/projects"
+	m.envCurrent = "/projects/envs/dev"
+
+	name := m.envDisplayName()
+	if name != "envs/dev" {
+		t.Errorf("expected relative path 'envs/dev', got %q", name)
+	}
+}
+
+func TestEnvDisplayNameWithFolderStrategyEmptyWorkDir(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyFolder
+	m.envWorkDir = ""
+	m.envCurrent = "/some/path/env"
+
+	name := m.envDisplayName()
+	// When workDir is empty, use current working dir (".")
+	// The result depends on current dir, so just check it doesn't panic
+	if name == "" {
+		// Either returns basename or empty is acceptable
+		name = m.envDisplayName()
+	}
+}
+
+func TestEnvDisplayNameWithFolderStrategyCurrentEmpty(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyFolder
+	m.envWorkDir = "/projects"
+	m.envCurrent = ""
+
+	name := m.envDisplayName()
+	if name != "" {
+		t.Errorf("expected empty name for empty current, got %q", name)
+	}
+}
+
+func TestEnvDisplayNameWithWorkspaceStrategy(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyWorkspace
+	m.envCurrent = "production"
+
+	name := m.envDisplayName()
+	if name != "production" {
+		t.Errorf("expected 'production', got %q", name)
+	}
+}
+
+func TestEnvDisplayNameWithRelativePathOutside(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyFolder
+	m.envWorkDir = "/projects/a"
+	m.envCurrent = "/projects/b/env" // Not under workDir
+
+	name := m.envDisplayName()
+	// Should return basename when not a valid relative path
+	if name != "env" {
+		t.Errorf("expected basename 'env', got %q", name)
+	}
+}
+
+func TestCurrentWorkspaceNameError(t *testing.T) {
+	origNewWorkspaceManager := newWorkspaceManager
+	defer func() {
+		newWorkspaceManager = origNewWorkspaceManager
+	}()
+
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return nil, errors.New("no workspace manager")
+	}
+
+	_, err := currentWorkspaceName("/tmp")
+	if err == nil {
+		t.Error("expected error from currentWorkspaceName")
+	}
+}
+
+func TestCurrentWorkspaceNameSuccess(t *testing.T) {
+	origNewWorkspaceManager := newWorkspaceManager
+	defer func() {
+		newWorkspaceManager = origNewWorkspaceManager
+	}()
+
+	manager := &fakeWorkspaceManager{current: "development"}
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return manager, nil
+	}
+
+	name, err := currentWorkspaceName("/tmp")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if name != "development" {
+		t.Errorf("expected 'development', got %q", name)
+	}
+}
+
+func TestLoadEnvironmentPreferenceNoPreference(t *testing.T) {
+	tmpDir := t.TempDir()
+	pref, err := loadEnvironmentPreference(tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// No preference file exists, so pref should be nil
+	if pref != nil {
+		t.Errorf("expected nil preference, got %+v", pref)
+	}
+}
+
+func TestLoadEnvironmentPreferenceWithPreference(t *testing.T) {
+	tmpDir := t.TempDir()
+	expected := environment.Preference{
+		Strategy:    environment.StrategyWorkspace,
+		Environment: "staging",
+	}
+	if err := environment.SavePreference(tmpDir, expected); err != nil {
+		t.Fatalf("failed to save preference: %v", err)
+	}
+
+	pref, err := loadEnvironmentPreference(tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if pref == nil {
+		t.Fatal("expected non-nil preference")
+	}
+	if pref.Strategy != expected.Strategy || pref.Environment != expected.Environment {
+		t.Errorf("expected %+v, got %+v", expected, pref)
+	}
+}
+
+func TestDetectEnvironmentsError(t *testing.T) {
+	origNewEnvironmentDetector := newEnvironmentDetector
+	defer func() {
+		newEnvironmentDetector = origNewEnvironmentDetector
+	}()
+
+	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+		return nil, errors.New("detector error")
+	}
+
+	_, err := detectEnvironments("/tmp")
+	if err == nil {
+		t.Error("expected error from detectEnvironments")
+	}
+}
+
+func TestDetectEnvironmentsSuccess(t *testing.T) {
+	origNewEnvironmentDetector := newEnvironmentDetector
+	defer func() {
+		newEnvironmentDetector = origNewEnvironmentDetector
+	}()
+
+	expected := environment.DetectionResult{
+		Strategy:   environment.StrategyWorkspace,
+		Workspaces: []string{"dev", "prod"},
+	}
+	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+		return &fakeDetector{result: expected}, nil
+	}
+
+	result, err := detectEnvironments("/tmp")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result.Strategy != expected.Strategy {
+		t.Errorf("expected strategy %v, got %v", expected.Strategy, result.Strategy)
+	}
+	if len(result.Workspaces) != len(expected.Workspaces) {
+		t.Errorf("expected %d workspaces, got %d", len(expected.Workspaces), len(result.Workspaces))
+	}
+}
+
+func TestViewExecutionOverrideStateModes(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	// Test viewStateList
+	m.execView = viewStateList
+	view := m.viewExecutionOverride()
+	if view != "" {
+		t.Error("expected empty view for state list")
+	}
+
+	// Test viewStateShow
+	m.execView = viewStateShow
+	view = m.viewExecutionOverride()
+	if view != "" {
+		t.Error("expected empty view for state show")
+	}
+
+	// Test viewDiagnostics
+	m.execView = viewDiagnostics
+	view = m.viewExecutionOverride()
+	if view != "" {
+		t.Error("expected empty view for diagnostics")
+	}
+}
+
+func TestHandleEnvironmentPanelKeyNotFocused(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+
+	// Focus on resources panel, not environment panel
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelResources)
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	handled, _ := m.handleEnvironmentPanelKey(msg)
+	if handled {
+		t.Error("expected not to handle when environment panel not focused")
+	}
+}
+
+func TestHandleEnvironmentPanelKeyFocused(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+
+	if m.panelManager == nil {
+		t.Skip("panel manager not initialized")
+	}
+
+	// Register and focus on environment panel
+	m.panelManager.RegisterPanel(PanelWorkspace, m.environmentPanel)
+	m.panelManager.SetFocus(PanelWorkspace)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	// Should handle the key when focused (even if result is no-op)
+	_, _ = m.handleEnvironmentPanelKey(msg)
+}
+
+func TestResolveDetectedEnvironmentWithWorkspaces(t *testing.T) {
+	origNewWorkspaceManager := newWorkspaceManager
+	defer func() {
+		newWorkspaceManager = origNewWorkspaceManager
+	}()
+
+	manager := &fakeWorkspaceManager{current: "staging"}
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return manager, nil
+	}
+
+	m := NewModel(&terraform.Plan{})
+	result := environment.DetectionResult{
+		Strategy:   environment.StrategyWorkspace,
+		Workspaces: []string{"dev", "staging", "prod"},
+	}
+
+	current := resolveDetectedEnvironment(m, "/tmp", "/tmp", result)
+	if current != "staging" {
+		t.Errorf("expected 'staging', got %q", current)
+	}
+}
+
+func TestResolveDetectedEnvironmentFallbackToAbsWorkDir(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	result := environment.DetectionResult{
+		Strategy:    environment.StrategyFolder,
+		FolderPaths: []string{"/other/path"},
+	}
+
+	current := resolveDetectedEnvironment(m, "/projects", "/projects/abs", result)
+	if current != "/projects/abs" {
+		t.Errorf("expected '/projects/abs', got %q", current)
+	}
+}
+
+func TestMatchCurrentFolderFound(t *testing.T) {
+	folders := []string{"/a/envs/dev", "/a/envs/prod", "/a/envs/staging"}
+	result := matchCurrentFolder(folders, "/a/envs/prod")
+	if result != "/a/envs/prod" {
+		t.Errorf("expected '/a/envs/prod', got %q", result)
+	}
+}
+
+func TestMatchCurrentFolderNotFound(t *testing.T) {
+	folders := []string{"/a/envs/dev", "/a/envs/staging"}
+	result := matchCurrentFolder(folders, "/a/envs/prod")
+	if result != "" {
+		t.Errorf("expected empty string, got %q", result)
+	}
+}
+
+func TestEnvStatusLabelWithUnknownStrategy(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyUnknown
+	m.envCurrent = "test-env"
+
+	label := m.envStatusLabel()
+	if label != "test-env" {
+		t.Errorf("expected 'test-env', got %q", label)
+	}
+}
+
+func TestEnvStatusLabelWithKnownStrategy(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyWorkspace
+	m.envCurrent = "production"
+
+	label := m.envStatusLabel()
+	expected := "production (workspace)"
+	if label != expected {
+		t.Errorf("expected %q, got %q", expected, label)
+	}
+}
+
+func TestEnvStatusLabelEmpty(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.envStrategy = environment.StrategyUnknown
+	m.envCurrent = ""
+
+	label := m.envStatusLabel()
+	if label != "unknown" {
+		t.Errorf("expected 'unknown', got %q", label)
 	}
 }

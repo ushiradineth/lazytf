@@ -635,6 +635,264 @@ func TestExecutorStateShow(t *testing.T) {
 	}
 }
 
+func TestCloneWithWorkDirNilExecutor(t *testing.T) {
+	var exec *Executor
+	_, err := exec.CloneWithWorkDir("/tmp")
+	if err == nil {
+		t.Error("expected error for nil executor")
+	}
+}
+
+func TestCloneWithWorkDirEmptyPath(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	writeFakeTerraform(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir)
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	// Empty workdir should default to "."
+	clone, err := exec.CloneWithWorkDir("")
+	if err != nil {
+		t.Fatalf("clone with empty workdir: %v", err)
+	}
+	if clone.workDir == "" {
+		t.Error("expected workdir to be set")
+	}
+}
+
+func TestCloneWithWorkDirMissingPath(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	writeFakeTerraform(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir)
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	// Clone with missing workdir should fail
+	_, err = exec.CloneWithWorkDir("/nonexistent/path/that/does/not/exist")
+	if err == nil {
+		t.Error("expected error for missing workdir")
+	}
+}
+
+func TestCloneWithWorkDirFilePath(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	writeFakeTerraform(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir)
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	// Create a file
+	filePath := filepath.Join(dir, "not-a-dir.txt")
+	if err := os.WriteFile(filePath, []byte("content"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	// Clone with file path should fail
+	_, err = exec.CloneWithWorkDir(filePath)
+	if err == nil {
+		t.Error("expected error when workdir is a file")
+	}
+}
+
+func TestWorkDir(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	writeFakeTerraform(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir)
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	workDir := exec.WorkDir()
+	if workDir == "" {
+		t.Error("expected non-empty workdir")
+	}
+}
+
+func TestWorkDirNilExecutor(t *testing.T) {
+	var exec *Executor
+	workDir := exec.WorkDir()
+	if workDir != "" {
+		t.Error("expected empty workdir for nil executor")
+	}
+}
+
+func TestSplitEnvVariants(t *testing.T) {
+	tests := []struct {
+		input     string
+		wantKey   string
+		wantValue string
+	}{
+		{"FOO=bar", "FOO", "bar"},
+		{"KEY=value=with=equals", "KEY", "value=with=equals"},
+		{"EMPTY=", "EMPTY", ""},
+		{"NOEQUALS", "NOEQUALS", ""},
+		{"", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			key, value := splitEnv(tt.input)
+			if key != tt.wantKey {
+				t.Errorf("splitEnv(%q) key = %q, want %q", tt.input, key, tt.wantKey)
+			}
+			if value != tt.wantValue {
+				t.Errorf("splitEnv(%q) value = %q, want %q", tt.input, value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestExecutorShowWithOptions(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.Show(context.Background(), "plan.tfplan", ShowOptions{})
+	if err != nil {
+		t.Fatalf("show error: %v", err)
+	}
+	if result == nil {
+		t.Error("expected non-nil result from show")
+	}
+}
+
+func TestExecutorShowNilExecutor(t *testing.T) {
+	var exec *Executor
+	_, err := exec.Show(context.Background(), "plan.tfplan", ShowOptions{})
+	if err == nil {
+		t.Error("expected error for nil executor")
+	}
+}
+
+func TestExecutorShowEmptyPlanFile(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	_, err = exec.Show(context.Background(), "", ShowOptions{})
+	if err == nil {
+		t.Error("expected error for empty plan file")
+	}
+}
+
+func TestExecutorStateShowWithOptions(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.StateShow(context.Background(), "aws_instance.web", StateShowOptions{})
+	if err != nil {
+		t.Fatalf("state show error: %v", err)
+	}
+	if result == nil {
+		t.Error("expected non-nil result from state show")
+	}
+}
+
+func TestExecutorStateShowNilExecutor(t *testing.T) {
+	var exec *Executor
+	_, err := exec.StateShow(context.Background(), "resource", StateShowOptions{})
+	if err == nil {
+		t.Error("expected error for nil executor")
+	}
+}
+
+func TestExecutorStateShowEmptyAddress(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	_, err = exec.StateShow(context.Background(), "", StateShowOptions{})
+	if err == nil {
+		t.Error("expected error for empty address")
+	}
+}
+
+func TestExecutorFormatSuccess(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+	t.Setenv("PATH", dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	output, err := exec.Format(context.Background(), FormatOptions{})
+	if err != nil {
+		t.Fatalf("format error: %v", err)
+	}
+	if output == nil {
+		t.Error("expected non-nil output from format")
+	}
+}
+
+func TestExecutorFormatNilExecutor(t *testing.T) {
+	var exec *Executor
+	_, err := exec.Format(context.Background(), FormatOptions{})
+	if err == nil {
+		t.Error("expected error for nil executor")
+	}
+}
+
 //nolint:dupword // shell script has repeated 'fi' keywords
 func writeFakeTerraformExtended(t *testing.T, dir string) string {
 	t.Helper()

@@ -778,3 +778,255 @@ func TestValidateMoreCases(t *testing.T) {
 		}
 	})
 }
+
+func TestWriteFileAtomicSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test-atomic.yaml")
+
+	data := []byte("test: data\n")
+	if err := writeFileAtomic(path, data); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the file was written
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	if string(content) != string(data) {
+		t.Errorf("expected %q, got %q", string(data), string(content))
+	}
+
+	// Verify file permissions
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat file: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("expected mode 0600, got %o", info.Mode().Perm())
+	}
+}
+
+func TestDefaultConfigHasDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.Version != currentVersion {
+		t.Errorf("expected version %d, got %d", currentVersion, cfg.Version)
+	}
+	if !cfg.History.Enabled {
+		t.Error("expected history enabled by default")
+	}
+	if cfg.Theme.Name == "" {
+		t.Error("expected theme name to have default")
+	}
+	if cfg.UI.SplitRatio == 0 {
+		t.Error("expected split ratio to have default")
+	}
+}
+
+func TestSaveWithInvalidSplitRatioFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	// Save with invalid split ratio (should fail validation)
+	invalidCfg := Config{
+		UI: UIConfig{SplitRatio: 1.5},
+	}
+	if err := manager.Save(invalidCfg); err == nil {
+		t.Error("expected error for invalid split ratio")
+	}
+}
+
+func TestLoadCorruptedConfigFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	// Write corrupted YAML
+	if err := os.WriteFile(path, []byte("!!!invalid yaml: ["), 0o600); err != nil {
+		t.Fatalf("failed to write corrupted config: %v", err)
+	}
+
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	_, err = manager.Load()
+	if err == nil {
+		t.Error("expected error for corrupted config")
+	}
+}
+
+func TestValidateVersionEdgeCases(t *testing.T) {
+	t.Run("negative version", func(t *testing.T) {
+		cfg := &Config{Version: -1}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for negative version")
+		}
+	})
+
+	t.Run("future version", func(t *testing.T) {
+		cfg := &Config{Version: currentVersion + 1}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for future version")
+		}
+	})
+
+	t.Run("current version", func(t *testing.T) {
+		cfg := &Config{Version: currentVersion}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestNewManagerEmptyPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LAZYTF_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	manager, err := NewManager("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if manager.Path() == "" {
+		t.Error("expected non-empty path")
+	}
+}
+
+func TestWriteDefaultLockedSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	manager, err := NewManager(configPath)
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+
+	cfg := DefaultConfig()
+	if err := manager.writeDefaultLocked(cfg); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify file was written
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("config file was not created")
+	}
+}
+
+func TestExpandConfigPathsWithHistoryPath(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot get user home dir")
+	}
+
+	cfg := &Config{
+		History: HistoryConfig{
+			Path: "~/.lazytf/history.db",
+		},
+	}
+
+	if err := expandConfigPaths(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expectedPath := filepath.Join(homeDir, ".lazytf/history.db")
+	if cfg.History.Path != expectedPath {
+		t.Errorf("expected %q, got %q", expectedPath, cfg.History.Path)
+	}
+}
+
+func TestExpandPathWithAbsolutePathReturnsValue(t *testing.T) {
+	absPath := "/absolute/path/config.yaml"
+	expanded, err := expandPath(absPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if expanded != absPath {
+		t.Errorf("expected %q, got %q", absPath, expanded)
+	}
+}
+
+func TestExpandPathWithTildeExpands(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot get user home dir")
+	}
+
+	tildeDir := "~/config/file.yaml"
+	expanded, err := expandPath(tildeDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := filepath.Join(homeDir, "config/file.yaml")
+	if expanded != expected {
+		t.Errorf("expected %q, got %q", expected, expanded)
+	}
+}
+
+func TestMigrateConfigFromVersion0(t *testing.T) {
+	cfg := Config{Version: 0}
+	migrated, _, err := migrateConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Version 0 gets set to currentVersion by WithDefaults first
+	if migrated.Version != currentVersion {
+		t.Errorf("expected version %d, got %d", currentVersion, migrated.Version)
+	}
+}
+
+func TestMigrateConfigAlreadyCurrentNoChange(t *testing.T) {
+	cfg := Config{Version: currentVersion}
+	_, changed, err := migrateConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if changed {
+		t.Error("expected no migration for current version")
+	}
+}
+
+func TestValidateHistoryLevelVariants(t *testing.T) {
+	tests := []struct {
+		level   string
+		wantErr bool
+	}{
+		{"", false},
+		{"minimal", false},
+		{"standard", false},
+		{"verbose", false},
+		{"invalid", true},
+		{"MINIMAL", true}, // case sensitive
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			err := validateHistoryLevel(tt.level)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateHistoryLevel(%q) error = %v, wantErr %v", tt.level, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLockFilePathValue(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	manager, err := NewManager(configPath)
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+
+	lockPath := manager.lockPath()
+	expected := configPath + ".lock"
+	if lockPath != expected {
+		t.Errorf("expected %q, got %q", expected, lockPath)
+	}
+}

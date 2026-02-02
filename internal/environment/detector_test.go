@@ -198,3 +198,27 @@ func TestTerraformWorkspaceListErrorOutput(t *testing.T) {
 		t.Fatalf("expected error for terraform workspace list")
 	}
 }
+
+func TestPathDepth(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected int
+	}{
+		{"root", "/", 0},
+		{"single dir", "/foo", 1},
+		{"two dirs", "/foo/bar", 2},
+		{"three dirs", "/foo/bar/baz", 3},
+		{"relative path", "foo/bar", 1},
+		{"current dir", ".", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pathDepth(tt.path)
+			if result != tt.expected {
+				t.Errorf("pathDepth(%q) = %d, want %d", tt.path, result, tt.expected)
+			}
+		})
+	}
+}

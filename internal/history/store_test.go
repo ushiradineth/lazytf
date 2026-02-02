@@ -757,3 +757,234 @@ func TestQueryOperationsWithDateFilter(t *testing.T) {
 		t.Errorf("expected 1 old entry, got %d", len(entries))
 	}
 }
+
+func TestDefaultPathReturnsValidPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path, err := DefaultPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path == "" {
+		t.Error("expected non-empty path")
+	}
+	if !strings.Contains(path, "lazytf") {
+		t.Errorf("expected path to contain 'lazytf', got %s", path)
+	}
+}
+
+func TestParseLocalTimeVariousFormats(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantZero bool
+	}{
+		{"RFC3339", "2024-01-02T15:04:05Z", false},
+		{"RFC3339Nano", "2024-01-02T15:04:05.123456789Z", false},
+		{"empty string", "", true},
+		{"invalid", "not-a-date", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseLocalTime(tt.input)
+			if tt.wantZero && !result.IsZero() {
+				t.Error("expected zero time")
+			}
+			if !tt.wantZero && result.IsZero() {
+				t.Error("expected non-zero time")
+			}
+		})
+	}
+}
+
+func TestListRecentWithLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	// Add multiple entries
+	for i := 0; i < 5; i++ {
+		entry := Entry{
+			StartedAt:   time.Now(),
+			FinishedAt:  time.Now(),
+			Status:      StatusSuccess,
+			Summary:     "test",
+			Environment: "dev",
+		}
+		if err := store.RecordApply(entry); err != nil {
+			t.Fatalf("record apply: %v", err)
+		}
+	}
+
+	// List with limit
+	entries, err := store.ListRecent(2)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(entries))
+	}
+}
+
+func TestListRecentForEnvironmentNoResults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	// List for non-existent environment
+	entries, err := store.ListRecentForEnvironment("nonexistent", 10)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+func TestOpenWithTildePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Open with tilde path
+	store, err := Open("~/test.db")
+	if err != nil {
+		t.Fatalf("open with tilde path: %v", err)
+	}
+	defer store.Close()
+	// Store should be opened successfully
+}
+
+func TestRecordOperationWithOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	entry := OperationEntry{
+		StartedAt:  time.Now(),
+		FinishedAt: time.Now(),
+		Duration:   time.Second,
+		Action:     "plan",
+		Command:    "terraform plan",
+		ExitCode:   0,
+		Status:     StatusSuccess,
+		Summary:    "1 to add",
+		Output:     "Plan output here",
+	}
+
+	if err := store.RecordOperation(entry); err != nil {
+		t.Fatalf("record operation: %v", err)
+	}
+
+	// Verify it was stored
+	entries, err := store.QueryOperations(OperationFilter{Action: "plan", Limit: 1})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+}
+
+func TestOpenWithAbsolutePathSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	absPath := filepath.Join(tmpDir, "test.db")
+	store, err := Open(absPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+}
+
+func TestListRecentForEnvironmentMultipleEntries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	// Record entries for different environments
+	envs := []string{"dev", "staging", "prod", "dev", "dev"}
+	for i, env := range envs {
+		entry := Entry{
+			StartedAt:   time.Now().Add(time.Duration(i) * time.Second),
+			FinishedAt:  time.Now().Add(time.Duration(i+1) * time.Second),
+			Duration:    time.Second,
+			Status:      StatusSuccess,
+			Environment: env,
+		}
+		if err := store.RecordApply(entry); err != nil {
+			t.Fatalf("record apply: %v", err)
+		}
+	}
+
+	// Query for dev - should return 3 entries
+	entries, err := store.ListRecentForEnvironment("dev", 10)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("expected 3 entries for dev, got %d", len(entries))
+	}
+
+	// Query for staging - should return 1 entry
+	entries, err = store.ListRecentForEnvironment("staging", 10)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry for staging, got %d", len(entries))
+	}
+}
+
+func TestQueryOperationsWithActionFilter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	actions := []string{"plan", "apply", "plan", "refresh", "plan"}
+	for i, action := range actions {
+		entry := OperationEntry{
+			StartedAt:  time.Now().Add(time.Duration(i) * time.Second),
+			FinishedAt: time.Now().Add(time.Duration(i+1) * time.Second),
+			Duration:   time.Second,
+			Action:     action,
+			Status:     StatusSuccess,
+		}
+		if err := store.RecordOperation(entry); err != nil {
+			t.Fatalf("record operation: %v", err)
+		}
+	}
+
+	// Query for plan actions
+	entries, err := store.QueryOperations(OperationFilter{Action: "plan"})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("expected 3 plan entries, got %d", len(entries))
+	}
+
+	// Query for apply actions
+	entries, err = store.QueryOperations(OperationFilter{Action: "apply"})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 apply entry, got %d", len(entries))
+	}
+}

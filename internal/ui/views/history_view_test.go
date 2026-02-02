@@ -158,3 +158,271 @@ Planning...`
 		t.Error("expected title in output")
 	}
 }
+
+func TestColorizeLineDiffPrefixes(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"replace prefix", "-/+ resource.test"},
+		{"add prefix", "+ added_field = value"},
+		{"remove prefix", "- removed_field = value"},
+		{"change prefix", "~ changed_field = value"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := view.colorizeLine(tc.input)
+			if result == "" {
+				t.Error("expected non-empty result")
+			}
+		})
+	}
+}
+
+func TestColorizeLineRemoveWithNullSuffix(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	// Line with "-> null" suffix should be colored specially
+	result := view.colorizeLine("- old_field = value -> null")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+}
+
+func TestColorizeLineWithLeadingWhitespace(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	// Line with indentation
+	result := view.colorizeLine("    + indented_field = value")
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+	// Should preserve indentation
+	if !strings.HasPrefix(result, "    ") {
+		t.Error("expected leading whitespace to be preserved")
+	}
+}
+
+func TestColorizeLineSeparatorLine(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	// Separator line should return empty string
+	result := view.colorizeLine("─────────────────────")
+	if result != "" {
+		t.Errorf("expected empty string for separator, got %q", result)
+	}
+}
+
+func TestColorizeLineSectionTitles(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	titles := []string{"Details", "Plan Output", "Apply Output"}
+	for _, title := range titles {
+		t.Run(title, func(t *testing.T) {
+			result := view.colorizeLine(title)
+			if result == "" {
+				t.Errorf("expected non-empty result for section title %q", title)
+			}
+		})
+	}
+}
+
+func TestColorizeLineMetadataLines(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	lines := []string{
+		"Status: Success",
+		"Time: 2024-01-15 10:00:00",
+		"Environment: production",
+		"Directory: /path/to/project",
+	}
+
+	for _, line := range lines {
+		t.Run(line, func(t *testing.T) {
+			result := view.colorizeLine(line)
+			if result == "" {
+				t.Errorf("expected non-empty result for metadata line %q", line)
+			}
+		})
+	}
+}
+
+func TestColorizeLineDefaultCase(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	// A regular line without any special prefix
+	input := "regular line without special prefix"
+	result := view.colorizeLine(input)
+	if result != input {
+		t.Errorf("expected line to be unchanged, got %q", result)
+	}
+}
+
+func TestIsSeparatorLine(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"", false},
+		{"───────", true},
+		{"─", true},
+		{"normal text", false},
+		{"─text", false},
+		{"  ─  ", false}, // has spaces
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := isSeparatorLine(tc.input)
+			if result != tc.expected {
+				t.Errorf("isSeparatorLine(%q) = %v, want %v", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestIsSectionTitle(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"Details", true},
+		{"Plan Output", true},
+		{"Apply Output", true},
+		{"Other Title", false},
+		{"", false},
+		{"details", false}, // case sensitive
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := isSectionTitle(tc.input)
+			if result != tc.expected {
+				t.Errorf("isSectionTitle(%q) = %v, want %v", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestIsMetadataLine(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"Status: Success", true},
+		{"Time: 10:00:00", true},
+		{"Environment: prod", true},
+		{"Directory: /path", true},
+		{"Other: value", false},
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := isMetadataLine(tc.input)
+			if result != tc.expected {
+				t.Errorf("isMetadataLine(%q) = %v, want %v", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestColorizeStatusValue(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"success with icon", "  ● Success"},
+		{"success text", "  Success"},
+		{"failed with icon", "  ✗ Failed"},
+		{"failed text", "  Failed"},
+		{"canceled with icon", "  ○ Canceled"},
+		{"canceled text", "  Canceled"},
+		{"other value", "  Unknown"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := view.colorizeStatusValue(tc.input)
+			if result == "" {
+				t.Error("expected non-empty result")
+			}
+		})
+	}
+}
+
+func TestColorizeMetadataLineNoColon(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 30)
+
+	// Line without colon should return unchanged
+	input := "no colon here"
+	result := view.colorizeMetadataLine(input, input)
+	if result != input {
+		t.Errorf("expected line unchanged, got %q", result)
+	}
+}
+
+func TestColorizeOutputNilStyles(t *testing.T) {
+	view := &HistoryView{}
+	input := "test content"
+	result := view.colorizeOutput(input)
+	if result != input {
+		t.Errorf("expected content unchanged with nil styles, got %q", result)
+	}
+}
+
+func TestHistoryViewViewDefaultTitle(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 20)
+	view.SetContent("content")
+
+	// Don't set title - should use default
+	out := view.View()
+	if !strings.Contains(out, "Apply details") {
+		t.Error("expected default title 'Apply details'")
+	}
+}
+
+func TestHistoryViewViewNilStyles(t *testing.T) {
+	view := &HistoryView{}
+	out := view.View()
+	if out != "" {
+		t.Error("expected empty output for nil styles")
+	}
+}
+
+func TestHistoryViewViewZeroWidth(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(0, 20)
+	view.SetContent("content")
+
+	// Should still render even with zero width
+	out := view.View()
+	if out == "" {
+		t.Error("expected non-empty output")
+	}
+}

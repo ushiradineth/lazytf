@@ -550,3 +550,106 @@ func TestNormalizeUnknownValue(t *testing.T) {
 		})
 	}
 }
+
+func TestStringListDiffsAllRemoved(t *testing.T) {
+	before := map[string]any{
+		"list": []any{"a", "b", "c"},
+	}
+	after := map[string]any{
+		"list": []any{},
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	// When all items removed, the function returns a single change diff for the whole list
+	if len(diffs) == 0 {
+		t.Fatal("expected at least 1 diff")
+	}
+}
+
+func TestStringListDiffsEmptyToValues(t *testing.T) {
+	before := map[string]any{
+		"list": []any{},
+	}
+	after := map[string]any{
+		"list": []any{"x", "y", "z"},
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	// When going from empty to values, might get single change diff
+	if len(diffs) < 1 {
+		t.Fatalf("expected at least 1 diff, got %d", len(diffs))
+	}
+}
+
+func TestStringListDiffsWithSameValues(t *testing.T) {
+	before := map[string]any{
+		"list": []any{"a", "b", "c"},
+	}
+	after := map[string]any{
+		"list": []any{"a", "b", "c"},
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	// Same values, no diffs expected
+	if len(diffs) != 0 {
+		t.Fatalf("expected 0 diffs, got %d", len(diffs))
+	}
+}
+
+func TestCalculateDiffs_DeletedKey(t *testing.T) {
+	before := map[string]any{
+		"a": 1,
+		"b": 2,
+	}
+	after := map[string]any{
+		"a": 1,
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d", len(diffs))
+	}
+	if diffs[0].Action != DiffRemove || diffs[0].Path[0] != "b" {
+		t.Errorf("expected remove of 'b', got %s %v", diffs[0].Action, diffs[0].Path)
+	}
+}
+
+func TestCalculateDiffs_AddedKey(t *testing.T) {
+	before := map[string]any{
+		"a": 1,
+	}
+	after := map[string]any{
+		"a": 1,
+		"b": 2,
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d", len(diffs))
+	}
+	if diffs[0].Action != DiffAdd || diffs[0].Path[0] != "b" {
+		t.Errorf("expected add of 'b', got %s %v", diffs[0].Action, diffs[0].Path)
+	}
+}
+
+func TestCalculateDiffs_NestedDeletion(t *testing.T) {
+	before := map[string]any{
+		"config": map[string]any{
+			"a": 1,
+			"b": 2,
+		},
+	}
+	after := map[string]any{
+		"config": map[string]any{
+			"a": 1,
+		},
+	}
+
+	diffs := CalculateDiffs(before, after, nil, nil, nil, nil, "")
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d", len(diffs))
+	}
+	if diffs[0].Action != DiffRemove {
+		t.Errorf("expected remove action, got %s", diffs[0].Action)
+	}
+}

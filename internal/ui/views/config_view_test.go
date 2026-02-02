@@ -265,3 +265,15 @@ func TestConfigViewRenderBox(t *testing.T) {
 		t.Error("expected non-empty output with size set")
 	}
 }
+
+func TestConfigViewSetStyles(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewConfigView(s)
+
+	newStyles := styles.DefaultStyles()
+	view.SetStyles(newStyles)
+
+	if view.styles != newStyles {
+		t.Error("expected styles to be updated")
+	}
+}
