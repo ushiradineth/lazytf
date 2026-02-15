@@ -63,7 +63,7 @@ func TestNewExecutorResolvesPathFromEnv(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
-	tfPath := writeFakeTerraform(t, dir)
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
 	t.Setenv("PATH", dir)
 
 	exec, err := NewExecutor(dir)
@@ -490,6 +490,28 @@ for arg in "$@"; do
 done
 if [ "$1" = "exit7" ]; then
   exit 7
+fi
+echo "ARGS:$cmd $*"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return path
+}
+
+func writeFakeTerraformArgsOnly(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "terraform")
+	script := `#!/bin/sh
+cmd="$1"
+shift
+if [ "$cmd" = "version" ]; then
+  echo "Terraform v1.0.0"
+  exit 0
 fi
 echo "ARGS:$cmd $*"
 exit 0
