@@ -286,6 +286,7 @@ func (m *Model) applyEnvironmentSelection(option environment.Environment) error 
 	m.setPlan(nil)
 	m.planFilePath = ""
 	m.planRunFlags = nil
+	m.applyRunFlags = nil
 	if m.planView != nil {
 		m.planView.SetSummary(m.planSummary())
 	}

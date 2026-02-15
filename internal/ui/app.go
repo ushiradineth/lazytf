@@ -54,6 +54,7 @@ type Model struct {
 	planFlags        []string
 	applyFlags       []string
 	planRunFlags     []string
+	applyRunFlags    []string
 	planRunning      bool
 	applyRunning     bool
 	refreshRunning   bool
