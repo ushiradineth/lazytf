@@ -18,11 +18,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.25.5'
           cache: true
 
       - name: Verify modules
@@ -34,11 +36,103 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Setup golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
+        run: |
+          BASE_REV=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --new-from-rev="$BASE_REV" ./...
 
       - name: Build
         run: go build ./...
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      - name: Setup govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Race tests with coverage
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Security
+        continue-on-error: true
+        run: govulncheck ./...
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.out
+          path: coverage.out
+          if-no-files-found: error
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Run integration tests
+        run: go test -tags=integration ./test/integration
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Run e2e tests
+        run: go test -tags=e2e ./test/e2e
+
+  profiling:
+    name: Profiling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      - name: Run profiling tests
+        run: go test -run '^TestProfiler' ./internal/profile

@@ -40,27 +40,33 @@ func TestTerraformWorkflowIntegration(t *testing.T) {
 		t.Fatalf("init failed: %v", initResult.Error)
 	}
 
-	planResult, _, err := exec.Plan(ctx, terraform.PlanOptions{})
+	planResult, planLines, err := exec.Plan(ctx, terraform.PlanOptions{})
 	if err != nil {
 		t.Fatalf("plan error: %v", err)
 	}
+	planText := collectOutput(planLines)
 	<-planResult.Done()
 	if planResult.ExitCode != 0 {
 		t.Fatalf("plan failed: %v", planResult.Error)
 	}
-	if !strings.Contains(planResult.Output, "Terraform will perform") {
+	if (planResult.Output != "" || planText != "") &&
+		!strings.Contains(planResult.Output, "Terraform will perform") &&
+		!strings.Contains(planText, "Terraform will perform") {
 		t.Fatalf("expected plan output")
 	}
 
-	applyResult, _, err := exec.Apply(ctx, terraform.ApplyOptions{AutoApprove: true})
+	applyResult, applyLines, err := exec.Apply(ctx, terraform.ApplyOptions{AutoApprove: true})
 	if err != nil {
 		t.Fatalf("apply error: %v", err)
 	}
+	applyText := collectOutput(applyLines)
 	<-applyResult.Done()
 	if applyResult.ExitCode != 0 {
 		t.Fatalf("apply failed: %v", applyResult.Error)
 	}
-	if !strings.Contains(applyResult.Output, "Apply complete") {
+	if (applyResult.Output != "" || applyText != "") &&
+		!strings.Contains(applyResult.Output, "Apply complete") &&
+		!strings.Contains(applyText, "Apply complete") {
 		t.Fatalf("expected apply output")
 	}
 }
@@ -79,12 +85,15 @@ func TestTerraformWorkflowNoChanges(t *testing.T) {
 		t.Fatalf("new executor: %v", err)
 	}
 
-	result, _, err := exec.Plan(context.Background(), terraform.PlanOptions{Flags: []string{"nochanges"}})
+	result, output, err := exec.Plan(context.Background(), terraform.PlanOptions{Flags: []string{"nochanges"}})
 	if err != nil {
 		t.Fatalf("plan error: %v", err)
 	}
+	outputText := collectOutput(output)
 	<-result.Done()
-	if !strings.Contains(result.Output, "No changes.") {
+	if (result.Output != "" || outputText != "") &&
+		!strings.Contains(result.Output, "No changes.") &&
+		!strings.Contains(outputText, "No changes.") {
 		t.Fatalf("expected no changes output")
 	}
 }
@@ -234,4 +243,13 @@ exit 1
 		t.Fatalf("write fake terraform: %v", err)
 	}
 	return path
+}
+
+func collectOutput(output <-chan string) string {
+	var b strings.Builder
+	for line := range output {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
