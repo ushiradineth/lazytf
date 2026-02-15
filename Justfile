@@ -106,39 +106,39 @@ vet:
 # Check code complexity (cyclomatic and cognitive)
 complexity:
     @echo "=== Cyclomatic Complexity (threshold: 15) ==="
-    @golangci-lint run --disable-all --enable gocyclo --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable gocyclo --timeout 5m ./... || true
     @echo ""
     @echo "=== Cognitive Complexity (threshold: 20) ==="
-    @golangci-lint run --disable-all --enable gocognit --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable gocognit --timeout 5m ./... || true
     @echo ""
     @echo "=== Function Length (threshold: 80 lines, 50 statements) ==="
-    @golangci-lint run --disable-all --enable funlen --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable funlen --timeout 5m ./... || true
     @echo ""
     @echo "=== Nested If Complexity (threshold: 5) ==="
-    @golangci-lint run --disable-all --enable nestif --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable nestif --timeout 5m ./... || true
     @echo ""
     @echo "=== Maintainability Index (threshold: under 20) ==="
-    @golangci-lint run --disable-all --enable maintidx --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable maintidx --timeout 5m ./... || true
 
 # Find code duplication
 dupl:
     @echo "=== Code Duplication Detection ==="
-    @golangci-lint run --disable-all --enable dupl --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable dupl --timeout 5m ./... || true
 
 # Find repeated strings that should be constants
 constants:
     @echo "=== Repeated Strings (candidates for constants) ==="
-    @golangci-lint run --disable-all --enable goconst --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable goconst --timeout 5m ./... || true
 
 # Find TODO/FIXME/BUG comments
 todo:
     @echo "=== TODO/FIXME/BUG/HACK Comments ==="
-    @golangci-lint run --disable-all --enable godox --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable godox --timeout 5m ./... || true
 
 # Find unused code (variables, functions, types, constants)
 unused:
     @echo "=== Unused Code Detection ==="
-    @golangci-lint run --disable-all --enable unused --enable ineffassign --enable unparam --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable unused --enable ineffassign --enable unparam --timeout 5m ./... || true
 
 # Find dead code with deadcode tool
 deadcode:
@@ -157,7 +157,7 @@ security:
 # Run gosec security linter
 gosec:
     @echo "=== Security Analysis (gosec) ==="
-    @golangci-lint run --disable-all --enable gosec --timeout 5m ./... || true
+    @golangci-lint run --default=none --enable gosec --timeout 5m ./... || true
 
 # ===== Module Management =====
 
@@ -203,27 +203,27 @@ quality:
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "▸ Complexity Metrics"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @golangci-lint run --disable-all --enable gocyclo,gocognit,funlen,nestif,maintidx --timeout 5m ./... 2>&1 | head -30 || true
+    @golangci-lint run --default=none --enable gocyclo,gocognit,funlen,nestif,maintidx --timeout 5m ./... 2>&1 | head -30 || true
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "▸ Code Duplication"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @golangci-lint run --disable-all --enable dupl --timeout 5m ./... 2>&1 | head -20 || true
+    @golangci-lint run --default=none --enable dupl --timeout 5m ./... 2>&1 | head -20 || true
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "▸ Security Issues"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @golangci-lint run --disable-all --enable gosec --timeout 5m ./... 2>&1 | head -20 || true
+    @golangci-lint run --default=none --enable gosec --timeout 5m ./... 2>&1 | head -20 || true
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "▸ TODO/FIXME Comments"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @golangci-lint run --disable-all --enable godox --timeout 5m ./... 2>&1 | head -20 || true
+    @golangci-lint run --default=none --enable godox --timeout 5m ./... 2>&1 | head -20 || true
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "▸ Unused Code"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @golangci-lint run --disable-all --enable unused,ineffassign,unparam --timeout 5m ./... 2>&1 | head -20 || true
+    @golangci-lint run --default=none --enable unused,ineffassign,unparam --timeout 5m ./... 2>&1 | head -20 || true
     @echo ""
     @echo "╔══════════════════════════════════════════════════════════════════╗"
     @echo "║              QUALITY REPORT COMPLETE                              ║"
@@ -232,12 +232,8 @@ quality:
 # Quick quality check (fast subset of linters)
 quality-quick:
     @echo "Running quick quality check..."
-    @golangci-lint run --disable-all \
-        --enable errcheck \
-        --enable govet \
-        --enable staticcheck \
-        --enable unused \
-        --enable gosec \
+    @golangci-lint run \
+        --enable-only errcheck,govet,staticcheck,unused,gosec \
         --timeout 2m ./...
 
 # ===== Cleanup =====
@@ -327,20 +323,3 @@ bench *pattern:
     @echo "Running benchmarks..."
     go test -bench={{ if pattern == "" { "." } else { pattern } }} -benchmem -cpuprofile=bench-cpu.prof -memprofile=bench-mem.prof ./internal/ui/components/
     @echo "Benchmark profiles written: bench-cpu.prof, bench-mem.prof"
-
-# ===== Pre-commit Hook =====
-
-# Install git pre-commit hook
-hook-install:
-    @echo "Installing pre-commit hook..."
-    @cp "scripts/pre-commit-hook.sh" ".git/hooks/pre-commit"
-    @chmod +x ".git/hooks/pre-commit"
-    @echo "✓ Pre-commit hook installed"
-
-# Run pre-commit checks
-pre-commit:
-    @echo "Running pre-commit checks..."
-    @just fmt
-    @just vet
-    @just quality-quick
-    @echo "✓ Pre-commit checks passed"
