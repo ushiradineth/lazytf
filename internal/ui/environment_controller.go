@@ -13,12 +13,14 @@ import (
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
+const unknownEnvironmentLabel = "unknown"
+
 // Environment-related methods for Model
 
 func (m *Model) envStatusLabel() string {
 	label := m.envDisplayName()
 	if label == "" {
-		label = "unknown"
+		label = unknownEnvironmentLabel
 	}
 	if m.envStrategy != environment.StrategyUnknown {
 		return fmt.Sprintf("%s (%s)", label, m.envStrategy)

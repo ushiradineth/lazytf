@@ -12,6 +12,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // EnvironmentChangedMsg is sent when the user selects a new environment.
@@ -190,7 +191,7 @@ func (e *EnvironmentPanel) handleNavigationKey(key string) (bool, tea.Cmd) {
 	case "up", "k":
 		e.moveUp()
 		return true, nil
-	case "down", "j":
+	case keybinds.KeyDown, "j":
 		e.moveDown()
 		return true, nil
 	case "enter":

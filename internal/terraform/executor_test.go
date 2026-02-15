@@ -239,7 +239,7 @@ func TestExecutorEnvPrecedence(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
-	tfPath := writeFakeTerraform(t, dir)
+	tfPath := writeFakeTerraformEnvTest(t, dir)
 	t.Setenv("FOO", "base")
 	exec, err := NewExecutor(dir, WithTerraformPath(tfPath), WithEnv([]string{"FOO=exec", "BAR=exec"}))
 	if err != nil {
@@ -472,11 +472,35 @@ fi
 if [ "$1" = "sleep" ]; then
   sleep 1
 fi
-if [ "$1" = "envtest" ]; then
-  echo "ENV:FOO=$FOO BAR=$BAR"
-fi
+for arg in "$@"; do
+  if [ "$arg" = "envtest" ]; then
+    echo "ENV:FOO=$FOO BAR=$BAR"
+    break
+  fi
+done
 if [ "$1" = "exit7" ]; then
   exit 7
+fi
+echo "ARGS:$cmd $*"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return path
+}
+
+func writeFakeTerraformEnvTest(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "terraform")
+	script := `#!/bin/sh
+cmd="$1"
+shift
+if [ "$cmd" = "plan" ]; then
+  echo "ENV:FOO=$FOO BAR=$BAR"
 fi
 echo "ARGS:$cmd $*"
 exit 0
