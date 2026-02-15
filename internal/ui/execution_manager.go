@@ -618,20 +618,7 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 		m.toast.Hide()
 	}
 
-	// Log to session history
-	var stateListOutput string
-	if msg.Error != nil {
-		stateListOutput = msg.Error.Error()
-	} else {
-		addresses := make([]string, len(msg.Resources))
-		for i, r := range msg.Resources {
-			addresses[i] = r.Address
-		}
-		stateListOutput = fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
-	}
-	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("State listed", "terraform state list", stateListOutput)
-	}
+	m.appendSessionLog("State listed", "terraform state list", stateListSessionOutput(msg))
 
 	if msg.Error != nil {
 		// Mark progress indicator as failed
@@ -703,14 +690,7 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 }
 
 func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, tea.Cmd) {
-	// Log to session history
-	output := msg.Output
-	if msg.Error != nil {
-		output = msg.Error.Error()
-	}
-	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("State shown", "terraform state show "+msg.Address, output)
-	}
+	m.appendSessionLog("State shown", "terraform state show "+msg.Address, stateShowSessionOutput(msg))
 
 	if msg.Error != nil {
 		m.addErrorDiagnostic("State show failed", msg.Error, "")
@@ -739,6 +719,34 @@ func (m *Model) showSelectedStateDetail() tea.Cmd {
 		return nil
 	}
 	return m.beginStateShow(selected.Address)
+}
+
+func stateListSessionOutput(msg StateListCompleteMsg) string {
+	if msg.Error != nil {
+		return msg.Error.Error()
+	}
+	if len(msg.Resources) == 0 {
+		return "0 resources"
+	}
+	addresses := make([]string, len(msg.Resources))
+	for i, r := range msg.Resources {
+		addresses[i] = r.Address
+	}
+	return fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+}
+
+func stateShowSessionOutput(msg StateShowCompleteMsg) string {
+	if msg.Error != nil {
+		return msg.Error.Error()
+	}
+	return msg.Output
+}
+
+func (m *Model) appendSessionLog(title, command, output string) {
+	if m.commandLogPanel == nil {
+		return
+	}
+	m.commandLogPanel.AppendSessionLog(title, command, output)
 }
 
 func (m *Model) prepareTerraformEnv() ([]string, error) {
