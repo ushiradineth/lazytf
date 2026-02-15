@@ -536,9 +536,19 @@ func streamLines(reader io.Reader, output chan<- string, buffer *strings.Builder
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	if err := scanner.Err(); err != nil && !isIgnorableScannerError(err) {
 		streamErrs <- err
 	}
+}
+
+func isIgnorableScannerError(err error) bool {
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrClosed) || errors.Is(err, io.EOF) {
+		return true
+	}
+	return strings.Contains(err.Error(), "file already closed")
 }
 
 func collectStreamError(streamErrs <-chan error) error {
