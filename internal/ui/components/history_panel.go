@@ -9,6 +9,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/styles"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // HistoryItem implements ListPanelItem for history entries.
@@ -266,7 +267,7 @@ func (h *HistoryPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 // HandleKey handles key events (implements Panel interface).
 func (h *HistoryPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	switch msg.String() {
-	case "j", keyDown:
+	case "j", keybinds.KeyDown:
 		h.listPanel.MoveDown()
 		return true, nil
 	case "k", "up":

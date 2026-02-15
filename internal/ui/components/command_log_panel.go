@@ -7,6 +7,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // CommandLogPanel wraps DiagnosticsPanel with a PanelFrame for consistent styling.
@@ -125,7 +126,7 @@ func (c *CommandLogPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) 
 	case "up", "k":
 		_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyUp})
 		return true, cmd
-	case keyDown, "j":
+	case keybinds.KeyDown, "j":
 		_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyDown})
 		return true, cmd
 	case "pgup":

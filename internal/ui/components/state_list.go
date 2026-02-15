@@ -7,6 +7,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // StateResourceItem implements ListPanelItem for state resources.
@@ -131,7 +132,7 @@ func (s *StateListContent) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 	case "up", "k":
 		s.MoveUp()
 		return true, nil
-	case keyDown, "j":
+	case keybinds.KeyDown, "j":
 		s.MoveDown()
 		return true, nil
 	case "enter":
