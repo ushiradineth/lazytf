@@ -117,6 +117,12 @@ func (m *Model) beginApply() tea.Cmd {
 		m.err = err
 		return nil
 	}
+	applyFlags, err := m.applyFlagsForRun()
+	if err != nil {
+		m.err = err
+		return m.toastError(err.Error())
+	}
+	m.applyRunFlags = applyFlags
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -159,7 +165,7 @@ func (m *Model) beginApply() tea.Cmd {
 
 	applyCmd := func() tea.Msg {
 		result, output, err := m.executor.Apply(ctx, terraform.ApplyOptions{
-			Flags:       m.applyFlags,
+			Flags:       applyFlags,
 			AutoApprove: true,
 			Env:         applyEnv,
 		})
@@ -884,7 +890,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		output = msg.Result.Output
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("Applied", m.buildCommand("apply", m.applyFlags, true), output)
+		m.commandLogPanel.AppendSessionLog("Applied", m.buildCommand("apply", m.applyFlagsForRecord(), true), output)
 	}
 
 	if msg.Error != nil || !msg.Success {
@@ -925,12 +931,13 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.setPlan(&terraform.Plan{Resources: nil})
 	m.planFilePath = ""
 	m.planRunFlags = nil
+	m.applyRunFlags = nil
 	m.updateExecutionViewForStreaming()
 
 	// Build commands - recordHistoryCmd will record and reload entries
 	// Always add explicit reload as safety measure to ensure UI is updated
 	recordCmd := m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil)
-	operationCmd := m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", nil)
+	operationCmd := m.recordOperationCmd("apply", m.applyFlagsForRecord(), true, m.applyStartedAt, msg.Result, "", nil)
 	reloadCmd := m.reloadHistoryCmd()
 
 	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
@@ -996,6 +1003,7 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Clear plan-related state on apply failure
 	m.planFilePath = ""
 	m.planRunFlags = nil
+	m.applyRunFlags = nil
 
 	// Set full output to applyView so [0] Operation Logs shows everything
 	if m.applyView != nil {
@@ -1046,7 +1054,7 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Build commands - recordHistoryCmd will record and reload entries
 	// Always add explicit reload as safety measure to ensure UI is updated
 	recordCmd := m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error)
-	operationCmd := m.recordOperationCmd("apply", m.applyFlags, true, m.applyStartedAt, msg.Result, "", opErr)
+	operationCmd := m.recordOperationCmd("apply", m.applyFlagsForRecord(), true, m.applyStartedAt, msg.Result, "", opErr)
 	reloadCmd := m.reloadHistoryCmd()
 
 	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
@@ -1295,6 +1303,28 @@ func (m *Model) planFlagsForRecord() []string {
 		return m.planRunFlags
 	}
 	return m.planFlags
+}
+
+func (m *Model) applyFlagsForRun() ([]string, error) {
+	flags := append([]string{}, m.applyFlags...)
+	if strings.TrimSpace(m.planFilePath) == "" {
+		return flags, nil
+	}
+	if _, err := os.Stat(m.planFilePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("saved plan file missing at %q, run terraform plan again", m.planFilePath)
+		}
+		return nil, fmt.Errorf("check saved plan file %q: %w", m.planFilePath, err)
+	}
+	flags = append(flags, m.planFilePath)
+	return flags, nil
+}
+
+func (m *Model) applyFlagsForRecord() []string {
+	if len(m.applyRunFlags) > 0 {
+		return m.applyRunFlags
+	}
+	return m.applyFlags
 }
 
 func (m *Model) planSummary() string {
