@@ -72,18 +72,6 @@ func (d *DiagnosticsPanel) SetLogText(text string) {
 	d.viewport.GotoBottom()
 }
 
-// SetParsedText is a no-op kept for API compatibility.
-// The parsed text was previously stored but never displayed.
-func (d *DiagnosticsPanel) SetParsedText(_ string) {
-	// Intentionally empty - parsed text is not used
-}
-
-// SetShowRaw is a no-op kept for API compatibility.
-// The show raw flag was previously stored but never used.
-func (d *DiagnosticsPanel) SetShowRaw(_ bool) {
-	// Intentionally empty - show raw flag is not used
-}
-
 // SetStyles updates the panel styles.
 func (d *DiagnosticsPanel) SetStyles(s *styles.Styles) {
 	d.styles = s

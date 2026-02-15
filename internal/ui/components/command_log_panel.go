@@ -79,20 +79,6 @@ func (c *CommandLogPanel) SetLogText(text string) {
 	}
 }
 
-// SetParsedText sets the parsed summary text.
-func (c *CommandLogPanel) SetParsedText(text string) {
-	if c.diagnosticsPanel != nil {
-		c.diagnosticsPanel.SetParsedText(text)
-	}
-}
-
-// SetShowRaw toggles between raw logs and parsed summary.
-func (c *CommandLogPanel) SetShowRaw(show bool) {
-	if c.diagnosticsPanel != nil {
-		c.diagnosticsPanel.SetShowRaw(show)
-	}
-}
-
 // SetStyles updates the panel styles.
 func (c *CommandLogPanel) SetStyles(s *styles.Styles) {
 	c.styles = s

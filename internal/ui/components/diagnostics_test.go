@@ -84,20 +84,6 @@ func TestDiagnosticsPanelUpdate(_ *testing.T) {
 	_, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 }
 
-func TestDiagnosticsPanelSetParsedText(_ *testing.T) {
-	panel := NewDiagnosticsPanel(styles.DefaultStyles())
-	// SetParsedText is a no-op, just make sure it doesn't panic
-	panel.SetParsedText("some parsed text")
-	panel.SetParsedText("")
-}
-
-func TestDiagnosticsPanelSetShowRaw(_ *testing.T) {
-	panel := NewDiagnosticsPanel(styles.DefaultStyles())
-	// SetShowRaw is a no-op, just make sure it doesn't panic
-	panel.SetShowRaw(true)
-	panel.SetShowRaw(false)
-}
-
 func TestDiagnosticsPanelUpdateNil(t *testing.T) {
 	var panel *DiagnosticsPanel
 	result, cmd := panel.Update(nil)
@@ -226,22 +212,4 @@ func TestDiagnosticsPanelExpandFillsContent(t *testing.T) {
 			"Expanded view:\n%s",
 			minExpectedContentLines, expandedContentLines, expandedView)
 	}
-}
-
-func TestSetParsedText(t *testing.T) {
-	s := styles.DefaultStyles()
-	d := NewDiagnosticsPanel(s)
-	// SetParsedText is a no-op for API compatibility
-	// Just verify it doesn't panic
-	d.SetParsedText("some parsed text")
-	d.SetParsedText("")
-}
-
-func TestSetShowRaw(t *testing.T) {
-	s := styles.DefaultStyles()
-	d := NewDiagnosticsPanel(s)
-	// SetShowRaw is a no-op for API compatibility
-	// Just verify it doesn't panic
-	d.SetShowRaw(true)
-	d.SetShowRaw(false)
 }

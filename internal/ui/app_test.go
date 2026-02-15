@@ -1648,7 +1648,7 @@ func TestViewExecutionModes(t *testing.T) {
 	m.planView = views.NewPlanView("", m.styles)
 	m.diagnosticsPanel = components.NewDiagnosticsPanel(m.styles)
 	m.diagnosticsPanel.SetSize(40, 5)
-	m.diagnosticsPanel.SetParsedText("parsed")
+	m.diagnosticsPanel.SetLogText("parsed")
 	// History view is now embedded in mainArea
 	m.mainArea = NewMainArea(m.styles, nil, nil, nil)
 	m.mainArea.SetSize(80, 20)

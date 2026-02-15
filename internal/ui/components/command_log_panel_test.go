@@ -105,27 +105,6 @@ func TestCommandLogPanelSetLogText(t *testing.T) {
 	}
 }
 
-func TestCommandLogPanelSetParsedText(t *testing.T) {
-	panel := NewCommandLogPanel(styles.DefaultStyles())
-	panel.SetSize(80, 20)
-
-	panel.SetParsedText("parsed summary")
-	if panel.GetDiagnosticsPanel() == nil {
-		t.Error("diagnostics panel should not be nil")
-	}
-}
-
-func TestCommandLogPanelSetShowRaw(t *testing.T) {
-	panel := NewCommandLogPanel(styles.DefaultStyles())
-	panel.SetSize(80, 20)
-
-	panel.SetShowRaw(true)
-	panel.SetShowRaw(false)
-	if panel.GetDiagnosticsPanel() == nil {
-		t.Error("diagnostics panel should not be nil")
-	}
-}
-
 func TestCommandLogPanelUpdate(t *testing.T) {
 	panel := NewCommandLogPanel(styles.DefaultStyles())
 	panel.SetSize(80, 20)
