@@ -296,11 +296,7 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	if strings.TrimSpace(parsed) == "" {
 		parsed = "Refresh complete"
 	}
-	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetLogText(parsed)
-	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetLogText(parsed)
-	}
+	m.setLogText(parsed)
 	m.updateExecutionViewForStreaming()
 	var toastCmd tea.Cmd
 	if m.toast != nil {
@@ -438,11 +434,7 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	}
 
 	if len(msg.Result.Diagnostics) > 0 {
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetDiagnostics(msg.Result.Diagnostics)
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetDiagnostics(msg.Result.Diagnostics)
-		}
+		m.setDiagnostics(msg.Result.Diagnostics)
 	}
 
 	var cmd tea.Cmd
@@ -783,7 +775,6 @@ func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 	)
 }
 
-//nolint:gocognit,gocyclo // Plan completion handling has inherent complexity
 func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planRunning = false
 	m.cancelFunc = nil
@@ -794,7 +785,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.commandLogPanel.AppendSessionLog("Planned", m.buildCommand("plan", m.planRunFlags, false), msg.Output)
 	}
 
-	if msg.Error != nil { //nolint:nestif // Plan error handling requires nested checks
+	if msg.Error != nil {
 		// Mark progress indicator as failed
 		if m.progressIndicator != nil {
 			m.progressIndicator.Fail()
@@ -811,11 +802,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
 		// Route logs to command log panel
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Output))
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Output))
-		}
+		m.setFormattedLogOutput(msg.Output)
 		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
 		return m, cmd
 	}
@@ -837,11 +824,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.Output != "" {
 		m.lastPlanOutput = msg.Output
 		// Route logs to command log panel
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Output))
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Output))
-		}
+		m.setFormattedLogOutput(msg.Output)
 	}
 	if m.applyView != nil {
 		m.applyView.SetStatus(views.ApplySuccess)
@@ -920,11 +903,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	if strings.TrimSpace(parsed) == "" {
 		parsed = "Apply complete"
 	}
-	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetLogText(parsed)
-	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetLogText(parsed)
-	}
+	m.setLogText(parsed)
 	// Stay in main view with panel layout
 	m.setPlan(&terraform.Plan{Resources: nil})
 	m.planFilePath = ""
@@ -976,11 +955,7 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 	}
 	// Route logs to command log panel.
 	if msg.Result != nil {
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
-		}
+		m.setFormattedLogOutput(msg.Result.Output)
 	}
 	if msg.Error != nil {
 		output := ""
@@ -994,7 +969,6 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 	return m, cmd
 }
 
-//nolint:gocognit,gocyclo // Apply failure handling has inherent complexity
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Clear plan-related state on apply failure
 	m.planFilePath = ""
@@ -1009,12 +983,8 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	// Route logs to command log panel.
-	if msg.Result != nil { //nolint:nestif // Apply failure logging requires nested checks
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
-		}
+	if msg.Result != nil {
+		m.setFormattedLogOutput(msg.Result.Output)
 		// Parse the full output for status updates - some lines (like Error:) may not
 		// have been streamed but are in the final result
 		if m.operationState != nil {
@@ -1061,10 +1031,30 @@ func (m *Model) showFormattedFiles(changedFiles []string) {
 	}
 
 	output := "Formatted files:\n" + strings.Join(changedFiles, "\n")
+	m.setLogText(output)
+}
+
+func (m *Model) setLogText(text string) {
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetLogText(output)
-	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetLogText(output)
+		m.commandLogPanel.SetLogText(text)
+		return
+	}
+	if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetLogText(text)
+	}
+}
+
+func (m *Model) setFormattedLogOutput(raw string) {
+	m.setLogText(utils.FormatLogOutput(raw))
+}
+
+func (m *Model) setDiagnostics(diagnostics []terraform.Diagnostic) {
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.SetDiagnostics(diagnostics)
+		return
+	}
+	if m.diagnosticsPanel != nil {
+		m.diagnosticsPanel.SetDiagnostics(diagnostics)
 	}
 }
 
@@ -1124,19 +1114,11 @@ func (m *Model) addErrorDiagnostic(summary string, err error, output string) {
 	if m.operationState != nil {
 		m.operationState.AddDiagnostic(diag)
 		// Route diagnostics to command log panel
-		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetDiagnostics(m.operationState.GetDiagnostics())
-		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetDiagnostics(m.operationState.GetDiagnostics())
-		}
+		m.setDiagnostics(m.operationState.GetDiagnostics())
 		return
 	}
 	// Route diagnostics to command log panel
-	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetDiagnostics([]terraform.Diagnostic{diag})
-	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetDiagnostics([]terraform.Diagnostic{diag})
-	}
+	m.setDiagnostics([]terraform.Diagnostic{diag})
 }
 
 func (m *Model) streamPlanOutputCmd() tea.Cmd {
