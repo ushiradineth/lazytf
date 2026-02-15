@@ -115,6 +115,27 @@ func TestApplyWithoutPlanShowsToast(t *testing.T) {
 	}
 }
 
+func TestExecutionModelWithoutPlanStartsInAboutMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	if m.mainArea == nil {
+		t.Fatal("expected main area to be initialized")
+	}
+	if m.mainArea.GetMode() != ModeAbout {
+		t.Fatalf("expected main area mode %v, got %v", ModeAbout, m.mainArea.GetMode())
+	}
+}
+
+func TestExecutionModelWithPlanStartsInDiffMode(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_vpc.main", Action: terraform.ActionCreate}}}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	if m.mainArea == nil {
+		t.Fatal("expected main area to be initialized")
+	}
+	if m.mainArea.GetMode() != ModeDiff {
+		t.Fatalf("expected main area mode %v, got %v", ModeDiff, m.mainArea.GetMode())
+	}
+}
+
 func TestHelpBlocksInput(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.ready = true
