@@ -378,15 +378,6 @@ func TestEnvironmentPanelSelectorActive(t *testing.T) {
 	}
 }
 
-func TestEnvironmentPanelSetWarnings(_ *testing.T) {
-	s := styles.DefaultStyles()
-	panel := NewEnvironmentPanel(s)
-
-	// SetWarnings should not panic (it's a no-op)
-	panel.SetWarnings([]string{"warning1", "warning2"})
-	panel.SetWarnings(nil)
-}
-
 func TestEnvironmentPanelFiltering(t *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewEnvironmentPanel(s)
@@ -401,14 +392,6 @@ func TestEnvironmentPanelFiltering(t *testing.T) {
 	if !panel.Filtering() {
 		t.Error("Expected panel to be filtering when filterActive is true")
 	}
-}
-
-func TestEnvironmentPanelActivateSelector(_ *testing.T) {
-	s := styles.DefaultStyles()
-	panel := NewEnvironmentPanel(s)
-
-	// ActivateSelector is a no-op, just make sure it doesn't panic
-	panel.ActivateSelector()
 }
 
 func TestEnvironmentPanelUpdate(t *testing.T) {
@@ -1384,22 +1367,4 @@ func TestEnvironmentPanelItemCount(t *testing.T) {
 	if panel.ItemCount() != 2 {
 		t.Errorf("expected 2 items, got %d", panel.ItemCount())
 	}
-}
-
-func TestSetWarnings(t *testing.T) {
-	s := styles.DefaultStyles()
-	panel := NewEnvironmentPanel(s)
-	// SetWarnings is a no-op for compatibility
-	// Just verify it doesn't panic
-	panel.SetWarnings([]string{"warning1", "warning2"})
-	panel.SetWarnings([]string{})
-	panel.SetWarnings(nil)
-}
-
-func TestActivateSelector(t *testing.T) {
-	s := styles.DefaultStyles()
-	panel := NewEnvironmentPanel(s)
-	// ActivateSelector is a no-op for compatibility
-	// Just verify it doesn't panic
-	panel.ActivateSelector()
 }

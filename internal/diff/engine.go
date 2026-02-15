@@ -21,13 +21,6 @@ func NewEngine() *Engine {
 	}
 }
 
-// CalculateResourceDiffs is a no-op kept for compatibility
-// Diffs are now calculated on-demand in GetResourceDiffs.
-func (e *Engine) CalculateResourceDiffs(_ *terraform.Plan) error {
-	// Nothing to do - diffs are calculated on demand
-	return nil
-}
-
 // ResetCache clears cached diff results.
 func (e *Engine) ResetCache() {
 	e.mu.Lock()
