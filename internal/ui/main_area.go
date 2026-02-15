@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,7 +27,6 @@ const (
 type MainArea struct {
 	styles       *styles.Styles
 	frame        *components.PanelFrame
-	width        int
 	height       int
 	focused      bool
 	mode         MainAreaMode
@@ -61,7 +59,6 @@ func NewMainArea(s *styles.Styles, diffEngine *diff.Engine, applyView *views.App
 
 // SetSize updates the main area dimensions.
 func (m *MainArea) SetSize(width, height int) {
-	m.width = width
 	m.height = height
 	m.frame.SetSize(width, height)
 
@@ -294,10 +291,10 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 //nolint:gocognit,gocyclo,funlen // Rendering multiple view modes requires branching
 func (m *MainArea) View() string {
 	if m.styles == nil {
-		return "[DEBUG: styles nil]"
+		return ""
 	}
 	if m.height <= 0 {
-		return fmt.Sprintf("[DEBUG: height=%d width=%d]", m.height, m.width)
+		return ""
 	}
 
 	var content string
