@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -2516,6 +2519,65 @@ func TestBeginApplyFromConfirmView(t *testing.T) {
 	// Should transition to main view
 	if m.execView != viewMain {
 		t.Errorf("expected execView=viewMain, got %d", m.execView)
+	}
+}
+
+func TestBeginApplyUsesSavedPlanFile(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	m.applyFlags = []string{"-parallelism=5"}
+	planPath := filepath.Join(t.TempDir(), "plan.tfplan")
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+	m.planFilePath = planPath
+
+	cmd := m.beginApply()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	_ = cmd()
+
+	if mock.ApplyCalls != 1 {
+		t.Fatalf("expected one apply call, got %d", mock.ApplyCalls)
+	}
+	if len(mock.LastApplyOpts.Flags) != 2 {
+		t.Fatalf("expected apply flags and plan path, got %v", mock.LastApplyOpts.Flags)
+	}
+	if mock.LastApplyOpts.Flags[1] != planPath {
+		t.Fatalf("expected saved plan path in apply args, got %v", mock.LastApplyOpts.Flags)
+	}
+}
+
+func TestBeginApplyFailsWhenSavedPlanMissing(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	m.planFilePath = filepath.Join(t.TempDir(), "missing.tfplan")
+
+	cmd := m.beginApply()
+	if cmd != nil {
+		_ = cmd()
+	}
+
+	if mock.ApplyCalls != 0 {
+		t.Fatalf("expected apply not to run when saved plan is missing")
+	}
+	if m.err == nil || !strings.Contains(m.err.Error(), "run terraform plan again") {
+		t.Fatalf("expected missing saved plan error, got %v", m.err)
 	}
 }
 

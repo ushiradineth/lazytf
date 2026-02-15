@@ -714,6 +714,18 @@ func TestPlanFlagsForRecord(t *testing.T) {
 	}
 }
 
+func TestApplyFlagsForRecord(t *testing.T) {
+	m := NewModel(&terraform.Plan{})
+	m.applyFlags = []string{"-parallelism=5"}
+	if got := m.applyFlagsForRecord(); len(got) != 1 || got[0] != "-parallelism=5" {
+		t.Fatalf("expected default apply flags")
+	}
+	m.applyRunFlags = []string{"-parallelism=5", "/tmp/plan.tfplan"}
+	if got := m.applyFlagsForRecord(); len(got) != 2 || got[1] != "/tmp/plan.tfplan" {
+		t.Fatalf("expected apply run flags")
+	}
+}
+
 func TestMaxInt(t *testing.T) {
 	if utils.MaxInt(1, 3) != 3 {
 		t.Fatalf("expected MaxInt to return larger value")
@@ -1095,6 +1107,7 @@ func TestApplyEnvironmentSelectionWorkspace(t *testing.T) {
 	m := NewModel(&terraform.Plan{Resources: []terraform.ResourceChange{{Address: "a", Action: terraform.ActionCreate}}})
 	m.planFilePath = consts.PlanTFPlan
 	m.planRunFlags = []string{"-out=plan.tfplan"}
+	m.applyRunFlags = []string{"-parallelism=5", consts.PlanTFPlan}
 	m.planView = views.NewPlanView("", m.styles)
 	m.operationState = terraform.NewOperationState()
 
@@ -1104,7 +1117,7 @@ func TestApplyEnvironmentSelectionWorkspace(t *testing.T) {
 	if manager.switched != consts.EnvDev {
 		t.Fatalf("expected workspace switch to dev")
 	}
-	if m.plan != nil || m.planFilePath != "" || m.planRunFlags != nil {
+	if m.plan != nil || m.planFilePath != "" || m.planRunFlags != nil || m.applyRunFlags != nil {
 		t.Fatalf("expected plan state to reset")
 	}
 }
