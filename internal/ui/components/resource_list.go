@@ -157,7 +157,7 @@ func (r *ResourceList) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
 		r.MoveUp()
 		return true, nil
-	case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
+	case key.Matches(msg, key.NewBinding(key.WithKeys(keyDown, "j"))):
 		r.MoveDown()
 		return true, nil
 	case key.Matches(msg, key.NewBinding(key.WithKeys("enter", " "))):
@@ -209,7 +209,7 @@ func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("up", "k"))):
 			r.MoveUp()
 			handled = true
-		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("down", "j"))):
+		case key.Matches(keyMsg, key.NewBinding(key.WithKeys(keyDown, "j"))):
 			r.MoveDown()
 			handled = true
 		case key.Matches(keyMsg, key.NewBinding(key.WithKeys("enter", " "))):

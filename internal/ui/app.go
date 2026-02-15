@@ -762,7 +762,7 @@ func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q", "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
 		m.quitting = true
 		return true, tea.Quit
-	case "esc", "D": //nolint:goconst // keyboard keys are clearer as literals
+	case "esc", "D":
 		m.diagnosticsFocused = false
 		return true, nil
 	default:
@@ -783,10 +783,10 @@ func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "y", "Y":
 		m.modalState = ModalNone
 		return true, m.beginApply()
-	case "n", "N", "esc": //nolint:goconst // keyboard keys are clearer as literals
+	case "n", "N", "esc":
 		m.modalState = ModalNone
 		return true, nil
-	case "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
+	case "ctrl+c":
 		m.cancelExecution()
 		m.modalState = ModalNone
 		return true, nil

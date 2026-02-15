@@ -190,7 +190,7 @@ func (e *EnvironmentPanel) handleNavigationKey(key string) (bool, tea.Cmd) {
 	case "up", "k":
 		e.moveUp()
 		return true, nil
-	case "down", "j":
+	case keyDown, "j":
 		e.moveDown()
 		return true, nil
 	case "enter":

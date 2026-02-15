@@ -125,7 +125,7 @@ func (c *CommandLogPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) 
 	case "up", "k":
 		_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyUp})
 		return true, cmd
-	case "down", "j": //nolint:goconst // keyboard keys are clearer as literals
+	case keyDown, "j":
 		_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyDown})
 		return true, cmd
 	case "pgup":

@@ -104,6 +104,7 @@ showing only changed attributes in a git-style diff format.`,
 	return rootCmd
 }
 
+//nolint:gocognit,gocyclo // CLI setup branches by mode and config source.
 func run(_ *cobra.Command, args []string) error {
 	// Initialize profiler from flags or environment.
 	profiler := initProfiler()

@@ -172,6 +172,8 @@ func New(opts Options) *Profiler {
 }
 
 // Start begins all enabled profiling.
+//
+//nolint:gocognit,gocyclo,funlen // Startup needs ordered cleanup paths for partial initialization failures.
 func (p *Profiler) Start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

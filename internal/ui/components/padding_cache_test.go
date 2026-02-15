@@ -105,7 +105,7 @@ func BenchmarkPaddingMixedWidths(b *testing.B) {
 	})
 }
 
-// Simulate a typical render cycle with many padding operations
+// Simulate a typical render cycle with many padding operations.
 func BenchmarkSimulatedRender(b *testing.B) {
 	// Simulate: 8 panels × 30 lines each + 50 resources
 	panelWidths := []int{40, 80, 120, 60, 100, 50, 70, 90}
@@ -149,7 +149,7 @@ func BenchmarkSimulatedRender(b *testing.B) {
 	})
 }
 
-// Benchmark border character caching
+// Benchmark border character caching.
 func BenchmarkBorderLines(b *testing.B) {
 	widths := []int{40, 80, 120}
 

@@ -266,7 +266,7 @@ func (h *HistoryPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 // HandleKey handles key events (implements Panel interface).
 func (h *HistoryPanel) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	switch msg.String() {
-	case "j", "down":
+	case "j", keyDown:
 		h.listPanel.MoveDown()
 		return true, nil
 	case "k", "up":
