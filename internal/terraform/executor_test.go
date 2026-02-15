@@ -98,7 +98,7 @@ func TestExecutorPlanApplyFlagsAndAutoApprove(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
-	tfPath := writeFakeTerraform(t, dir)
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
 	exec, err := NewExecutor(dir,
 		WithTerraformPath(tfPath),
 		WithDefaultFlags([]string{"-foo", "-bar=1"}),
