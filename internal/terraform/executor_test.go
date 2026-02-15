@@ -3,11 +3,13 @@ package terraform
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -824,6 +826,82 @@ func TestSplitEnvVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestRunDisablesOutputStreamForSyncCommands(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformExtended(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, output, err := exec.run(context.Background(), []string{"validate", "-json"}, execOptions{streamOutput: false})
+	if err != nil {
+		t.Fatalf("run validate: %v", err)
+	}
+	if output != nil {
+		t.Fatalf("expected nil output channel for non-streaming command")
+	}
+
+	<-result.Done()
+	if result.Error != nil {
+		t.Fatalf("unexpected result error: %v", result.Error)
+	}
+}
+
+func TestStreamLinesReportsScannerError(t *testing.T) {
+	var (
+		wg         sync.WaitGroup
+		buffer     strings.Builder
+		output     = make(chan string, 1)
+		streamErrs = make(chan error, 1)
+	)
+
+	wg.Add(1)
+	go streamLines(&failingScannerReader{}, output, &buffer, streamErrs, &wg)
+	wg.Wait()
+	close(streamErrs)
+
+	if got := buffer.String(); !strings.Contains(got, "line") {
+		t.Fatalf("expected buffer to include streamed line, got %q", got)
+	}
+
+	select {
+	case line := <-output:
+		if line != "line" {
+			t.Fatalf("unexpected streamed line %q", line)
+		}
+	default:
+		t.Fatalf("expected one streamed line")
+	}
+
+	err := collectStreamError(streamErrs)
+	if err == nil {
+		t.Fatalf("expected scanner error")
+	}
+	if !strings.Contains(err.Error(), "forced read error") {
+		t.Fatalf("unexpected scanner error: %v", err)
+	}
+}
+
+type failingScannerReader struct {
+	readOnce bool
+}
+
+func (r *failingScannerReader) Read(p []byte) (int, error) {
+	if r.readOnce {
+		return 0, errors.New("forced read error")
+	}
+	r.readOnce = true
+	return strings.NewReader("line\n").Read(p)
+}
+
+var _ io.Reader = (*failingScannerReader)(nil)
 
 func TestExecutorShowWithOptions(t *testing.T) {
 	if runtime.GOOS == consts.OSWindows {
