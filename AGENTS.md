@@ -52,7 +52,7 @@ confidence: high
 - `test/integration/`: tagged integration tests against real terraform fixtures
 - `test/e2e/`: tagged end-to-end tests
 - `testdata/`: fixtures (plans and terraform fixtures)
-- `docs/`: planning and design notes
+- `.agents/docs/`: planning notes and migrated legacy docs
 
 Write boundaries
 - Prefer edits in `internal/**` and `cmd/lazytf/**` for behavior changes.
