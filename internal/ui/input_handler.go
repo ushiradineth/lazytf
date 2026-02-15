@@ -34,10 +34,10 @@ func (m *Model) handleLegacyOutputKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		m.quitting = true
 		return true, tea.Quit
-	case "ctrl+c":
+	case keyCtrlC:
 		m.cancelExecution()
 		return true, nil
-	case "esc":
+	case keyEsc:
 		if !m.planRunning && !m.applyRunning {
 			m.execView = viewMain
 			return true, nil
@@ -53,7 +53,7 @@ func (m *Model) handleCommandLogKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case "esc":
+	case keyEsc:
 		m.execView = viewMain
 		return true, nil
 	default:
@@ -66,7 +66,7 @@ func (m *Model) handleStateListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case "esc":
+	case keyEsc:
 		m.execView = viewMain
 		return true, nil
 	case "up", "k":
@@ -96,7 +96,7 @@ func (m *Model) handleStateShowKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q":
 		m.quitting = true
 		return true, tea.Quit
-	case "esc":
+	case keyEsc:
 		m.execView = viewStateList
 		return true, nil
 	default:
