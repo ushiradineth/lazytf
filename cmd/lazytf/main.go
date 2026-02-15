@@ -172,7 +172,9 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 	if err := configureWorkDirAndWorkspace(); err != nil {
 		return err
 	}
-	exec, err := buildExecutor(cfg, flags)
+	// Execution model applies flags per operation.
+	// Keep executor defaults empty to avoid duplicate arguments.
+	exec, err := buildExecutor(cfg, nil)
 	if err != nil {
 		return err
 	}
