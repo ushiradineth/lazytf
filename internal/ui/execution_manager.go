@@ -21,6 +21,8 @@ import (
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
+const noChangesSummary = "No changes"
+
 // Execution-related methods for Model
 
 func (m *Model) beginPlan() tea.Cmd {
@@ -1326,7 +1328,7 @@ func (m *Model) applyFlagsForRecord() []string {
 
 func (m *Model) planSummary() string {
 	if m.plan == nil {
-		return "No changes"
+		return noChangesSummary
 	}
 	create := m.countResourcesByAction(terraform.ActionCreate)
 	update := m.countResourcesByAction(terraform.ActionUpdate)
@@ -1347,7 +1349,7 @@ func (m *Model) planSummary() string {
 // planSummaryVerbose returns a multi-line summary with labels and colors for the confirm dialog.
 func (m *Model) planSummaryVerbose() string {
 	if m.plan == nil {
-		return "No changes"
+		return noChangesSummary
 	}
 	create := m.countResourcesByAction(terraform.ActionCreate)
 	update := m.countResourcesByAction(terraform.ActionUpdate)

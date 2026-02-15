@@ -16,7 +16,11 @@ go.work
 bin/
 .go/
 **/.lazytf
+/main
 
 # Output of the go coverage tool
 coverage.out
 coverage.html
+
+# Local plan artifacts
+/plan.json
