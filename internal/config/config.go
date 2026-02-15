@@ -75,6 +75,7 @@ type HistoryConfig struct {
 	CompressionThreshold int    `yaml:"compression_threshold,omitempty"`
 	RetentionDays        int    `yaml:"retention_days,omitempty"`
 	MaxEntries           int    `yaml:"max_entries,omitempty"`
+	RedactSensitive      *bool  `yaml:"redact_sensitive,omitempty"`
 }
 
 // Manager loads and saves configuration files with locking.
@@ -319,6 +320,9 @@ func (c Config) WithDefaults() Config {
 	if c.History.MaxEntries == 0 {
 		c.History.MaxEntries = 10000
 	}
+	if c.History.RedactSensitive == nil {
+		c.History.RedactSensitive = boolPtr(true)
+	}
 	return c
 }
 
@@ -338,6 +342,15 @@ func (c Config) Validate() error {
 	}
 	if c.Terraform.Parallelism < 0 {
 		return errors.New("terraform parallelism cannot be negative")
+	}
+	if c.History.CompressionThreshold < 0 {
+		return errors.New("history compression_threshold cannot be negative")
+	}
+	if c.History.RetentionDays < 0 {
+		return errors.New("history retention_days cannot be negative")
+	}
+	if c.History.MaxEntries < 0 {
+		return errors.New("history max_entries cannot be negative")
 	}
 	return validateHistoryLevel(c.History.Level)
 }
@@ -368,6 +381,10 @@ func migrateConfig(cfg Config) (Config, bool, error) {
 		return cfg, false, fmt.Errorf("unsupported config version: %d", cfg.Version)
 	}
 	return cfg, false, nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 func expandConfigPaths(cfg *Config) error {

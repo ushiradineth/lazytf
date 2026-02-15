@@ -281,7 +281,14 @@ func openHistory(cfg *config.Config) (*history.Store, *history.Logger, error) {
 	}
 	opts := []history.StoreOption{
 		history.WithCompressionThreshold(cfg.History.CompressionThreshold),
+		history.WithRetentionDays(cfg.History.RetentionDays),
+		history.WithMaxEntries(cfg.History.MaxEntries),
 	}
+	redactionEnabled := true
+	if cfg.History.RedactSensitive != nil {
+		redactionEnabled = *cfg.History.RedactSensitive
+	}
+	opts = append(opts, history.WithSensitiveRedaction(redactionEnabled))
 	var (
 		historyStore  *history.Store
 		historyLogger *history.Logger

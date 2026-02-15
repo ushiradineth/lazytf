@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -68,9 +69,14 @@ type OperationFilter struct {
 type Store struct {
 	db                   *sql.DB
 	compressionThreshold int
+	retentionDays        int
+	maxEntries           int
+	redactSensitive      bool
 }
 
 const defaultCompressionThreshold = 64 * 1024
+const defaultRetentionDays = 90
+const defaultMaxEntries = 10000
 
 // StoreOption configures Store behavior.
 type StoreOption func(*Store)
@@ -81,6 +87,31 @@ func WithCompressionThreshold(bytes int) StoreOption {
 		if bytes > 0 {
 			s.compressionThreshold = bytes
 		}
+	}
+}
+
+// WithRetentionDays sets the number of days to keep history rows.
+func WithRetentionDays(days int) StoreOption {
+	return func(s *Store) {
+		if days >= 0 {
+			s.retentionDays = days
+		}
+	}
+}
+
+// WithMaxEntries sets the maximum number of rows kept per history table.
+func WithMaxEntries(maxEntries int) StoreOption {
+	return func(s *Store) {
+		if maxEntries >= 0 {
+			s.maxEntries = maxEntries
+		}
+	}
+}
+
+// WithSensitiveRedaction enables or disables secret redaction before persistence.
+func WithSensitiveRedaction(enabled bool) StoreOption {
+	return func(s *Store) {
+		s.redactSensitive = enabled
 	}
 }
 
@@ -129,6 +160,9 @@ func Open(path string, opts ...StoreOption) (*Store, error) {
 	store := &Store{
 		db:                   db,
 		compressionThreshold: defaultCompressionThreshold,
+		retentionDays:        defaultRetentionDays,
+		maxEntries:           defaultMaxEntries,
+		redactSensitive:      true,
 	}
 	for _, opt := range opts {
 		opt(store)
@@ -136,6 +170,12 @@ func Open(path string, opts ...StoreOption) (*Store, error) {
 	if err := store.ensureSchema(); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			// Best effort close after schema failure.
+			_ = closeErr
+		}
+		return nil, err
+	}
+	if err := store.enforceRetention(context.Background()); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
 			_ = closeErr
 		}
 		return nil, err
@@ -157,6 +197,9 @@ func (s *Store) RecordApply(entry Entry) error {
 		return nil
 	}
 	ctx := context.Background()
+	entry.Summary = s.maybeRedact(entry.Summary)
+	entry.Error = s.maybeRedact(entry.Error)
+	entry.Output = s.maybeRedact(entry.Output)
 	_, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO apply_history (started_at, finished_at, duration_ms, status, summary, error, workdir, environment, output_text)
@@ -171,7 +214,10 @@ func (s *Store) RecordApply(entry Entry) error {
 		entry.Environment,
 		entry.Output,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.enforceRetention(ctx)
 }
 
 // RecordOperation writes a terraform operation entry.
@@ -179,6 +225,9 @@ func (s *Store) RecordOperation(entry OperationEntry) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
+	entry.Command = s.maybeRedact(entry.Command)
+	entry.Summary = s.maybeRedact(entry.Summary)
+	entry.Output = s.maybeRedact(entry.Output)
 	outputText, outputGzip, err := prepareOutput(entry.Output, s.compressionThreshold)
 	if err != nil {
 		return err
@@ -201,7 +250,74 @@ func (s *Store) RecordOperation(entry OperationEntry) error {
 		outputText,
 		outputGzip,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.enforceRetention(ctx)
+}
+
+func (s *Store) enforceRetention(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+
+	if s.retentionDays > 0 {
+		cutoff := time.Now().Add(-time.Duration(s.retentionDays) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM apply_history WHERE finished_at < ?`, cutoff); err != nil {
+			return fmt.Errorf("prune apply_history by retention: %w", err)
+		}
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM operations WHERE finished_at < ?`, cutoff); err != nil {
+			return fmt.Errorf("prune operations by retention: %w", err)
+		}
+	}
+
+	if s.maxEntries > 0 {
+		if _, err := s.db.ExecContext(ctx,
+			`DELETE FROM apply_history
+			 WHERE id IN (
+			   SELECT id FROM apply_history
+			   ORDER BY finished_at DESC
+			   LIMIT -1 OFFSET ?
+			 )`,
+			s.maxEntries,
+		); err != nil {
+			return fmt.Errorf("prune apply_history by max entries: %w", err)
+		}
+		if _, err := s.db.ExecContext(ctx,
+			`DELETE FROM operations
+			 WHERE id IN (
+			   SELECT id FROM operations
+			   ORDER BY finished_at DESC
+			   LIMIT -1 OFFSET ?
+			 )`,
+			s.maxEntries,
+		); err != nil {
+			return fmt.Errorf("prune operations by max entries: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) maybeRedact(value string) string {
+	if s == nil || !s.redactSensitive {
+		return value
+	}
+	return redactSensitiveData(value)
+}
+
+var secretAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|client[_-]?secret)\b\s*[:=]\s*("[^"]*"|'[^']*'|\S+)`)
+var bearerTokenPattern = regexp.MustCompile(`(?i)(authorization\s*:\s*bearer\s+)(\S+)`)
+var urlCredentialPattern = regexp.MustCompile(`(?i)(https?://[^\s:@/]+:)([^@\s/]+)(@)`)
+
+func redactSensitiveData(input string) string {
+	if strings.TrimSpace(input) == "" {
+		return input
+	}
+	redacted := secretAssignmentPattern.ReplaceAllString(input, `${1}=[REDACTED]`)
+	redacted = bearerTokenPattern.ReplaceAllString(redacted, `${1}[REDACTED]`)
+	redacted = urlCredentialPattern.ReplaceAllString(redacted, `${1}[REDACTED]${3}`)
+	return redacted
 }
 
 // scanEntry scans a single row into an Entry struct.

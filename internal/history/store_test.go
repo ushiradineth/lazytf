@@ -704,6 +704,134 @@ func TestWithCompressionThresholdZero(t *testing.T) {
 	}
 }
 
+func TestStoreRetentionMaxEntriesAppliesToOperations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path, WithMaxEntries(2), WithRetentionDays(0))
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	for i := range 3 {
+		start := time.Now().Add(time.Duration(i) * time.Second)
+		entry := OperationEntry{
+			StartedAt:  start,
+			FinishedAt: start.Add(200 * time.Millisecond),
+			Duration:   200 * time.Millisecond,
+			Action:     "plan",
+			Command:    "terraform plan",
+			Status:     StatusSuccess,
+			Summary:    "ok",
+			User:       "tester",
+		}
+		if err := store.RecordOperation(entry); err != nil {
+			t.Fatalf("record operation: %v", err)
+		}
+	}
+
+	entries, err := store.QueryOperations(OperationFilter{Action: "plan", Limit: 10})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 retained operations, got %d", len(entries))
+	}
+}
+
+func TestStoreRetentionDaysAppliesToApplyHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path, WithRetentionDays(1), WithMaxEntries(0))
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	old := time.Now().Add(-72 * time.Hour)
+	if err := store.RecordApply(Entry{
+		StartedAt:   old,
+		FinishedAt:  old.Add(time.Minute),
+		Duration:    time.Minute,
+		Status:      StatusSuccess,
+		Summary:     "old",
+		Environment: "dev",
+	}); err != nil {
+		t.Fatalf("record old apply: %v", err)
+	}
+
+	now := time.Now()
+	if err := store.RecordApply(Entry{
+		StartedAt:   now,
+		FinishedAt:  now.Add(time.Minute),
+		Duration:    time.Minute,
+		Status:      StatusSuccess,
+		Summary:     "new",
+		Environment: "dev",
+	}); err != nil {
+		t.Fatalf("record new apply: %v", err)
+	}
+
+	entries, err := store.ListRecentForEnvironment("dev", 10)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 retained apply entry, got %d", len(entries))
+	}
+	if entries[0].Summary != "new" {
+		t.Fatalf("expected most recent entry to remain, got %q", entries[0].Summary)
+	}
+}
+
+func TestStoreRedactsSensitiveValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path, WithSensitiveRedaction(true), WithRetentionDays(0), WithMaxEntries(0))
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	op := OperationEntry{
+		StartedAt:  time.Now(),
+		FinishedAt: time.Now().Add(time.Second),
+		Duration:   time.Second,
+		Action:     "apply",
+		Command:    "terraform apply -var token=abcd1234",
+		Status:     StatusSuccess,
+		Summary:    "using password=topsecret",
+		Output:     "Authorization: Bearer shhh\napi_key=xyz\nhttps://user:pass@example.com",
+	}
+	if err := store.RecordOperation(op); err != nil {
+		t.Fatalf("record operation: %v", err)
+	}
+
+	entries, err := store.QueryOperations(OperationFilter{Action: "apply", Limit: 1})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one operation, got %d", len(entries))
+	}
+	got := entries[0]
+	if strings.Contains(got.Command, "abcd1234") || strings.Contains(got.Summary, "topsecret") || strings.Contains(got.Output, "shhh") || strings.Contains(got.Output, "xyz") || strings.Contains(got.Output, "pass@example.com") {
+		t.Fatalf("expected sensitive values redacted, got command=%q summary=%q output=%q", got.Command, got.Summary, got.Output)
+	}
+	if !strings.Contains(got.Output, "[REDACTED]") {
+		t.Fatalf("expected redaction marker in output")
+	}
+}
+
 func TestQueryOperationsWithDateFilter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := Open(path)
