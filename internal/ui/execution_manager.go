@@ -42,19 +42,7 @@ func (m *Model) beginPlan() tea.Cmd {
 		m.err = err
 		return nil
 	}
-	planFlags := append([]string{}, m.planFlags...)
-	planFilePath := planOutputPath(planFlags)
-	if planFilePath == "" {
-		workDir := m.envWorkDir
-		if m.executor != nil {
-			workDir = m.executor.WorkDir()
-		}
-		if strings.TrimSpace(workDir) == "" {
-			workDir = "."
-		}
-		planFilePath = filepath.Join(workDir, ".lazytf", "tmp", "plan.tfplan")
-		planFlags = append(planFlags, "-out="+planFilePath)
-	}
+	planFlags, planFilePath := m.planFlagsForRun()
 	m.planRunFlags = planFlags
 	m.planFilePath = planFilePath
 	// Cancel any previous execution before starting new one
@@ -1279,6 +1267,24 @@ func planOutputPath(flags []string) string {
 		}
 	}
 	return ""
+}
+
+func (m *Model) planFlagsForRun() ([]string, string) {
+	planFlags := append([]string{}, m.planFlags...)
+	planFilePath := planOutputPath(planFlags)
+	if planFilePath != "" {
+		return planFlags, planFilePath
+	}
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	planFilePath = filepath.Join(workDir, ".lazytf", "tmp", "plan.tfplan")
+	planFlags = append(planFlags, "-out="+planFilePath)
+	return planFlags, planFilePath
 }
 
 func (m *Model) planFlagsForRecord() []string {
