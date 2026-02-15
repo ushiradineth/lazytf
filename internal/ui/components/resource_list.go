@@ -179,20 +179,38 @@ func (r *ResourceList) SetSummary(create, update, deleteCount, replace int) {
 
 // MoveUp moves the selection up.
 func (r *ResourceList) MoveUp() {
-	if r.selectedIndex > 0 {
-		r.selectedIndex--
-		r.lastMove = -1
-		r.updateViewport()
-	}
+	r.moveSelection(-1)
 }
 
 // MoveDown moves the selection down.
 func (r *ResourceList) MoveDown() {
-	if r.selectedIndex < len(r.visibleItems)-1 {
-		r.selectedIndex++
-		r.lastMove = 1
-		r.updateViewport()
+	r.moveSelection(1)
+}
+
+func (r *ResourceList) moveSelection(delta int) {
+	if len(r.visibleItems) == 0 || delta == 0 {
+		return
 	}
+
+	previous := r.selectedIndex
+	next := previous + delta
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(r.visibleItems) {
+		next = len(r.visibleItems) - 1
+	}
+	if next == previous {
+		return
+	}
+
+	r.selectedIndex = next
+	if delta > 0 {
+		r.lastMove = 1
+	} else {
+		r.lastMove = -1
+	}
+	r.adjustViewportOffset()
 }
 
 // Init initializes the component.
