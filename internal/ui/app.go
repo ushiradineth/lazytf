@@ -304,10 +304,13 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 
 	// Update main area with plan/apply views
 	m.mainArea = NewMainArea(m.styles, m.diffEngine, m.applyView, m.planView)
+	m.panelManager.RegisterPanel(PanelMain, m.mainArea)
 	if plan == nil {
 		m.mainArea.SetMode(ModeAbout)
+		if m.panelManager != nil {
+			m.panelManager.SetFocus(PanelMain)
+		}
 	}
-	m.panelManager.RegisterPanel(PanelMain, m.mainArea)
 
 	// Initialize state list content for the Resources panel tab
 	m.stateListContent = components.NewStateListContent(m.styles)

@@ -123,6 +123,12 @@ func TestExecutionModelWithoutPlanStartsInAboutMode(t *testing.T) {
 	if m.mainArea.GetMode() != ModeAbout {
 		t.Fatalf("expected main area mode %v, got %v", ModeAbout, m.mainArea.GetMode())
 	}
+	if m.panelManager == nil {
+		t.Fatal("expected panel manager to be initialized")
+	}
+	if focused := m.panelManager.GetFocusedPanel(); focused != PanelMain {
+		t.Fatalf("expected focused panel %v, got %v", PanelMain, focused)
+	}
 }
 
 func TestExecutionModelWithPlanStartsInDiffMode(t *testing.T) {
