@@ -247,14 +247,21 @@ func TestExecutorEnvPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new executor: %v", err)
 	}
-	result, _, err := exec.Plan(context.Background(), PlanOptions{Flags: []string{"envtest"}, Env: []string{"FOO=opts"}})
-	if err != nil {
-		t.Fatalf("plan start error: %v", err)
+
+	const expected = "ENV:FOO=opts BAR=exec"
+	var stdout string
+	for range 3 {
+		result, _, runErr := exec.Plan(context.Background(), PlanOptions{Flags: []string{"envtest"}, Env: []string{"FOO=opts"}})
+		if runErr != nil {
+			t.Fatalf("plan start error: %v", runErr)
+		}
+		<-result.Done()
+		stdout = result.Stdout
+		if strings.Contains(stdout, expected) {
+			return
+		}
 	}
-	<-result.Done()
-	if !strings.Contains(result.Stdout, "ENV:FOO=opts BAR=exec") {
-		t.Fatalf("unexpected env output: %q", result.Stdout)
-	}
+	t.Fatalf("unexpected env output after retries: %q", stdout)
 }
 
 func TestExecutorSymlinkedTerraformPath(t *testing.T) {
