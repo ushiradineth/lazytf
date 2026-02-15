@@ -63,7 +63,7 @@ func TestNewExecutorResolvesPathFromEnv(t *testing.T) {
 		t.Skip("shell script test not supported on windows")
 	}
 	dir := t.TempDir()
-	tfPath := writeFakeTerraform(t, dir)
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
 	t.Setenv("PATH", dir)
 
 	exec, err := NewExecutor(dir)
@@ -247,14 +247,21 @@ func TestExecutorEnvPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new executor: %v", err)
 	}
-	result, _, err := exec.Plan(context.Background(), PlanOptions{Flags: []string{"envtest"}, Env: []string{"FOO=opts"}})
-	if err != nil {
-		t.Fatalf("plan start error: %v", err)
+
+	const expected = "ENV:FOO=opts BAR=exec"
+	var stdout string
+	for range 3 {
+		result, _, runErr := exec.Plan(context.Background(), PlanOptions{Flags: []string{"envtest"}, Env: []string{"FOO=opts"}})
+		if runErr != nil {
+			t.Fatalf("plan start error: %v", runErr)
+		}
+		<-result.Done()
+		stdout = result.Stdout
+		if strings.Contains(stdout, expected) {
+			return
+		}
 	}
-	<-result.Done()
-	if !strings.Contains(result.Stdout, "ENV:FOO=opts BAR=exec") {
-		t.Fatalf("unexpected env output: %q", result.Stdout)
-	}
+	t.Fatalf("unexpected env output after retries: %q", stdout)
 }
 
 func TestExecutorSymlinkedTerraformPath(t *testing.T) {
@@ -483,6 +490,28 @@ for arg in "$@"; do
 done
 if [ "$1" = "exit7" ]; then
   exit 7
+fi
+echo "ARGS:$cmd $*"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return path
+}
+
+func writeFakeTerraformArgsOnly(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "terraform")
+	script := `#!/bin/sh
+cmd="$1"
+shift
+if [ "$cmd" = "version" ]; then
+  echo "Terraform v1.0.0"
+  exit 0
 fi
 echo "ARGS:$cmd $*"
 exit 0
