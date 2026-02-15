@@ -14,6 +14,18 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
+func debugf(format string, args ...any) {
+	if testing.Verbose() {
+		fmt.Printf(format, args...)
+	}
+}
+
+func debugln(args ...any) {
+	if testing.Verbose() {
+		fmt.Println(args...)
+	}
+}
+
 func TestEnvironmentPanelRender(_ *testing.T) {
 	s := styles.DefaultStyles()
 	panel := NewEnvironmentPanel(s)
@@ -43,13 +55,13 @@ func TestEnvironmentPanelRender(_ *testing.T) {
 
 	// Render and print
 	output := panel.View()
-	fmt.Println("=== Panel Output (width=50, height=10) ===")
-	fmt.Println(output)
-	fmt.Println("=== End Output ===")
+	debugln("=== Panel Output (width=50, height=10) ===")
+	debugln(output)
+	debugln("=== End Output ===")
 
 	// Print line by line with markers
 	lines := strings.Split(output, "\n")
-	fmt.Printf("\n=== Line-by-line analysis (total %d lines) ===\n", len(lines))
+	debugf("\n=== Line-by-line analysis (total %d lines) ===\n", len(lines))
 	for i, line := range lines {
 		// Show visible width
 		visWidth := 0
@@ -58,11 +70,11 @@ func TestEnvironmentPanelRender(_ *testing.T) {
 				visWidth++
 			}
 		}
-		fmt.Printf("Line %d (len=%d): %q\n", i, len(line), line)
+		debugf("Line %d (len=%d): %q\n", i, len(line), line)
 	}
 
 	// Test individual item rendering
-	fmt.Println("\n=== Testing renderItem directly ===")
+	debugln("\n=== Testing renderItem directly ===")
 	testWidth := 46 // content width (50 - 2 borders - 2 for scrollbar potential)
 
 	item1 := envListItem{
@@ -81,19 +93,19 @@ func TestEnvironmentPanelRender(_ *testing.T) {
 	rendered1 := panel.renderItem(item1, testWidth, true)  // selected
 	rendered2 := panel.renderItem(item2, testWidth, false) // not selected
 
-	fmt.Printf("Item 1 (selected, width=%d):\n", testWidth)
-	fmt.Printf("  Raw: %q\n", rendered1)
-	fmt.Printf("  Len: %d bytes\n", len(rendered1))
+	debugf("Item 1 (selected, width=%d):\n", testWidth)
+	debugf("  Raw: %q\n", rendered1)
+	debugf("  Len: %d bytes\n", len(rendered1))
 
-	fmt.Printf("Item 2 (not selected, width=%d):\n", testWidth)
-	fmt.Printf("  Raw: %q\n", rendered2)
-	fmt.Printf("  Len: %d bytes\n", len(rendered2))
+	debugf("Item 2 (not selected, width=%d):\n", testWidth)
+	debugf("  Raw: %q\n", rendered2)
+	debugf("  Len: %d bytes\n", len(rendered2))
 
 	// Check if items exceed width
-	fmt.Println("\n=== Width check ===")
-	fmt.Printf("Expected content width: %d\n", testWidth)
-	fmt.Printf("Item 1 visible width: %d (should be <= %d)\n", visibleWidth(rendered1), testWidth)
-	fmt.Printf("Item 2 visible width: %d (should be <= %d)\n", visibleWidth(rendered2), testWidth)
+	debugln("\n=== Width check ===")
+	debugf("Expected content width: %d\n", testWidth)
+	debugf("Item 1 visible width: %d (should be <= %d)\n", visibleWidth(rendered1), testWidth)
+	debugf("Item 2 visible width: %d (should be <= %d)\n", visibleWidth(rendered2), testWidth)
 }
 
 func visibleWidth(s string) int {
@@ -141,7 +153,7 @@ func TestEnvironmentPanelItemWidth(t *testing.T) {
 		selWidth := visibleWidth(selected)
 		notSelWidth := visibleWidth(notSelected)
 
-		fmt.Printf("Width %d: selected=%d, notSelected=%d\n", width, selWidth, notSelWidth)
+		debugf("Width %d: selected=%d, notSelected=%d\n", width, selWidth, notSelWidth)
 
 		if selWidth > width {
 			t.Errorf("Selected item exceeds width %d: got %d", width, selWidth)
@@ -175,20 +187,20 @@ func TestEnvironmentPanelWithStyledOutput(t *testing.T) {
 	selected := panel.renderItem(item, width, true)
 	notSelected := panel.renderItem(item, width, false)
 
-	fmt.Println("=== Styled output analysis ===")
-	fmt.Printf("Width target: %d\n\n", width)
+	debugln("=== Styled output analysis ===")
+	debugf("Width target: %d\n\n", width)
 
-	fmt.Println("Selected item:")
-	fmt.Printf("  Raw bytes: %d\n", len(selected))
-	fmt.Printf("  Visible width: %d\n", visibleWidth(selected))
-	fmt.Printf("  Contains ANSI: %v\n", strings.Contains(selected, "\x1b["))
-	fmt.Printf("  Output: %s|\n", selected) // | shows where it ends
+	debugln("Selected item:")
+	debugf("  Raw bytes: %d\n", len(selected))
+	debugf("  Visible width: %d\n", visibleWidth(selected))
+	debugf("  Contains ANSI: %v\n", strings.Contains(selected, "\x1b["))
+	debugf("  Output: %s|\n", selected) // | shows where it ends
 
-	fmt.Println("\nNot selected item:")
-	fmt.Printf("  Raw bytes: %d\n", len(notSelected))
-	fmt.Printf("  Visible width: %d\n", visibleWidth(notSelected))
-	fmt.Printf("  Contains ANSI: %v\n", strings.Contains(notSelected, "\x1b["))
-	fmt.Printf("  Output: %s|\n", notSelected) // | shows where it ends
+	debugln("\nNot selected item:")
+	debugf("  Raw bytes: %d\n", len(notSelected))
+	debugf("  Visible width: %d\n", visibleWidth(notSelected))
+	debugf("  Contains ANSI: %v\n", strings.Contains(notSelected, "\x1b["))
+	debugf("  Output: %s|\n", notSelected) // | shows where it ends
 
 	// Check the styled content
 	if visibleWidth(selected) != width {
@@ -229,9 +241,9 @@ func TestEnvironmentPanelFrameIntegration(t *testing.T) {
 	})
 
 	contentWidth := frame.ContentWidth()
-	fmt.Printf("=== Frame integration test ===\n")
-	fmt.Printf("Panel width: %d\n", panelWidth)
-	fmt.Printf("Content width from frame: %d\n", contentWidth)
+	debugf("=== Frame integration test ===\n")
+	debugf("Panel width: %d\n", panelWidth)
+	debugf("Content width from frame: %d\n", contentWidth)
 
 	// Manually render items at the content width
 	item := envListItem{
@@ -241,22 +253,22 @@ func TestEnvironmentPanelFrameIntegration(t *testing.T) {
 	item.env.IsCurrent = true
 
 	rendered := panel.renderItem(item, contentWidth, true)
-	fmt.Printf("\nItem rendered at contentWidth=%d:\n", contentWidth)
-	fmt.Printf("  visibleWidth: %d\n", visibleWidth(rendered))
-	fmt.Printf("  lipgloss.Width: %d\n", lipgloss.Width(rendered))
-	fmt.Printf("  runewidth: %d\n", runewidth.StringWidth(rendered))
-	fmt.Printf("  Output: [%s]\n", rendered)
+	debugf("\nItem rendered at contentWidth=%d:\n", contentWidth)
+	debugf("  visibleWidth: %d\n", visibleWidth(rendered))
+	debugf("  lipgloss.Width: %d\n", lipgloss.Width(rendered))
+	debugf("  runewidth: %d\n", runewidth.StringWidth(rendered))
+	debugf("  Output: [%s]\n", rendered)
 
 	// Check what padLine does to it
 	padded := frame.padLine(rendered, contentWidth)
-	fmt.Printf("\nAfter frame.padLine:\n")
-	fmt.Printf("  visibleWidth: %d\n", visibleWidth(padded))
-	fmt.Printf("  lipgloss.Width: %d\n", lipgloss.Width(padded))
-	fmt.Printf("  Output: [%s]\n", padded)
+	debugf("\nAfter frame.padLine:\n")
+	debugf("  visibleWidth: %d\n", visibleWidth(padded))
+	debugf("  lipgloss.Width: %d\n", lipgloss.Width(padded))
+	debugf("  Output: [%s]\n", padded)
 
 	// Check if there's a mismatch
 	if lipgloss.Width(rendered) != visibleWidth(rendered) {
-		fmt.Printf("\n⚠️  WARNING: lipgloss.Width (%d) != visibleWidth (%d)\n",
+		debugf("\n⚠️  WARNING: lipgloss.Width (%d) != visibleWidth (%d)\n",
 			lipgloss.Width(rendered), visibleWidth(rendered))
 	}
 
@@ -272,19 +284,19 @@ func TestPanelFramePadLine(_ *testing.T) {
 	// Test with plain text
 	plain := "hello"
 	padded := frame.padLine(plain, 10)
-	fmt.Printf("Plain text padLine:\n")
-	fmt.Printf("  Input: %q (len=%d)\n", plain, len(plain))
-	fmt.Printf("  Output: %q (len=%d)\n", padded, len(padded))
-	fmt.Printf("  Visible: %d\n", visibleWidth(padded))
+	debugf("Plain text padLine:\n")
+	debugf("  Input: %q (len=%d)\n", plain, len(plain))
+	debugf("  Output: %q (len=%d)\n", padded, len(padded))
+	debugf("  Visible: %d\n", visibleWidth(padded))
 
 	// Test with ANSI styled text
 	styled := "\x1b[1m\x1b[48;5;240mhello\x1b[0m"
 	paddedStyled := frame.padLine(styled, 10)
-	fmt.Printf("\nStyled text padLine:\n")
-	fmt.Printf("  Input visible width: %d\n", visibleWidth(styled))
-	fmt.Printf("  lipgloss.Width: %d\n", lipgloss.Width(styled))
-	fmt.Printf("  Output visible width: %d\n", visibleWidth(paddedStyled))
-	fmt.Printf("  Output lipgloss.Width: %d\n", lipgloss.Width(paddedStyled))
+	debugf("\nStyled text padLine:\n")
+	debugf("  Input visible width: %d\n", visibleWidth(styled))
+	debugf("  lipgloss.Width: %d\n", lipgloss.Width(styled))
+	debugf("  Output visible width: %d\n", visibleWidth(paddedStyled))
+	debugf("  Output lipgloss.Width: %d\n", lipgloss.Width(paddedStyled))
 }
 
 func TestSelectedItemWithANSI(t *testing.T) {
@@ -332,12 +344,12 @@ func TestSelectedItemWithANSI(t *testing.T) {
 		t.Errorf("After padLine, visible width = %d, want %d", paddedVisible, width)
 	}
 
-	fmt.Printf("\n=== Selected item with ANSI test ===\n")
-	fmt.Printf("Width target: %d\n", width)
-	fmt.Printf("Selected visible: %d\n", selectedVisible)
-	fmt.Printf("Selected lipgloss: %d\n", selectedLipgloss)
-	fmt.Printf("After padLine visible: %d\n", paddedVisible)
-	fmt.Printf("Output: [%s]\n", padded)
+	debugf("\n=== Selected item with ANSI test ===\n")
+	debugf("Width target: %d\n", width)
+	debugf("Selected visible: %d\n", selectedVisible)
+	debugf("Selected lipgloss: %d\n", selectedLipgloss)
+	debugf("After padLine visible: %d\n", paddedVisible)
+	debugf("Output: [%s]\n", padded)
 }
 
 func TestEnvironmentPanelIsFocused(t *testing.T) {
