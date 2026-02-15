@@ -145,7 +145,7 @@ func (m *Model) beginApply() tea.Cmd {
 
 	// Clear command log content - it will be populated when apply completes
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetParsedText("")
+		m.commandLogPanel.SetLogText("")
 	}
 
 	if m.applyView != nil {
@@ -297,9 +297,9 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 		parsed = "Refresh complete"
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetParsedText(parsed)
+		m.commandLogPanel.SetLogText(parsed)
 	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetParsedText(parsed)
+		m.diagnosticsPanel.SetLogText(parsed)
 	}
 	m.updateExecutionViewForStreaming()
 	var toastCmd tea.Cmd
@@ -812,11 +812,9 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
 		// Route logs to command log panel
 		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(msg.Output)
-			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Output))
 		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(msg.Output)
-			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Output))
 		}
 		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
 		return m, cmd
@@ -840,11 +838,9 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.lastPlanOutput = msg.Output
 		// Route logs to command log panel
 		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(msg.Output)
-			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Output))
 		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(msg.Output)
-			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Output))
+			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Output))
 		}
 	}
 	if m.applyView != nil {
@@ -925,9 +921,9 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 		parsed = "Apply complete"
 	}
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetParsedText(parsed)
+		m.commandLogPanel.SetLogText(parsed)
 	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetParsedText(parsed)
+		m.diagnosticsPanel.SetLogText(parsed)
 	}
 	// Stay in main view with panel layout
 	m.setPlan(&terraform.Plan{Resources: nil})
@@ -981,11 +977,9 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 	// Route logs to command log panel.
 	if msg.Result != nil {
 		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(msg.Result.Output)
-			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
 		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(msg.Result.Output)
-			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
 		}
 	}
 	if msg.Error != nil {
@@ -1017,11 +1011,9 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Route logs to command log panel.
 	if msg.Result != nil { //nolint:nestif // Apply failure logging requires nested checks
 		if m.commandLogPanel != nil {
-			m.commandLogPanel.SetLogText(msg.Result.Output)
-			m.commandLogPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			m.commandLogPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
 		} else if m.diagnosticsPanel != nil {
-			m.diagnosticsPanel.SetLogText(msg.Result.Output)
-			m.diagnosticsPanel.SetParsedText(utils.FormatLogOutput(msg.Result.Output))
+			m.diagnosticsPanel.SetLogText(utils.FormatLogOutput(msg.Result.Output))
 		}
 		// Parse the full output for status updates - some lines (like Error:) may not
 		// have been streamed but are in the final result
@@ -1070,9 +1062,9 @@ func (m *Model) showFormattedFiles(changedFiles []string) {
 
 	output := "Formatted files:\n" + strings.Join(changedFiles, "\n")
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.SetParsedText(output)
+		m.commandLogPanel.SetLogText(output)
 	} else if m.diagnosticsPanel != nil {
-		m.diagnosticsPanel.SetParsedText(output)
+		m.diagnosticsPanel.SetLogText(output)
 	}
 }
 

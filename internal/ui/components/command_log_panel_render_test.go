@@ -214,18 +214,9 @@ func TestCommandLogPanel_DiagnosticSeverities(t *testing.T) {
 	}
 }
 
-func TestCommandLogPanel_RawAndParsedModes(t *testing.T) {
+func TestCommandLogPanel_LogTextRendering(t *testing.T) {
 	clp := NewCommandLogPanel(styles.DefaultStyles())
 	clp.SetLogText("Raw log output")
-	clp.SetParsedText("Parsed summary")
-
-	// Show raw mode renders correctly
-	clp.SetShowRaw(true)
-	rawResult := testutil.RenderComponent(t, clp, 80, 20)
-	rawResult.AssertNotEmpty(t).AssertHasBorder(t)
-
-	// Show parsed mode renders correctly
-	clp.SetShowRaw(false)
-	parsedResult := testutil.RenderComponent(t, clp, 80, 20)
-	parsedResult.AssertNotEmpty(t).AssertHasBorder(t)
+	result := testutil.RenderComponent(t, clp, 80, 20)
+	result.AssertNotEmpty(t).AssertHasBorder(t)
 }

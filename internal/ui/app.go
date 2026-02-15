@@ -764,7 +764,7 @@ func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return true, tea.Quit
-	case "esc", "D":
+	case keybinds.KeyEsc, "D":
 		m.diagnosticsFocused = false
 		return true, nil
 	default:

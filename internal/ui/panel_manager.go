@@ -4,6 +4,8 @@ import (
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // PanelManager manages panel registration, focus, and layout.
@@ -371,7 +373,7 @@ func (pm *PanelManager) HandleNavigation(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, pm.SetFocus(PanelResources)
 		}
 		return true, nil
-	case "esc": //nolint:goconst // keyboard keys are clearer as literals
+	case keybinds.KeyEsc:
 		// Return to resource list
 		if pm.focusedPanel != PanelResources || pm.commandLogFocused {
 			return true, pm.SetFocus(PanelResources)
