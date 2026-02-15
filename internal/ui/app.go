@@ -755,7 +755,7 @@ func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return false, nil
 	}
 	switch msg.String() {
-	case "q", "ctrl+c": //nolint:goconst // keyboard keys are clearer as literals
+	case "q", "ctrl+c":
 		m.quitting = true
 		return true, tea.Quit
 	case "esc", "D":
