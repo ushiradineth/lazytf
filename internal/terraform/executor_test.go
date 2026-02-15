@@ -467,6 +467,7 @@ fi
 if [ "$cmd" = "plan" ] || [ "$cmd" = "apply" ]; then
   echo "stdout $cmd"
   echo "stderr $cmd" 1>&2
+  sleep 0.05
 fi
 if [ "$cmd" = "init" ]; then
   echo "stdout init"
