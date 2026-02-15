@@ -1,7 +1,6 @@
 package profile
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,8 +30,7 @@ func TestParseEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("LAZYTF_PROFILE", tt.env)
-			defer os.Unsetenv("LAZYTF_PROFILE")
+			t.Setenv("LAZYTF_PROFILE", tt.env)
 
 			opts := ParseEnv()
 

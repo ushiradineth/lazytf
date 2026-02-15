@@ -25,7 +25,7 @@ func registerGlobalBindings(r *Registry) {
 		Category:    "General",
 	})
 	r.Register(Binding{
-		Keys:        []string{"ctrl+c"},
+		Keys:        []string{KeyCtrlC},
 		Action:      ActionCancelOp,
 		Scope:       ScopeGlobal,
 		Description: "quit / cancel operation",
@@ -132,7 +132,7 @@ func registerPanelNavigationBindings(r *Registry) {
 
 	// Escape
 	r.Register(Binding{
-		Keys:        []string{"esc"},
+		Keys:        []string{KeyEsc},
 		Action:      ActionEscapeBack,
 		Scope:       ScopeGlobal,
 		Description: "return to resource list",
@@ -151,7 +151,7 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 	})
 	r.Register(Binding{
-		Keys:        []string{"down", "j"},
+		Keys:        []string{KeyDown, "j"},
 		Action:      ActionMoveDown,
 		Scope:       ScopeGlobal,
 		Description: "move selection down",

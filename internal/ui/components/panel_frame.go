@@ -9,6 +9,8 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
+const defaultHorizontalBorder = "─"
+
 // PanelFrameConfig holds configuration for a panel frame.
 type PanelFrameConfig struct {
 	PanelID       string   // e.g., "[2]"
@@ -134,7 +136,7 @@ func (f *PanelFrame) buildPanel(contentLines []string, borderStyle, titleStyle l
 		bottomRight = "╯"
 	}
 	if horizontal == "" {
-		horizontal = "─"
+		horizontal = defaultHorizontalBorder
 	}
 	if vertical == "" {
 		vertical = consts.VerticalBar

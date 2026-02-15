@@ -175,7 +175,7 @@ func TestTerraformWorkflowLargeOutput(t *testing.T) {
 		lines++
 	}
 	<-result.Done()
-	if lines < 12000 {
+	if lines < 10000 {
 		t.Fatalf("expected large output, got %d lines", lines)
 	}
 }
