@@ -3909,9 +3909,9 @@ func TestHandleKeyMsgEnvironmentPanelActive(t *testing.T) {
 	m.height = 30
 	m.updateLayout()
 
-	// Activate environment selector
+	// Focus environment panel to activate selector handling.
 	if m.environmentPanel != nil {
-		m.environmentPanel.ActivateSelector()
+		m.environmentPanel.SetFocused(true)
 	}
 
 	model, cmd := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc})
@@ -4029,7 +4029,7 @@ func TestHandleEnvironmentPanelKeySelectorActive(t *testing.T) {
 	m.updateLayout()
 
 	if m.environmentPanel != nil {
-		m.environmentPanel.ActivateSelector()
+		m.environmentPanel.SetFocused(true)
 		handled, _ := m.handleEnvironmentPanelKey(tea.KeyMsg{Type: tea.KeyEsc})
 		// Result depends on panel handling the key
 		_ = handled

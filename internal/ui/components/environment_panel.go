@@ -104,19 +104,9 @@ func (e *EnvironmentPanel) SetEnvironmentInfo(current, _ string, _ environment.S
 	e.rebuildItems()
 }
 
-// SetWarnings is a no-op for compatibility (warnings are not displayed in list mode).
-func (e *EnvironmentPanel) SetWarnings(_ []string) {
-	// No-op - warnings are not displayed in the new list-based UI
-}
-
 // Filtering reports whether filter input is active.
 func (e *EnvironmentPanel) Filtering() bool {
 	return e.filterActive
-}
-
-// ActivateSelector is a no-op now - the panel is always in list mode.
-func (e *EnvironmentPanel) ActivateSelector() {
-	// No-op for compatibility
 }
 
 // Update handles Bubble Tea messages.

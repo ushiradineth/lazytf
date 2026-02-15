@@ -253,9 +253,6 @@ func NewModelWithStyles(plan *terraform.Plan, appStyles *styles.Styles) *Model {
 
 	// Calculate diffs for all resources
 	if plan != nil {
-		if err := m.diffEngine.CalculateResourceDiffs(plan); err != nil {
-			m.err = err
-		}
 		resourceList.SetResources(plan.Resources)
 	}
 
@@ -656,12 +653,11 @@ func applyEnvironmentPreference(
 	return strategy, current
 }
 
-func (m *Model) updateEnvironmentPanel(warnings []string) {
+func (m *Model) updateEnvironmentPanel(_ []string) {
 	if m.environmentPanel == nil {
 		return
 	}
 	m.environmentPanel.SetEnvironmentInfo(m.envCurrent, m.envWorkDir, m.envStrategy, m.envOptions)
-	m.environmentPanel.SetWarnings(warnings)
 }
 
 func (m *Model) applyCurrentEnvironment() {
@@ -678,7 +674,6 @@ func (m *Model) promptEnvironmentSelection() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cmd := m.panelManager.SetFocus(PanelWorkspace)
-	m.environmentPanel.ActivateSelector()
 	m.updateLayout()
 	return m, tea.Batch(cmd)
 }
