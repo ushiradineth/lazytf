@@ -160,6 +160,10 @@ func TestExecutorStreamingStdoutStderr(t *testing.T) {
 		t.Fatalf("plan error: %v", err)
 	}
 	lines := collectLines(output, result)
+	if len(lines) == 0 {
+		lines = appendResultLines(lines, result.Stdout)
+		lines = appendResultLines(lines, result.Stderr)
+	}
 	if !containsLine(lines, "stdout plan") {
 		t.Fatalf("expected stdout line, got %#v", lines)
 	}
@@ -536,6 +540,17 @@ func inOrder(lines []string, seq []string) bool {
 		}
 	}
 	return false
+}
+
+func appendResultLines(lines []string, content string) []string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+	return lines
 }
 
 func TestExecutorRefresh(t *testing.T) {

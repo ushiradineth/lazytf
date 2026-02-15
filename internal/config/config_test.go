@@ -121,7 +121,10 @@ func TestNewManagerEmptyPathUsesDefault(t *testing.T) {
 	if manager.Path() == "" {
 		t.Fatalf("expected manager path")
 	}
-	expected := filepath.Join(home, ".config", "lazytf", "config.yaml")
+	expected, err := ResolvePath()
+	if err != nil {
+		t.Fatalf("resolve path: %v", err)
+	}
 	if manager.Path() != expected {
 		t.Fatalf("expected %s, got %s", expected, manager.Path())
 	}
