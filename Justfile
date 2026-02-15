@@ -325,7 +325,7 @@ profile-clean:
 # Run benchmarks with profiling
 bench *pattern:
     @echo "Running benchmarks..."
-    go test -bench={{if pattern == "" { "." } else { pattern }}} -benchmem -cpuprofile=bench-cpu.prof -memprofile=bench-mem.prof ./internal/ui/components/
+    go test -bench={{ if pattern == "" { "." } else { pattern } }} -benchmem -cpuprofile=bench-cpu.prof -memprofile=bench-mem.prof ./internal/ui/components/
     @echo "Benchmark profiles written: bench-cpu.prof, bench-mem.prof"
 
 # ===== Pre-commit Hook =====
@@ -333,9 +333,8 @@ bench *pattern:
 # Install git pre-commit hook
 hook-install:
     @echo "Installing pre-commit hook..."
-    @echo '#!/bin/sh' > .git/hooks/pre-commit
-    @echo 'just pre-commit' >> .git/hooks/pre-commit
-    @chmod +x .git/hooks/pre-commit
+    @cp "scripts/pre-commit-hook.sh" ".git/hooks/pre-commit"
+    @chmod +x ".git/hooks/pre-commit"
     @echo "✓ Pre-commit hook installed"
 
 # Run pre-commit checks
