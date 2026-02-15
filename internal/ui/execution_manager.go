@@ -1232,9 +1232,6 @@ func (m *Model) setPlan(plan *terraform.Plan) {
 		m.resourceList.SetResources(nil)
 		return
 	}
-	if err := m.diffEngine.CalculateResourceDiffs(plan); err != nil {
-		m.err = err
-	}
 	m.resourceList.SetResources(plan.Resources)
 	if m.operationState != nil {
 		m.operationState.InitializeFromPlan(plan)

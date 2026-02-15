@@ -595,7 +595,6 @@ func (m *Model) handleActionScrollDown(ctx *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionSelectEnv(_ *keybinds.Context) tea.Cmd {
 	if m.environmentPanel != nil {
-		m.environmentPanel.ActivateSelector()
 		m.updateLayout()
 	}
 	return nil
