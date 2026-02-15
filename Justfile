@@ -152,7 +152,7 @@ deadcode:
 security:
     @echo "Running security checks..."
     @command -v govulncheck >/dev/null 2>&1 || { echo "❌ govulncheck not installed. Refer flake.nix for installation"; exit 1; }
-    govulncheck ./...
+    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.6}" govulncheck ./...
 
 # Run gosec security linter
 gosec:
