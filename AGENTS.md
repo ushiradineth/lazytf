@@ -81,6 +81,7 @@ confidence: medium
 
 - Work on a feature branch.
 - Keep diffs scoped to the requested change.
+- Before every PR push, run `just ci` locally and fix failures before pushing.
 - Before PR, run `just check-all` (project contribution guidance).
 - If touching CI-sensitive paths, also run CI-equivalent commands (`go mod verify`, `go vet ./...`, `go test ./...`, `golangci-lint run --timeout=5m`, `go build ./...`).
 
@@ -108,6 +109,7 @@ Never
 ## Verification checklist
 
 - Confirm changed scope is limited to requested files/areas.
+- Run `just ci` before creating or updating a PR branch.
 - Run relevant tests first, then broader checks as needed.
 - For core-path changes, run at least CI-equivalent validation.
 - Ensure formatting and lint pass (`just fmt`, `just lint`).
