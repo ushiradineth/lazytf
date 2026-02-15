@@ -472,9 +472,12 @@ fi
 if [ "$1" = "sleep" ]; then
   sleep 1
 fi
-if [ "$1" = "envtest" ]; then
-  echo "ENV:FOO=$FOO BAR=$BAR"
-fi
+for arg in "$@"; do
+  if [ "$arg" = "envtest" ]; then
+    echo "ENV:FOO=$FOO BAR=$BAR"
+    break
+  fi
+done
 if [ "$1" = "exit7" ]; then
   exit 7
 fi
