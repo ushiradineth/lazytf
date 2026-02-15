@@ -725,35 +725,55 @@ func (m *Model) buildEnvironmentCommand(env environment.Environment) string {
 }
 
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// 1. Special state handlers that take priority over the keybind registry
-	// These handle text input, selector mode, and focused sub-panels
-	if handled, cmd := m.handleDiagnosticsKey(msg); handled {
+	if handled, cmd := m.handlePriorityKey(msg); handled {
 		return m, cmd
 	}
-	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
+
+	if handled, cmd := m.handleNonMainExecutionKey(msg); handled {
 		return m, cmd
 	}
-	if m.inputCaptured() {
-		return m, nil
-	}
 
-	// 2. Handle non-main view keys (state list, command log fullscreen, etc.)
-	if m.execView != viewMain {
-		if handled, cmd := m.handleExecutionKey(msg); handled {
-			return m, cmd
-		}
-		return m.handleNonMainViewKey(msg)
-	}
-
-	// 3. Try the keybind registry for main view keys
-	if m.keybindRegistry != nil {
-		ctx := m.buildKeybindContext()
-		if cmd, handled := m.keybindRegistry.Handle(msg, ctx); handled {
-			return m, cmd
-		}
+	if cmd, handled := m.handleMainViewKeybind(msg); handled {
+		return m, cmd
 	}
 
 	return m, nil
+}
+
+func (m *Model) handlePriorityKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if handled, cmd := m.handleDiagnosticsKey(msg); handled {
+		return true, cmd
+	}
+	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
+		return true, cmd
+	}
+	if m.inputCaptured() {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (m *Model) handleNonMainExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.execView == viewMain {
+		return false, nil
+	}
+	if handled, cmd := m.handleExecutionKey(msg); handled {
+		return true, cmd
+	}
+	_, cmd := m.handleNonMainViewKey(msg)
+	return true, cmd
+}
+
+func (m *Model) handleMainViewKeybind(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if m.keybindRegistry == nil {
+		return nil, false
+	}
+	ctx := m.buildKeybindContext()
+	cmd, handled := m.keybindRegistry.Handle(msg, ctx)
+	if !handled {
+		return nil, false
+	}
+	return cmd, true
 }
 
 func (m *Model) handleDiagnosticsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
