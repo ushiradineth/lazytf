@@ -26,6 +26,7 @@ const (
 type ApplyView struct {
 	viewport    viewport.Model
 	outputLines []string
+	outputText  string
 	status      ApplyStatus
 	spinner     spinner.Model
 	styles      *styles.Styles
@@ -83,6 +84,7 @@ func (v *ApplyView) SetStatus(status ApplyStatus) {
 // Reset clears output and resets status.
 func (v *ApplyView) Reset() {
 	v.outputLines = nil
+	v.outputText = ""
 	v.status = ApplyPending
 	v.viewport.SetContent("")
 }
@@ -92,6 +94,7 @@ func (v *ApplyView) SetOutput(output string) {
 	output = strings.TrimRight(output, "\n")
 	if output == "" {
 		v.outputLines = nil
+		v.outputText = ""
 		v.viewport.SetContent("")
 		return
 	}
@@ -99,6 +102,7 @@ func (v *ApplyView) SetOutput(output string) {
 	if v.maxLines > 0 && len(v.outputLines) > v.maxLines {
 		v.outputLines = v.outputLines[len(v.outputLines)-v.maxLines:]
 	}
+	v.rebuildOutputText()
 	v.refreshViewport()
 }
 
@@ -106,8 +110,17 @@ func (v *ApplyView) SetOutput(output string) {
 func (v *ApplyView) AppendLine(line string) {
 	if v.maxLines > 0 && len(v.outputLines) >= v.maxLines {
 		v.outputLines = v.outputLines[len(v.outputLines)-v.maxLines+1:]
+		v.outputLines = append(v.outputLines, line)
+		v.rebuildOutputText()
+		v.refreshViewport()
+		return
 	}
 	v.outputLines = append(v.outputLines, line)
+	if v.outputText == "" {
+		v.outputText = line
+	} else {
+		v.outputText += "\n" + line
+	}
 	v.refreshViewport()
 }
 
@@ -171,7 +184,10 @@ func (v *ApplyView) renderHeader() string {
 }
 
 func (v *ApplyView) refreshViewport() {
-	content := strings.Join(v.outputLines, "\n")
-	v.viewport.SetContent(content)
+	v.viewport.SetContent(v.outputText)
 	v.viewport.GotoBottom()
+}
+
+func (v *ApplyView) rebuildOutputText() {
+	v.outputText = strings.Join(v.outputLines, "\n")
 }
