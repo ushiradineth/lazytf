@@ -203,7 +203,7 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 
 // Init runs terraform init.
 func (e *Executor) Init(ctx context.Context) (*ExecutionResult, error) {
-	result, _, err := e.run(ctx, []string{"init"}, execOptions{})
+	result, _, err := e.run(ctx, []string{"init"}, execOptions{streamOutput: false})
 	return result, err
 }
 
@@ -212,7 +212,7 @@ func (e *Executor) Plan(ctx context.Context, opts PlanOptions) (*ExecutionResult
 	args := []string{"plan"}
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
-	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})
 }
 
 // Apply runs terraform apply and streams output.
@@ -223,7 +223,7 @@ func (e *Executor) Apply(ctx context.Context, opts ApplyOptions) (*ExecutionResu
 	if opts.AutoApprove && !containsFlag(args, "-auto-approve") {
 		args = append(args, "-auto-approve")
 	}
-	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})
 }
 
 // Refresh runs terraform apply -refresh-only and streams output.
@@ -231,13 +231,13 @@ func (e *Executor) Refresh(ctx context.Context, opts RefreshOptions) (*Execution
 	args := []string{"apply", "-refresh-only", "-auto-approve"}
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
-	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})
 }
 
 // Validate runs terraform validate -json and returns the result.
 func (e *Executor) Validate(ctx context.Context, opts ValidateOptions) (*ExecutionResult, error) {
 	args := []string{"validate", "-json"}
-	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (e *Executor) Format(ctx context.Context, opts FormatOptions) (*ExecutionRe
 	if opts.Check {
 		args = append(args, "-check")
 	}
-	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func (e *Executor) Format(ctx context.Context, opts FormatOptions) (*ExecutionRe
 // StateList runs terraform state list and returns the resource addresses.
 func (e *Executor) StateList(ctx context.Context, opts StateListOptions) (*ExecutionResult, error) {
 	args := []string{"state", "list"}
-	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (e *Executor) StateShow(ctx context.Context, address string, opts StateShow
 		return nil, errors.New("resource address is required")
 	}
 	args := []string{"state", "show", address}
-	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (e *Executor) Show(ctx context.Context, planFile string, opts ShowOptions) 
 		return nil, errors.New("plan file path is required")
 	}
 	args := []string{"show", planFile}
-	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env})
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (e *Executor) Show(ctx context.Context, planFile string, opts ShowOptions) 
 func (e *Executor) Version() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	result, _, err := e.run(ctx, []string{"version"}, execOptions{})
+	result, _, err := e.run(ctx, []string{"version"}, execOptions{streamOutput: false})
 	if err != nil {
 		return "", err
 	}
@@ -368,8 +368,9 @@ func (e *Executor) CloneWithWorkDir(workDir string) (*Executor, error) {
 }
 
 type execOptions struct {
-	timeout time.Duration
-	env     []string
+	timeout      time.Duration
+	env          []string
+	streamOutput bool
 }
 
 func (e *Executor) run(ctx context.Context, args []string, opts execOptions) (*ExecutionResult, <-chan string, error) {
@@ -386,7 +387,7 @@ func (e *Executor) run(ctx context.Context, args []string, opts execOptions) (*E
 		return nil, nil, err
 	}
 
-	result, outputChan, start := newExecutionResult()
+	result, outputChan, start := newExecutionResult(opts.streamOutput)
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -396,11 +397,12 @@ func (e *Executor) run(ctx context.Context, args []string, opts execOptions) (*E
 	var stdoutBuf strings.Builder
 	var stderrBuf strings.Builder
 	var wg sync.WaitGroup
+	streamErrs := make(chan error, 2)
 	wg.Add(2)
-	go streamLines(stdoutPipe, outputChan, &stdoutBuf, &wg)
-	go streamLines(stderrPipe, outputChan, &stderrBuf, &wg)
+	go streamLines(stdoutPipe, outputChan, &stdoutBuf, streamErrs, &wg)
+	go streamLines(stderrPipe, outputChan, &stderrBuf, streamErrs, &wg)
 
-	go finalizeExecution(cmdCtx, cmd, cancel, &wg, &stdoutBuf, &stderrBuf, result, outputChan, start)
+	go finalizeExecution(cmdCtx, cmd, cancel, &wg, &stdoutBuf, &stderrBuf, result, outputChan, streamErrs, start)
 
 	return result, outputChan, nil
 }
@@ -446,12 +448,15 @@ func setupCommandPipes(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser, error) {
 	return stdoutPipe, stderrPipe, nil
 }
 
-func newExecutionResult() (*ExecutionResult, chan string, time.Time) {
+func newExecutionResult(streamOutput bool) (*ExecutionResult, chan string, time.Time) {
 	result := &ExecutionResult{
 		done: make(chan struct{}),
 	}
-	// Large buffer to prevent blocking when terraform outputs many lines quickly
-	outputChan := make(chan string, 1000)
+	var outputChan chan string
+	if streamOutput {
+		// Large buffer to prevent blocking when terraform outputs many lines quickly.
+		outputChan = make(chan string, 1000)
+	}
 	return result, outputChan, time.Now()
 }
 
@@ -464,6 +469,7 @@ func finalizeExecution(
 	stderrBuf *strings.Builder,
 	result *ExecutionResult,
 	outputChan chan string,
+	streamErrs chan error,
 	start time.Time,
 ) {
 	defer cancel()
@@ -471,6 +477,9 @@ func finalizeExecution(
 
 	waitErr := cmd.Wait()
 	wg.Wait()
+	close(streamErrs)
+
+	streamErr := collectStreamError(streamErrs)
 
 	duration := time.Since(start)
 	stdout := strings.TrimRight(stdoutBuf.String(), "\n")
@@ -497,10 +506,19 @@ func finalizeExecution(
 			result.Error = waitErr
 		}
 	}
-	close(outputChan)
+	if streamErr != nil {
+		if result.Error != nil {
+			result.Error = errors.Join(result.Error, streamErr)
+		} else {
+			result.Error = streamErr
+		}
+	}
+	if outputChan != nil {
+		close(outputChan)
+	}
 }
 
-func streamLines(reader io.Reader, output chan<- string, buffer *strings.Builder, wg *sync.WaitGroup) {
+func streamLines(reader io.Reader, output chan<- string, buffer *strings.Builder, streamErrs chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	scanner := bufio.NewScanner(reader)
@@ -517,6 +535,21 @@ func streamLines(reader io.Reader, output chan<- string, buffer *strings.Builder
 			output <- line
 		}
 	}
+
+	if err := scanner.Err(); err != nil {
+		streamErrs <- err
+	}
+}
+
+func collectStreamError(streamErrs <-chan error) error {
+	var joined error
+	for err := range streamErrs {
+		if err == nil {
+			continue
+		}
+		joined = errors.Join(joined, err)
+	}
+	return joined
 }
 
 func mergeEnv(base []string, sets ...[]string) []string {
