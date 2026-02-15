@@ -1297,8 +1297,31 @@ func (m *Model) applyFlagsForRun() ([]string, error) {
 		}
 		return nil, fmt.Errorf("check saved plan file %q: %w", m.planFilePath, err)
 	}
+	flags = removePlanFileArgs(flags)
 	flags = append(flags, m.planFilePath)
 	return flags, nil
+}
+
+func removePlanFileArgs(flags []string) []string {
+	if len(flags) == 0 {
+		return nil
+	}
+	filtered := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		if isPlanFileArg(flag) {
+			continue
+		}
+		filtered = append(filtered, flag)
+	}
+	return filtered
+}
+
+func isPlanFileArg(arg string) bool {
+	trimmed := strings.TrimSpace(arg)
+	if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+		return false
+	}
+	return strings.HasSuffix(trimmed, ".tfplan")
 }
 
 func (m *Model) applyFlagsForRecord() []string {
