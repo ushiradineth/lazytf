@@ -17,6 +17,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/profile"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/terraform/parser"
@@ -48,6 +49,7 @@ var (
 	configPath          string
 	themeName           string
 	noHistory           bool
+	profileFlags        string
 	programRunner       = runProgram
 	executionModeRunner = runProgramWithCleanup
 	executorFactory     = terraform.NewExecutor
@@ -98,10 +100,26 @@ showing only changed attributes in a git-style diff format.`,
 	rootCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 	rootCmd.Flags().StringVar(&themeName, "theme", "", "Theme name to use")
 	rootCmd.Flags().BoolVar(&noHistory, "no-history", false, "Disable history logging")
+	rootCmd.Flags().StringVar(&profileFlags, "profile", "", "Enable profiling (cpu,mem,trace,stats,all)")
 	return rootCmd
 }
 
 func run(_ *cobra.Command, args []string) error {
+	// Initialize profiler from flags or environment.
+	profiler := initProfiler()
+	if profiler != nil && profiler.IsEnabled() {
+		if err := profiler.Start(); err != nil {
+			return fmt.Errorf("start profiler: %w", err)
+		}
+		defer func() {
+			if err := profiler.Stop(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: profiler stop error: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Profiles written: %v\n", profiler.EnabledProfiles())
+			}
+		}()
+	}
+
 	configManager, err := config.NewManager(configPath)
 	if err != nil {
 		return fmt.Errorf("config manager: %w", err)
@@ -461,6 +479,22 @@ func stripFlag(flags []string, target string) []string {
 		filtered = append(filtered, flag)
 	}
 	return filtered
+}
+
+func initProfiler() *profile.Profiler {
+	// Check command-line flag first, then environment variable.
+	var opts profile.Options
+	if profileFlags != "" {
+		opts = profile.ParseFlags(profileFlags)
+	} else {
+		opts = profile.ParseEnv()
+	}
+
+	if !opts.CPU && !opts.Memory && !opts.Trace && !opts.Stats {
+		return nil
+	}
+
+	return profile.New(opts)
 }
 
 func resolveFolderSelection(baseDir, folder string) (string, error) {

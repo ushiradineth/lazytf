@@ -287,6 +287,47 @@ deps-tooling:
     @echo ""
     @echo "Make sure $(go env GOPATH)/bin is in your PATH"
 
+# ===== Profiling =====
+
+# Run with CPU profiling
+profile-cpu *args:
+    @echo "Running with CPU profiling..."
+    LAZYTF_PROFILE=cpu go run {{main_package}} {{args}}
+    @echo "CPU profile written. Analyze with: just profile-analyze cpu"
+
+# Run with memory profiling
+profile-mem *args:
+    @echo "Running with memory profiling..."
+    LAZYTF_PROFILE=mem go run {{main_package}} {{args}}
+    @echo "Memory profile written. Analyze with: just profile-analyze mem"
+
+# Run with all profiling
+profile-all *args:
+    @echo "Running with all profiling (cpu,mem,trace,stats)..."
+    LAZYTF_PROFILE=all go run {{main_package}} {{args}}
+    @echo "Profiles written. Analyze with: just profile-analyze"
+
+# Analyze profile files
+profile-analyze type="help":
+    ./scripts/profile-analyze.sh {{type}}
+
+# List profile files
+profile-list:
+    @echo "Available profile files:"
+    @ls -lh lazytf-*.prof lazytf-*.out lazytf-*.csv 2>/dev/null || echo "No profile files found"
+
+# Clean profile files
+profile-clean:
+    @echo "Cleaning profile files..."
+    rm -f lazytf-*.prof lazytf-*.out lazytf-*.csv
+    @echo "✓ Profile files cleaned"
+
+# Run benchmarks with profiling
+bench *pattern:
+    @echo "Running benchmarks..."
+    go test -bench={{if pattern == "" { "." } else { pattern }}} -benchmem -cpuprofile=bench-cpu.prof -memprofile=bench-mem.prof ./internal/ui/components/
+    @echo "Benchmark profiles written: bench-cpu.prof, bench-mem.prof"
+
 # ===== Pre-commit Hook =====
 
 # Install git pre-commit hook
