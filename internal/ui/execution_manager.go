@@ -553,7 +553,6 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
-//nolint:gocognit // State list setup has inherent complexity
 func (m *Model) beginStateList() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
@@ -592,17 +591,7 @@ func (m *Model) beginStateList() tea.Cmd {
 		if result.Error != nil {
 			return StateListCompleteMsg{Error: result.Error}
 		}
-		// Parse output - each line is a resource address
-		var resources []terraform.StateResource
-		if result.Stdout != "" {
-			for _, line := range strings.Split(result.Stdout, "\n") {
-				if trimmed := strings.TrimSpace(line); trimmed != "" {
-					resources = append(resources, terraform.StateResource{
-						Address: trimmed,
-					})
-				}
-			}
-		}
+		resources := parseStateListResources(result.Stdout)
 		return StateListCompleteMsg{Resources: resources}
 	}
 
@@ -733,6 +722,19 @@ func stateListSessionOutput(msg StateListCompleteMsg) string {
 		addresses[i] = r.Address
 	}
 	return fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+}
+
+func parseStateListResources(stdout string) []terraform.StateResource {
+	if strings.TrimSpace(stdout) == "" {
+		return nil
+	}
+	resources := make([]terraform.StateResource, 0)
+	for _, line := range strings.Split(stdout, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			resources = append(resources, terraform.StateResource{Address: trimmed})
+		}
+	}
+	return resources
 }
 
 func stateShowSessionOutput(msg StateShowCompleteMsg) string {
