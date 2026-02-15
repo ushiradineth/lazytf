@@ -2556,6 +2556,46 @@ func TestBeginApplyUsesSavedPlanFile(t *testing.T) {
 	}
 }
 
+func TestBeginApplyReplacesExistingPlanFileArg(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+
+	oldPlanPath := filepath.Join(t.TempDir(), "old.tfplan")
+	if err := os.WriteFile(oldPlanPath, []byte("old"), 0o600); err != nil {
+		t.Fatalf("write old plan file: %v", err)
+	}
+	newPlanPath := filepath.Join(t.TempDir(), "new.tfplan")
+	if err := os.WriteFile(newPlanPath, []byte("new"), 0o600); err != nil {
+		t.Fatalf("write new plan file: %v", err)
+	}
+
+	m.applyFlags = []string{"-parallelism=5", oldPlanPath}
+	m.planFilePath = newPlanPath
+
+	cmd := m.beginApply()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	_ = cmd()
+
+	if mock.ApplyCalls != 1 {
+		t.Fatalf("expected one apply call, got %d", mock.ApplyCalls)
+	}
+	if len(mock.LastApplyOpts.Flags) != 2 {
+		t.Fatalf("expected apply flags and one plan path, got %v", mock.LastApplyOpts.Flags)
+	}
+	if mock.LastApplyOpts.Flags[1] != newPlanPath {
+		t.Fatalf("expected updated plan path in apply args, got %v", mock.LastApplyOpts.Flags)
+	}
+}
+
 func TestBeginApplyFailsWhenSavedPlanMissing(t *testing.T) {
 	mock := setupMockExecutor(t)
 
