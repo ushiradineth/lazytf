@@ -11,6 +11,18 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
+func modalDebugf(format string, args ...any) {
+	if testing.Verbose() {
+		fmt.Printf(format, args...)
+	}
+}
+
+func modalDebugln(args ...any) {
+	if testing.Verbose() {
+		fmt.Println(args...)
+	}
+}
+
 func TestModalOverlayDebug(t *testing.T) {
 	s := styles.DefaultStyles()
 
@@ -25,9 +37,9 @@ func TestModalOverlayDebug(t *testing.T) {
 	}
 	baseView := strings.Join(baseLines, "\n")
 
-	fmt.Println("=== BASE VIEW ===")
-	fmt.Println(baseView)
-	fmt.Println()
+	modalDebugln("=== BASE VIEW ===")
+	modalDebugln(baseView)
+	modalDebugln()
 
 	// Create modal
 	modal := NewModal(s)
@@ -36,23 +48,23 @@ func TestModalOverlayDebug(t *testing.T) {
 	modal.SetContent("j/k: navigate\nenter: select\nq: quit")
 	modal.Show()
 
-	fmt.Println("=== MODAL VIEW (standalone) ===")
+	modalDebugln("=== MODAL VIEW (standalone) ===")
 	modalView := modal.View()
-	fmt.Println(modalView)
-	fmt.Println()
+	modalDebugln(modalView)
+	modalDebugln()
 
-	fmt.Println("=== MODAL OVERLAY ===")
+	modalDebugln("=== MODAL OVERLAY ===")
 	result := modal.Overlay(baseView)
-	fmt.Println(result)
-	fmt.Println()
+	modalDebugln(result)
+	modalDebugln()
 
 	// Check dimensions
-	fmt.Printf("Base view lines: %d\n", len(strings.Split(baseView, "\n")))
-	fmt.Printf("Base view width: %d\n", lipgloss.Width(baseLines[0]))
-	fmt.Printf("Modal width setting: %d\n", width)
-	fmt.Printf("Modal height setting: %d\n", height)
-	fmt.Printf("Modal box width: %d\n", lipgloss.Width(modalView))
-	fmt.Printf("Modal box height: %d\n", lipgloss.Height(modalView))
+	modalDebugf("Base view lines: %d\n", len(strings.Split(baseView, "\n")))
+	modalDebugf("Base view width: %d\n", lipgloss.Width(baseLines[0]))
+	modalDebugf("Modal width setting: %d\n", width)
+	modalDebugf("Modal height setting: %d\n", height)
+	modalDebugf("Modal box width: %d\n", lipgloss.Width(modalView))
+	modalDebugf("Modal box height: %d\n", lipgloss.Height(modalView))
 
 	// Check if base content is visible around modal
 	if !strings.Contains(result, "Line  1") {
@@ -68,9 +80,9 @@ func TestModalOverlayDebug(t *testing.T) {
 	// Verify modal is centered (check that content appears on both sides)
 	resultLines := strings.Split(result, "\n")
 	middleLine := resultLines[height/2]
-	fmt.Printf("\nMiddle line analysis:\n")
-	fmt.Printf("Middle line: %q\n", middleLine)
-	fmt.Printf("Contains 'Line': %v\n", strings.Contains(middleLine, "Line"))
+	modalDebugf("\nMiddle line analysis:\n")
+	modalDebugf("Middle line: %q\n", middleLine)
+	modalDebugf("Contains 'Line': %v\n", strings.Contains(middleLine, "Line"))
 }
 
 func TestModalScrolling(t *testing.T) {
@@ -90,11 +102,11 @@ func TestModalScrolling(t *testing.T) {
 	modal.Show()
 
 	offset, maxOffset, viewport, total := modal.GetScrollInfo()
-	fmt.Printf("Initial state:\n")
-	fmt.Printf("  scrollOffset: %d\n", offset)
-	fmt.Printf("  maxScrollOffset: %d\n", maxOffset)
-	fmt.Printf("  viewportHeight: %d\n", viewport)
-	fmt.Printf("  totalContentLines: %d\n", total)
+	modalDebugf("Initial state:\n")
+	modalDebugf("  scrollOffset: %d\n", offset)
+	modalDebugf("  maxScrollOffset: %d\n", maxOffset)
+	modalDebugf("  viewportHeight: %d\n", viewport)
+	modalDebugf("  totalContentLines: %d\n", total)
 
 	if maxOffset == 0 {
 		t.Errorf("maxScrollOffset should be > 0 for 50 lines of content, got %d", maxOffset)
@@ -106,8 +118,8 @@ func TestModalScrolling(t *testing.T) {
 	modal.ScrollDown()
 
 	offset, _, _, _ = modal.GetScrollInfo()
-	fmt.Printf("\nAfter 3x ScrollDown:\n")
-	fmt.Printf("  scrollOffset: %d\n", offset)
+	modalDebugf("\nAfter 3x ScrollDown:\n")
+	modalDebugf("  scrollOffset: %d\n", offset)
 
 	if offset != 3 {
 		t.Errorf("After 3 ScrollDown calls, offset should be 3, got %d", offset)
@@ -116,8 +128,8 @@ func TestModalScrolling(t *testing.T) {
 	// Test scrolling up
 	modal.ScrollUp()
 	offset, _, _, _ = modal.GetScrollInfo()
-	fmt.Printf("\nAfter 1x ScrollUp:\n")
-	fmt.Printf("  scrollOffset: %d\n", offset)
+	modalDebugf("\nAfter 1x ScrollUp:\n")
+	modalDebugf("  scrollOffset: %d\n", offset)
 
 	if offset != 2 {
 		t.Errorf("After ScrollUp, offset should be 2, got %d", offset)
@@ -146,8 +158,8 @@ func TestModalConfirmMode(t *testing.T) {
 
 	// Render the modal
 	view := modal.View()
-	fmt.Println("=== CONFIRM MODAL ===")
-	fmt.Println(view)
+	modalDebugln("=== CONFIRM MODAL ===")
+	modalDebugln(view)
 
 	// Check content is visible
 	if !strings.Contains(view, "Confirm Apply") {
@@ -194,9 +206,9 @@ func TestModalOverlayWithANSI(t *testing.T) {
 	}
 	baseView := strings.Join(baseLines, "\n")
 
-	fmt.Println("=== STYLED BASE VIEW ===")
-	fmt.Println(baseView)
-	fmt.Println()
+	modalDebugln("=== STYLED BASE VIEW ===")
+	modalDebugln(baseView)
+	modalDebugln()
 
 	// Create modal
 	modal := NewModal(s)
@@ -205,10 +217,10 @@ func TestModalOverlayWithANSI(t *testing.T) {
 	modal.SetContent("Press ? to close")
 	modal.Show()
 
-	fmt.Println("=== MODAL OVERLAY ON STYLED VIEW ===")
+	modalDebugln("=== MODAL OVERLAY ON STYLED VIEW ===")
 	result := modal.Overlay(baseView)
-	fmt.Println(result)
-	fmt.Println()
+	modalDebugln(result)
+	modalDebugln()
 
 	// Check that ANSI codes are NOT corrupted (no raw escape sequences visible)
 	// If ANSI handling is broken, we'd see things like "2;78;78;78m" in the output

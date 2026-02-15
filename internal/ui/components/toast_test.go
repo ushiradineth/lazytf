@@ -11,6 +11,18 @@ import (
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
+func toastDebugf(format string, args ...any) {
+	if testing.Verbose() {
+		fmt.Printf(format, args...)
+	}
+}
+
+func toastDebugln(args ...any) {
+	if testing.Verbose() {
+		fmt.Println(args...)
+	}
+}
+
 func TestToastOverlayDebug(t *testing.T) {
 	s := styles.DefaultStyles()
 
@@ -25,9 +37,9 @@ func TestToastOverlayDebug(t *testing.T) {
 	}
 	baseView := strings.Join(baseLines, "\n")
 
-	fmt.Println("=== BASE VIEW ===")
-	fmt.Println(baseView)
-	fmt.Println()
+	toastDebugln("=== BASE VIEW ===")
+	toastDebugln(baseView)
+	toastDebugln()
 
 	// Create toast
 	toast := NewToast(s)
@@ -35,23 +47,23 @@ func TestToastOverlayDebug(t *testing.T) {
 	toast.SetPosition(ToastTopLeft)
 	_ = toast.ShowSuccess("Operation completed successfully!")
 
-	fmt.Println("=== TOAST VIEW (standalone) ===")
+	toastDebugln("=== TOAST VIEW (standalone) ===")
 	toastBox := toast.renderBox()
-	fmt.Println(toastBox)
-	fmt.Println()
+	toastDebugln(toastBox)
+	toastDebugln()
 
-	fmt.Println("=== TOAST OVERLAY ===")
+	toastDebugln("=== TOAST OVERLAY ===")
 	result := toast.Overlay(baseView)
-	fmt.Println(result)
-	fmt.Println()
+	toastDebugln(result)
+	toastDebugln()
 
 	// Check dimensions
-	fmt.Printf("Base view lines: %d\n", len(strings.Split(baseView, "\n")))
-	fmt.Printf("Base view width: %d\n", lipgloss.Width(baseLines[0]))
-	fmt.Printf("Toast width setting: %d\n", width)
-	fmt.Printf("Toast height setting: %d\n", height)
-	fmt.Printf("Toast box width: %d\n", lipgloss.Width(toastBox))
-	fmt.Printf("Toast box height: %d\n", lipgloss.Height(toastBox))
+	toastDebugf("Base view lines: %d\n", len(strings.Split(baseView, "\n")))
+	toastDebugf("Base view width: %d\n", lipgloss.Width(baseLines[0]))
+	toastDebugf("Toast width setting: %d\n", width)
+	toastDebugf("Toast height setting: %d\n", height)
+	toastDebugf("Toast box width: %d\n", lipgloss.Width(toastBox))
+	toastDebugf("Toast box height: %d\n", lipgloss.Height(toastBox))
 
 	// Check if base content is visible around toast
 	if !strings.Contains(result, "Line 20") {
@@ -66,8 +78,8 @@ func TestToastOverlayDebug(t *testing.T) {
 	resultLines := strings.Split(result, "\n")
 	if len(resultLines) > 1 {
 		line2 := resultLines[1]
-		fmt.Printf("\nLine 2 analysis:\n")
-		fmt.Printf("Line 2: %q\n", line2)
+		toastDebugf("\nLine 2 analysis:\n")
+		toastDebugf("Line 2: %q\n", line2)
 		// With padding=1, first char is from base ("L" from "Line"), then toast box
 		if !strings.Contains(line2, "╭") {
 			t.Error("Toast box should be visible in line 2")
