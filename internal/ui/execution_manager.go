@@ -553,7 +553,6 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
-//nolint:gocognit // State list setup has inherent complexity
 func (m *Model) beginStateList() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
