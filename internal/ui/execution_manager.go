@@ -284,6 +284,7 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	if strings.TrimSpace(parsed) == "" {
 		parsed = "Refresh complete"
 	}
+	m.setDiagnostics(nil)
 	m.setLogText(parsed)
 	m.updateExecutionViewForStreaming()
 	var toastCmd tea.Cmd
@@ -423,6 +424,8 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 
 	if len(msg.Result.Diagnostics) > 0 {
 		m.setDiagnostics(msg.Result.Diagnostics)
+	} else {
+		m.setDiagnostics(nil)
 	}
 
 	var cmd tea.Cmd
@@ -532,10 +535,12 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	}
 
 	if len(msg.ChangedFiles) == 0 {
+		m.setDiagnostics(nil)
 		cmd := m.toastInfo("No files changed")
 		return m, cmd
 	}
 
+	m.setDiagnostics(nil)
 	m.showFormattedFiles(msg.ChangedFiles)
 	cmd := m.toastSuccess(fmt.Sprintf("Formatted %d file(s)", len(msg.ChangedFiles)))
 	return m, cmd
@@ -619,6 +624,7 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	}
 
 	// Update state list content (for tab view)
+	m.setDiagnostics(nil)
 	if m.stateListContent != nil {
 		m.stateListContent.SetResources(msg.Resources)
 	}
@@ -679,6 +685,7 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 	}
 
 	// Show state in main area instead of full-screen view
+	m.setDiagnostics(nil)
 	if m.mainArea != nil {
 		m.mainArea.SetStateContent(msg.Address, msg.Output)
 	}
@@ -819,6 +826,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 			m.planView.SetSummary(m.planSummary())
 		}
 	}
+	m.setDiagnostics(nil)
 	if msg.Output != "" {
 		m.lastPlanOutput = msg.Output
 		// Route logs to command log panel
@@ -901,6 +909,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	if strings.TrimSpace(parsed) == "" {
 		parsed = "Apply complete"
 	}
+	m.setDiagnostics(nil)
 	m.setLogText(parsed)
 	// Stay in main view with panel layout
 	m.setPlan(&terraform.Plan{Resources: nil})
