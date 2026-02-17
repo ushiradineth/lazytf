@@ -143,9 +143,14 @@ func buildSessionSections(styles *styles.Styles, logs []SessionLogEntry, width i
 		// Render label in highlight style
 		label := styles.Highlight.Render(entry.Label)
 		sections = append(sections, label)
-		// Render command indented with dimmed style
-		command := styles.Dimmed.Render("  " + entry.Command)
-		sections = append(sections, command)
+		// Render command indented with dimmed style and wrapped
+		command := "  " + entry.Command
+		if width > 0 {
+			command = wrapText(command, width)
+		}
+		for _, line := range strings.Split(command, "\n") {
+			sections = append(sections, styles.Dimmed.Render(line))
+		}
 		// Render output if present
 		if strings.TrimSpace(entry.Output) != "" {
 			output := entry.Output
@@ -222,12 +227,30 @@ func wrapText(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	wrapped := make([]string, 0, 32)
-	wrapStyle := lipgloss.NewStyle().Width(width)
+	wrapped := make([]string, 0, 64)
 	for _, line := range strings.Split(text, "\n") {
-		wrapped = append(wrapped, strings.TrimRight(wrapStyle.Render(line), " "))
+		for _, chunk := range wrapLine(line, width) {
+			wrapped = append(wrapped, chunk)
+		}
 	}
 	return strings.TrimRight(strings.Join(wrapped, "\n"), "\n")
+}
+
+func wrapLine(line string, width int) []string {
+	if width <= 0 {
+		return []string{line}
+	}
+	runes := []rune(line)
+	if len(runes) == 0 {
+		return []string{""}
+	}
+	chunks := make([]string, 0, (len(runes)/width)+1)
+	for len(runes) > width {
+		chunks = append(chunks, string(runes[:width]))
+		runes = runes[width:]
+	}
+	chunks = append(chunks, string(runes))
+	return chunks
 }
 
 func formatDiagnostic(diag terraform.Diagnostic) string {

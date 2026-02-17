@@ -213,3 +213,23 @@ func TestDiagnosticsPanelExpandFillsContent(t *testing.T) {
 			minExpectedContentLines, expandedContentLines, expandedView)
 	}
 }
+
+func TestWrapTextPreservesAllCharacters(t *testing.T) {
+	text := "terraform apply -compact-warnings /very/long/path/to/.lazytf/tmp/plan.tfplan"
+	wrapped := wrapText(text, 16)
+	reconstructed := strings.ReplaceAll(wrapped, "\n", "")
+	if reconstructed != text {
+		t.Fatalf("expected wrapped text to preserve all characters\nwant: %q\n got: %q", text, reconstructed)
+	}
+}
+
+func TestDiagnosticsPanelSessionCommandWrapKeepsTail(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+	panel.SetSize(28, 8)
+	panel.AppendSessionLog("Applied", "terraform apply -compact-warnings /tmp/plan.tfplan", "ok")
+
+	view := panel.View()
+	if !strings.Contains(view, "plan.tfplan") {
+		t.Fatalf("expected wrapped command tail to remain visible, got %q", view)
+	}
+}
