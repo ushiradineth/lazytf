@@ -229,9 +229,7 @@ func wrapText(text string, width int) string {
 	}
 	wrapped := make([]string, 0, 64)
 	for _, line := range strings.Split(text, "\n") {
-		for _, chunk := range wrapLine(line, width) {
-			wrapped = append(wrapped, chunk)
-		}
+		wrapped = append(wrapped, wrapLine(line, width)...)
 	}
 	return strings.TrimRight(strings.Join(wrapped, "\n"), "\n")
 }
