@@ -153,6 +153,18 @@ type StateShowOptions struct {
 	Env     []string
 }
 
+// StateRmOptions controls state rm execution.
+type StateRmOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
+// StateMvOptions controls state mv execution.
+type StateMvOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
 // ShowOptions controls terraform show execution.
 type ShowOptions struct {
 	Timeout time.Duration
@@ -294,6 +306,37 @@ func (e *Executor) StateShow(ctx context.Context, address string, opts StateShow
 		return nil, errors.New("resource address is required")
 	}
 	args := []string{"state", "show", address}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// StateRm runs terraform state rm for a specific resource address.
+func (e *Executor) StateRm(ctx context.Context, address string, opts StateRmOptions) (*ExecutionResult, error) {
+	if strings.TrimSpace(address) == "" {
+		return nil, errors.New("resource address is required")
+	}
+	args := []string{"state", "rm", address}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// StateMv runs terraform state mv for a source and destination resource address.
+func (e *Executor) StateMv(ctx context.Context, srcAddress, dstAddress string, opts StateMvOptions) (*ExecutionResult, error) {
+	if strings.TrimSpace(srcAddress) == "" {
+		return nil, errors.New("source resource address is required")
+	}
+	if strings.TrimSpace(dstAddress) == "" {
+		return nil, errors.New("destination resource address is required")
+	}
+	args := []string{"state", "mv", srcAddress, dstAddress}
 	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err

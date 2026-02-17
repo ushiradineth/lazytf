@@ -20,6 +20,8 @@ type MockExecutor struct {
 	FormatCalls    int
 	StateListCalls int
 	StateShowCalls int
+	StateRmCalls   int
+	StateMvCalls   int
 	ShowCalls      int
 	VersionCalls   int
 
@@ -32,6 +34,11 @@ type MockExecutor struct {
 	LastStateListOpts terraform.StateListOptions
 	LastStateShowAddr string
 	LastStateShowOpts terraform.StateShowOptions
+	LastStateRmAddr   string
+	LastStateRmOpts   terraform.StateRmOptions
+	LastStateMvSrc    string
+	LastStateMvDst    string
+	LastStateMvOpts   terraform.StateMvOptions
 	LastShowPlanFile  string
 	LastShowOpts      terraform.ShowOptions
 
@@ -62,6 +69,12 @@ type MockExecutor struct {
 
 	StateShowResult *terraform.ExecutionResult
 	StateShowErr    error
+
+	StateRmResult *terraform.ExecutionResult
+	StateRmErr    error
+
+	StateMvResult *terraform.ExecutionResult
+	StateMvErr    error
 
 	ShowResult *terraform.ExecutionResult
 	ShowErr    error
@@ -261,6 +274,49 @@ resource "aws_instance" "example" {
 	return result, nil
 }
 
+// StateRm implements ExecutorInterface.
+func (m *MockExecutor) StateRm(_ context.Context, address string, opts terraform.StateRmOptions) (*terraform.ExecutionResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.StateRmCalls++
+	m.LastStateRmAddr = address
+	m.LastStateRmOpts = opts
+
+	if m.StateRmErr != nil {
+		return nil, m.StateRmErr
+	}
+
+	result := m.StateRmResult
+	if result == nil {
+		result = NewMockResult("Removed "+address, 0)
+	}
+	return result, nil
+}
+
+// StateMv implements ExecutorInterface.
+func (m *MockExecutor) StateMv(
+	_ context.Context,
+	srcAddress, dstAddress string,
+	opts terraform.StateMvOptions,
+) (*terraform.ExecutionResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.StateMvCalls++
+	m.LastStateMvSrc = srcAddress
+	m.LastStateMvDst = dstAddress
+	m.LastStateMvOpts = opts
+
+	if m.StateMvErr != nil {
+		return nil, m.StateMvErr
+	}
+
+	result := m.StateMvResult
+	if result == nil {
+		result = NewMockResult("Moved "+srcAddress+" to "+dstAddress, 0)
+	}
+	return result, nil
+}
+
 // Show implements ExecutorInterface.
 func (m *MockExecutor) Show(_ context.Context, planFile string, opts terraform.ShowOptions) (*terraform.ExecutionResult, error) {
 	m.mu.Lock()
@@ -316,6 +372,8 @@ func (m *MockExecutor) Reset() {
 	m.FormatCalls = 0
 	m.StateListCalls = 0
 	m.StateShowCalls = 0
+	m.StateRmCalls = 0
+	m.StateMvCalls = 0
 	m.ShowCalls = 0
 	m.VersionCalls = 0
 
@@ -327,6 +385,11 @@ func (m *MockExecutor) Reset() {
 	m.LastStateListOpts = terraform.StateListOptions{}
 	m.LastStateShowAddr = ""
 	m.LastStateShowOpts = terraform.StateShowOptions{}
+	m.LastStateRmAddr = ""
+	m.LastStateRmOpts = terraform.StateRmOptions{}
+	m.LastStateMvSrc = ""
+	m.LastStateMvDst = ""
+	m.LastStateMvOpts = terraform.StateMvOptions{}
 	m.LastShowPlanFile = ""
 	m.LastShowOpts = terraform.ShowOptions{}
 }

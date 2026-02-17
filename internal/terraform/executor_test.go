@@ -1058,6 +1058,97 @@ func TestExecutorStateShowEmptyAddress(t *testing.T) {
 	}
 }
 
+func TestExecutorStateRmWithOptions(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.StateRm(context.Background(), "aws_instance.web", StateRmOptions{})
+	if err != nil {
+		t.Fatalf("state rm error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result from state rm")
+	}
+	<-result.Done()
+	if !strings.Contains(result.Stdout, "ARGS:state rm aws_instance.web") {
+		t.Fatalf("unexpected state rm args: %q", result.Stdout)
+	}
+}
+
+func TestExecutorStateRmEmptyAddress(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	_, err = exec.StateRm(context.Background(), "", StateRmOptions{})
+	if err == nil {
+		t.Error("expected error for empty address")
+	}
+}
+
+func TestExecutorStateMvWithOptions(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.StateMv(context.Background(), "aws_instance.old", "aws_instance.new", StateMvOptions{})
+	if err != nil {
+		t.Fatalf("state mv error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result from state mv")
+	}
+	<-result.Done()
+	if !strings.Contains(result.Stdout, "ARGS:state mv aws_instance.old aws_instance.new") {
+		t.Fatalf("unexpected state mv args: %q", result.Stdout)
+	}
+}
+
+func TestExecutorStateMvEmptyAddresses(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	_, err = exec.StateMv(context.Background(), "", "aws_instance.new", StateMvOptions{})
+	if err == nil {
+		t.Fatal("expected error for empty source address")
+	}
+
+	_, err = exec.StateMv(context.Background(), "aws_instance.old", "", StateMvOptions{})
+	if err == nil {
+		t.Fatal("expected error for empty destination address")
+	}
+}
+
 func TestExecutorFormatSuccess(t *testing.T) {
 	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
