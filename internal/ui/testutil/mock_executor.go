@@ -22,6 +22,7 @@ type MockExecutor struct {
 	StateShowCalls int
 	StateRmCalls   int
 	StateMvCalls   int
+	StatePullCalls int
 	ShowCalls      int
 	VersionCalls   int
 
@@ -39,6 +40,7 @@ type MockExecutor struct {
 	LastStateMvSrc    string
 	LastStateMvDst    string
 	LastStateMvOpts   terraform.StateMvOptions
+	LastStatePullOpts terraform.StatePullOptions
 	LastShowPlanFile  string
 	LastShowOpts      terraform.ShowOptions
 
@@ -75,6 +77,9 @@ type MockExecutor struct {
 
 	StateMvResult *terraform.ExecutionResult
 	StateMvErr    error
+
+	StatePullResult *terraform.ExecutionResult
+	StatePullErr    error
 
 	ShowResult *terraform.ExecutionResult
 	ShowErr    error
@@ -317,6 +322,24 @@ func (m *MockExecutor) StateMv(
 	return result, nil
 }
 
+// StatePull implements ExecutorInterface.
+func (m *MockExecutor) StatePull(_ context.Context, opts terraform.StatePullOptions) (*terraform.ExecutionResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.StatePullCalls++
+	m.LastStatePullOpts = opts
+
+	if m.StatePullErr != nil {
+		return nil, m.StatePullErr
+	}
+
+	result := m.StatePullResult
+	if result == nil {
+		result = NewMockResult(`{"version":4}`, 0)
+	}
+	return result, nil
+}
+
 // Show implements ExecutorInterface.
 func (m *MockExecutor) Show(_ context.Context, planFile string, opts terraform.ShowOptions) (*terraform.ExecutionResult, error) {
 	m.mu.Lock()
@@ -374,6 +397,7 @@ func (m *MockExecutor) Reset() {
 	m.StateShowCalls = 0
 	m.StateRmCalls = 0
 	m.StateMvCalls = 0
+	m.StatePullCalls = 0
 	m.ShowCalls = 0
 	m.VersionCalls = 0
 
@@ -390,6 +414,7 @@ func (m *MockExecutor) Reset() {
 	m.LastStateMvSrc = ""
 	m.LastStateMvDst = ""
 	m.LastStateMvOpts = terraform.StateMvOptions{}
+	m.LastStatePullOpts = terraform.StatePullOptions{}
 	m.LastShowPlanFile = ""
 	m.LastShowOpts = terraform.ShowOptions{}
 }

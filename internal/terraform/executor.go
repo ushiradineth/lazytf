@@ -165,6 +165,12 @@ type StateMvOptions struct {
 	Env     []string
 }
 
+// StatePullOptions controls state pull execution.
+type StatePullOptions struct {
+	Timeout time.Duration
+	Env     []string
+}
+
 // ShowOptions controls terraform show execution.
 type ShowOptions struct {
 	Timeout time.Duration
@@ -337,6 +343,17 @@ func (e *Executor) StateMv(ctx context.Context, srcAddress, dstAddress string, o
 		return nil, errors.New("destination resource address is required")
 	}
 	args := []string{"state", "mv", srcAddress, dstAddress}
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
+}
+
+// StatePull runs terraform state pull to get raw state JSON.
+func (e *Executor) StatePull(ctx context.Context, opts StatePullOptions) (*ExecutionResult, error) {
+	args := []string{"state", "pull"}
 	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
