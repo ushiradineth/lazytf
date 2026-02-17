@@ -133,6 +133,33 @@ func TestExecutorPlanApplyFlagsAndAutoApprove(t *testing.T) {
 	}
 }
 
+func TestExecutorApplyAutoApproveBeforePlanFile(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, output, err := exec.Apply(context.Background(), ApplyOptions{
+		Flags:       []string{"plan.tfplan"},
+		AutoApprove: true,
+	})
+	if err != nil {
+		t.Fatalf("apply error: %v", err)
+	}
+	applyOutput := collectOutput(output)
+	<-result.Done()
+	if (applyOutput != "" || result.Stdout != "") &&
+		!strings.Contains(applyOutput, "ARGS:apply -auto-approve plan.tfplan") &&
+		!strings.Contains(result.Stdout, "ARGS:apply -auto-approve plan.tfplan") {
+		t.Fatalf("expected auto-approve before plan file, got %q", result.Stdout)
+	}
+}
+
 func TestExecutorVersion(t *testing.T) {
 	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")

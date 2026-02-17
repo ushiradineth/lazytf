@@ -20,7 +20,7 @@ run *args:
 dev *args:
     @echo "Running with hot reload..."
     @command -v gow >/dev/null 2>&1 || { echo "❌ gow not installed. Run 'just deps-tooling'"; exit 1; }
-    gow run {{main_package}} {{args}}
+    TF_LOG="${TF_LOG:-TRACE}" TF_LOG_PATH="${TF_LOG_PATH:-/tmp/lazytf-tf.log}" gow run {{main_package}} {{args}}
 
 # Build the application
 build:

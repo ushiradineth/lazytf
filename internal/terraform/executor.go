@@ -221,9 +221,24 @@ func (e *Executor) Apply(ctx context.Context, opts ApplyOptions) (*ExecutionResu
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
 	if opts.AutoApprove && !containsFlag(args, "-auto-approve") {
-		args = append(args, "-auto-approve")
+		args = insertAutoApproveBeforePlanFile(args)
 	}
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})
+}
+
+func insertAutoApproveBeforePlanFile(args []string) []string {
+	for i, arg := range args {
+		trimmed := strings.TrimSpace(arg)
+		if strings.HasPrefix(trimmed, "-") || !strings.HasSuffix(trimmed, ".tfplan") {
+			continue
+		}
+		updated := make([]string, 0, len(args)+1)
+		updated = append(updated, args[:i]...)
+		updated = append(updated, "-auto-approve")
+		updated = append(updated, args[i:]...)
+		return updated
+	}
+	return append(args, "-auto-approve")
 }
 
 // Refresh runs terraform apply -refresh-only and streams output.
