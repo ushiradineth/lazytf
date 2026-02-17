@@ -12,6 +12,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
+	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
 
 // History-related methods for Model
@@ -137,7 +138,7 @@ func (m *Model) handleHistoryKeys(key string) (bool, tea.Cmd) {
 		if m.historySelected > 0 {
 			m.historySelected--
 		}
-	case "down", "j": //nolint:goconst // keyboard keys are clearer as literals
+	case keybinds.KeyDown, "j":
 		if m.historySelected < len(m.historyEntries)-1 {
 			m.historySelected++
 		}

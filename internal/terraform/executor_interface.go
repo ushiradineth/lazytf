@@ -29,6 +29,12 @@ type ExecutorInterface interface {
 	// StateShow runs terraform state show for a specific address.
 	StateShow(ctx context.Context, address string, opts StateShowOptions) (*ExecutionResult, error)
 
+	// StateRm runs terraform state rm for a specific address.
+	StateRm(ctx context.Context, address string, opts StateRmOptions) (*ExecutionResult, error)
+
+	// StateMv runs terraform state mv for source and destination addresses.
+	StateMv(ctx context.Context, srcAddress, dstAddress string, opts StateMvOptions) (*ExecutionResult, error)
+
 	// Show runs terraform show on a plan file.
 	Show(ctx context.Context, planFile string, opts ShowOptions) (*ExecutionResult, error)
 
