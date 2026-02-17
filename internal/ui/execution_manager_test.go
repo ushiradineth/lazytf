@@ -2891,6 +2891,31 @@ func TestHandlePlanCompleteNoChanges(t *testing.T) {
 	}
 }
 
+func TestHandlePlanCompleteClearsStaleDiagnostics(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.planRunning = true
+
+	m.setDiagnostics([]terraform.Diagnostic{{
+		Severity: "error",
+		Summary:  "stale error",
+	}})
+
+	msg := PlanCompleteMsg{Output: "No changes."}
+	m.handlePlanComplete(msg)
+
+	if m.commandLogPanel == nil {
+		t.Fatal("expected command log panel")
+	}
+	view := m.commandLogPanel.GetDiagnosticsPanel().View()
+	if strings.Contains(view, "stale error") || strings.Contains(view, "Diagnostics") {
+		t.Fatalf("expected stale diagnostics to be cleared, got %q", view)
+	}
+}
+
 // ============================================================================
 // Cleanup tests
 // ============================================================================
