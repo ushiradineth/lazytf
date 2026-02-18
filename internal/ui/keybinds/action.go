@@ -28,6 +28,7 @@ const (
 
 // Execution actions (require execution mode).
 const (
+	ActionInit     Action = "init"
 	ActionPlan     Action = "plan"
 	ActionApply    Action = "apply"
 	ActionRefresh  Action = "refresh"

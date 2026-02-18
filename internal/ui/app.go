@@ -412,6 +412,9 @@ func (m *Model) handleSecondaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case FormatCompleteMsg:
 		model, cmd := m.handleFormatComplete(msg)
 		return model, cmd, true
+	case InitCompleteMsg:
+		model, cmd := m.handleInitComplete(msg)
+		return model, cmd, true
 	case StateListCompleteMsg:
 		model, cmd := m.handleStateListComplete(msg)
 		return model, cmd, true

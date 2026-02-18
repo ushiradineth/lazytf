@@ -546,6 +546,75 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
+func (m *Model) beginInit() tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
+		return nil
+	}
+	if m.toast != nil {
+		m.toast.ShowInfo("Running terraform init...")
+	}
+
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationInit)
+	}
+
+	initCmd := func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		result, err := m.executor.Init(ctx)
+		if err != nil {
+			return InitCompleteMsg{Error: err}
+		}
+		if result == nil {
+			return InitCompleteMsg{Error: errors.New("init execution result missing")}
+		}
+		return InitCompleteMsg{Output: strings.TrimSpace(result.Output), Result: result, Error: result.Error}
+	}
+
+	if progressCmd != nil {
+		return tea.Batch(initCmd, progressCmd)
+	}
+	return initCmd
+}
+
+func (m *Model) handleInitComplete(msg InitCompleteMsg) (tea.Model, tea.Cmd) {
+	output := strings.TrimSpace(msg.Output)
+	if output == "" && msg.Error != nil {
+		output = msg.Error.Error()
+	}
+	if output == "" {
+		output = "Terraform init completed"
+	}
+
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("Initialized", "terraform init", output)
+	}
+
+	if msg.Error != nil {
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
+		m.addErrorDiagnostic("Init failed", msg.Error, output)
+		cmd := m.toastError(fmt.Sprintf("Init failed: %v", msg.Error))
+		return m, cmd
+	}
+
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
+	}
+	m.setDiagnostics(nil)
+	cmd := m.toastSuccess("Terraform initialized")
+	return m, cmd
+}
+
 func (m *Model) beginStateList() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")

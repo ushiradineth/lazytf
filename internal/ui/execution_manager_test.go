@@ -5770,3 +5770,44 @@ func TestBeginStateMvUsesCombinedResultOutputOnError(t *testing.T) {
 		t.Fatalf("expected terraform stderr in output, got %q", msg.Output)
 	}
 }
+
+func TestHandleInitCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := InitCompleteMsg{Output: "Terraform has been successfully initialized!"}
+	model, cmd := m.handleInitComplete(msg)
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Fatal("expected success toast command")
+	}
+
+	if m.commandLogPanel == nil {
+		t.Fatal("expected command log panel")
+	}
+	if got := m.commandLogPanel.View(); !strings.Contains(got, "terraform init") {
+		t.Fatalf("expected init command log entry, got %q", got)
+	}
+}
+
+func TestHandleInitCompleteError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := InitCompleteMsg{Error: errors.New("init failed")}
+	model, cmd := m.handleInitComplete(msg)
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Fatal("expected error toast command")
+	}
+}

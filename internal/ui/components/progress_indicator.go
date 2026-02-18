@@ -35,6 +35,8 @@ const (
 	OperationValidate
 	// OperationFormat means terraform fmt.
 	OperationFormat
+	// OperationInit means terraform init.
+	OperationInit
 	// OperationStateList means terraform state list.
 	OperationStateList
 )
@@ -135,6 +137,9 @@ func (p *ProgressIndicator) getIconAndText() (string, string) {
 	case OperationFormat:
 		runningText = "Formatting"
 		failedText = "Format Failed"
+	case OperationInit:
+		runningText = "Initializing"
+		failedText = "Init Failed"
 	case OperationStateList:
 		runningText = "Loading State"
 		failedText = "State Load Failed"
