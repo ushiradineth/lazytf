@@ -5177,6 +5177,36 @@ func TestHandleApplyOutputRunning(t *testing.T) {
 	_ = cmd // May be nil or non-nil depending on channel setup
 }
 
+func TestUpdateStateLockStatus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.progressIndicator.Start(components.OperationPlan)
+
+	m.updateStateLockStatus("Acquiring state lock. This may take a few moments...")
+	if !strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected lock wait detail in progress view")
+	}
+
+	m.updateStateLockStatus("Releasing state lock. This may take a few moments...")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected lock wait detail to be cleared")
+	}
+}
+
+func TestHandleApplyOutputUpdatesLockStatus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.applyRunning = true
+	m.progressIndicator.Start(components.OperationApply)
+
+	m.handleApplyOutput(ApplyOutputMsg{Line: "Acquiring state lock. This may take a few moments..."})
+	if !strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected lock detail from apply output")
+	}
+}
+
 func TestHandleEnvironmentChangedError(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
