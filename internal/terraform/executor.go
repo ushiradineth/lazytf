@@ -222,7 +222,11 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 // Init runs terraform init.
 func (e *Executor) Init(ctx context.Context) (*ExecutionResult, error) {
 	result, _, err := e.run(ctx, []string{"init"}, execOptions{streamOutput: false})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	<-result.Done()
+	return result, nil
 }
 
 // Plan runs terraform plan and streams output.
