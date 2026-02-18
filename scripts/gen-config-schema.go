@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -76,7 +77,12 @@ func main() {
 	}
 	data = append(data, '\n')
 
-	target := filepath.Join("internal", "config", "config.schema.json")
+	_, scriptFile, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("resolve script path")
+	}
+	repoRoot := filepath.Dir(filepath.Dir(scriptFile))
+	target := filepath.Join(repoRoot, "internal", "config", "config.schema.json")
 	if err := os.WriteFile(target, data, 0o600); err != nil {
 		panic(err)
 	}
