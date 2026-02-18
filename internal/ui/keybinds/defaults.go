@@ -336,6 +336,15 @@ func registerResourcesPanelBindings(r *Registry) {
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
 	})
+	r.Register(Binding{
+		Keys:        []string{"z"},
+		Action:      ActionDriftView,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "toggle drift analysis",
+		Category:    "Resources Panel",
+	})
 
 	// Tab switching
 	r.Register(Binding{

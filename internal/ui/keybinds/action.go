@@ -46,6 +46,7 @@ const (
 	ActionStateRemove     Action = "state_remove"
 	ActionStateMove       Action = "state_move"
 	ActionCopyAddress     Action = "copy_selected_address"
+	ActionDriftView       Action = "toggle_drift_view"
 )
 
 // Tab actions.

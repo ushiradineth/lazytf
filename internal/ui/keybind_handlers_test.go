@@ -369,6 +369,49 @@ func TestHandleActionCopyAddressClipboardError(t *testing.T) {
 	}
 }
 
+func TestHandleActionDriftViewShowsDriftMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.plan = &terraform.Plan{
+		Resources: []terraform.ResourceChange{{Address: "null_resource.example", Action: terraform.ActionUpdate}},
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionDriftView(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil command when showing drift view")
+	}
+	if m.mainArea == nil || m.mainArea.GetMode() != ModeDrift {
+		t.Fatal("expected drift mode")
+	}
+}
+
+func TestHandleActionDriftViewToggleBackToDiff(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	if m.mainArea == nil {
+		t.Fatal("expected main area")
+	}
+	m.mainArea.SetMode(ModeDrift)
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionDriftView(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil command when toggling drift off")
+	}
+	if m.mainArea.GetMode() != ModeDiff {
+		t.Fatal("expected diff mode")
+	}
+}
+
 func TestHandleActionStateRemoveShowsConfirmModal(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

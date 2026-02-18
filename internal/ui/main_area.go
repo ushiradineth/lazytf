@@ -20,6 +20,7 @@ const (
 	ModeLogs                              // Show operation logs
 	ModeHistoryDetail                     // Show history detail (formatted logs)
 	ModeStateShow                         // Show state resource details
+	ModeDrift                             // Show drift analysis
 	ModeAbout                             // Show about/info screen
 )
 
@@ -162,6 +163,16 @@ func (m *MainArea) SetStateContent(address, content string) {
 	m.mode = ModeStateShow
 }
 
+// SetDriftContent sets drift analysis content and switches to drift mode.
+func (m *MainArea) SetDriftContent(content string) {
+	if m.historyView == nil {
+		return
+	}
+	m.historyView.SetTitle("Drift Analysis")
+	m.historyView.SetContent(content)
+	m.mode = ModeDrift
+}
+
 // GetHistoryView returns the history view (for external updates).
 func (m *MainArea) GetHistoryView() *views.HistoryView {
 	return m.historyView
@@ -200,6 +211,10 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 		if m.aboutView != nil {
 			m.aboutView, cmd = m.aboutView.Update(msg)
 		}
+	case ModeDrift:
+		if m.historyView != nil {
+			m.historyView, cmd = m.historyView.Update(msg)
+		}
 	}
 
 	return m, cmd
@@ -207,7 +222,7 @@ func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 
 // HandleKey handles key events.
 //
-//nolint:gocognit,gocyclo // TUI key handling has inherent complexity from multiple modes
+//nolint:gocognit,gocyclo,funlen // TUI key handling has inherent complexity from multiple modes
 func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	// Forward key events to appropriate child based on mode
 	if m.mode == ModeLogs {
@@ -275,6 +290,14 @@ func (m *MainArea) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	case ModeAbout:
 		// About view handles scrolling
 		if m.aboutView != nil {
+			switch msg.String() {
+			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
+				_, cmd := m.Update(msg)
+				return true, cmd
+			}
+		}
+	case ModeDrift:
+		if m.historyView != nil {
 			switch msg.String() {
 			case "up", "down", "pgup", "pgdown", "home", "end", "k", "j":
 				_, cmd := m.Update(msg)
@@ -361,12 +384,21 @@ func (m *MainArea) View() string {
 		} else {
 			content = m.styles.Dimmed.Render("lazytf")
 		}
+
+	case ModeDrift:
+		title = "Drift Analysis"
+		tabs = []string{title}
+		if m.historyView != nil {
+			content = m.historyView.ViewContent()
+		} else {
+			content = m.styles.Dimmed.Render("No drift analysis available")
+		}
 	}
 
 	// Set footer text based on mode
 	var footerText string
 	switch m.mode {
-	case ModeDiff, ModeLogs, ModeHistoryDetail, ModeStateShow, ModeAbout:
+	case ModeDiff, ModeLogs, ModeHistoryDetail, ModeStateShow, ModeAbout, ModeDrift:
 		footerText = ""
 	}
 
