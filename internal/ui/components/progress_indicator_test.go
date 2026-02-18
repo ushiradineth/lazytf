@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -215,6 +216,24 @@ func TestProgressIndicatorSetStyles(t *testing.T) {
 
 	if p.styles != newStyles {
 		t.Error("expected styles to be updated")
+	}
+}
+
+func TestProgressIndicatorSetDetail(t *testing.T) {
+	s := styles.DefaultStyles()
+	p := NewProgressIndicator(s)
+
+	p.Start(OperationPlan)
+	p.SetDetail("waiting for state lock")
+
+	view := p.View()
+	if !strings.Contains(view, "waiting for state lock") {
+		t.Fatalf("expected detail text in view, got %q", view)
+	}
+
+	p.Reset()
+	if p.detail != "" {
+		t.Fatal("expected reset to clear detail")
 	}
 }
 

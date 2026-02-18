@@ -585,6 +585,7 @@ func (m *Model) handlePlanOutput(msg PlanOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	cmd := m.streamPlanOutputCmd()
 	return m, cmd
 }
@@ -597,6 +598,7 @@ func (m *Model) handleApplyOutput(msg ApplyOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	// Update resource status from apply output
 	if m.operationState != nil {
 		m.operationState.ParseApplyLine(msg.Line)
@@ -613,8 +615,25 @@ func (m *Model) handleRefreshOutput(msg RefreshOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	cmd := m.streamRefreshOutputCmd()
 	return m, cmd
+}
+
+func (m *Model) updateStateLockStatus(line string) {
+	if m.progressIndicator == nil {
+		return
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	if strings.Contains(normalized, "acquiring state lock") {
+		m.progressIndicator.SetDetail("waiting for state lock")
+		return
+	}
+
+	if strings.Contains(normalized, "releasing state lock") || strings.Contains(normalized, "acquired state lock") {
+		m.progressIndicator.SetDetail("")
+	}
 }
 
 func (m *Model) handleHistoryLoaded(msg HistoryLoadedMsg) tea.Model {

@@ -1,6 +1,8 @@
 package components
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -44,6 +46,7 @@ type ProgressIndicator struct {
 	styles    *styles.Styles
 	state     ProgressState
 	operation ProgressOperation
+	detail    string
 	spinner   spinner.Model
 }
 
@@ -75,6 +78,7 @@ func (p *ProgressIndicator) Fail() {
 func (p *ProgressIndicator) Reset() {
 	p.state = ProgressIdle
 	p.operation = OperationNone
+	p.detail = ""
 }
 
 // Update handles tick messages for animation.
@@ -116,6 +120,11 @@ func (p *ProgressIndicator) SetStyles(s *styles.Styles) {
 	p.styles = s
 }
 
+// SetDetail updates optional running-state detail text.
+func (p *ProgressIndicator) SetDetail(detail string) {
+	p.detail = strings.TrimSpace(detail)
+}
+
 func (p *ProgressIndicator) getIconAndText() (string, string) {
 	var runningText, failedText string
 
@@ -144,6 +153,9 @@ func (p *ProgressIndicator) getIconAndText() (string, string) {
 
 	switch p.state {
 	case ProgressRunning:
+		if p.detail != "" {
+			return "", runningText + " - " + p.detail
+		}
 		return "", runningText
 	case ProgressFailed:
 		return "●", failedText
