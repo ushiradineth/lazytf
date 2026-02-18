@@ -132,6 +132,8 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleReplace, m.handleActionToggleReplace)
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
+	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
+	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
 
 	// Tab actions
 	r.RegisterHandler(keybinds.ActionSwitchTabPrev, m.handleActionSwitchTabPrev)
@@ -602,10 +604,64 @@ func (m *Model) handleActionSelectEnv(_ *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionConfirmYes(_ *keybinds.Context) tea.Cmd {
 	m.modalState = ModalNone
-	return m.beginApply()
+	return m.consumePendingConfirmCmd(m.beginApply())
 }
 
 func (m *Model) handleActionConfirmNo(_ *keybinds.Context) tea.Cmd {
 	m.modalState = ModalNone
+	m.pendingConfirmCmd = nil
 	return nil
+}
+
+func (m *Model) handleActionStateRemove(ctx *keybinds.Context) tea.Cmd {
+	if !m.canRunStateMutation(ctx) {
+		return nil
+	}
+	selected := m.stateListContent.GetSelected()
+	if selected == nil {
+		return m.toastInfo("No state resource selected")
+	}
+	message := "This will remove the selected resource from Terraform state.\n\n" +
+		"Address:\n  " + selected.Address +
+		"\n\nA state backup will be created before removal. Continue?"
+	m.showConfirmModal("Confirm State Remove", message, "Yes, remove", m.beginStateRm(selected.Address))
+	return nil
+}
+
+func (m *Model) handleActionStateMove(ctx *keybinds.Context) tea.Cmd {
+	if !m.canRunStateMutation(ctx) {
+		return nil
+	}
+	selected := m.stateListContent.GetSelected()
+	if selected == nil {
+		return m.toastInfo("No state resource selected")
+	}
+	if m.stateMoveSource == "" {
+		m.stateMoveSource = selected.Address
+		return m.toastInfo("Move source selected: " + selected.Address + ". Select destination and press m again")
+	}
+	if m.stateMoveSource == selected.Address {
+		m.stateMoveSource = ""
+		return m.toastInfo("Move source cleared")
+	}
+	source := m.stateMoveSource
+	destination := selected.Address
+	message := "This will move Terraform state to a new address.\n\n" +
+		"From:\n  " + source + "\n\nTo:\n  " + destination +
+		"\n\nA state backup will be created before move. Continue?"
+	m.showConfirmModal("Confirm State Move", message, "Yes, move", m.beginStateMv(source, destination))
+	return nil
+}
+
+func (m *Model) canRunStateMutation(ctx *keybinds.Context) bool {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 1 {
+		return false
+	}
+	if m.stateListContent == nil {
+		return false
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		return false
+	}
+	return true
 }

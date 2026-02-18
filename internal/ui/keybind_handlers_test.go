@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
 )
@@ -207,6 +208,61 @@ func TestHandleActionSelectPanelNone(t *testing.T) {
 	cmd := m.handleActionSelect(ctx)
 	if cmd != nil {
 		t.Error("expected nil cmd for PanelNone")
+	}
+}
+
+func TestHandleActionStateRemoveShowsConfirmModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+	m.executor = setupMockExecutor(t)
+	m.stateListContent.SetResources([]terraform.StateResource{{Address: "null_resource.example"}})
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionStateRemove(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil cmd while showing confirm modal")
+	}
+	if m.modalState != ModalConfirmApply {
+		t.Fatalf("expected confirm modal state, got %v", m.modalState)
+	}
+	if m.pendingConfirmCmd == nil {
+		t.Fatal("expected pending confirm command for state remove")
+	}
+}
+
+func TestHandleActionStateMoveTwoStepSelection(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+	m.executor = setupMockExecutor(t)
+	m.stateListContent.SetResources([]terraform.StateResource{{Address: "null_resource.a"}, {Address: "null_resource.b"}})
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionStateMove(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil toast cmd for source selection")
+	}
+	if m.stateMoveSource != "null_resource.a" {
+		t.Fatalf("expected source selection, got %q", m.stateMoveSource)
+	}
+
+	m.stateListContent.MoveDown()
+	cmd = m.handleActionStateMove(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil cmd while showing move confirmation")
+	}
+	if m.modalState != ModalConfirmApply {
+		t.Fatalf("expected confirm modal state, got %v", m.modalState)
+	}
+	if m.pendingConfirmCmd == nil {
+		t.Fatal("expected pending confirm command for state move")
 	}
 }
 

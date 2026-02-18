@@ -977,6 +977,86 @@ func TestHandleStateShowCompleteResourceNotFound(t *testing.T) {
 	}
 }
 
+func TestBeginStateRmCreatesBackupAndRunsRemove(t *testing.T) {
+	mock := setupMockExecutor(t)
+	workDir := t.TempDir()
+	mock.MockWorkDir = workDir
+	mock.StatePullResult = testutil.NewMockResult(`{"version":4}`, 0)
+	mock.StateRmResult = testutil.NewMockResult("Removed", 0)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.beginStateRm("null_resource.example")
+	if cmd == nil {
+		t.Fatal("expected non-nil state rm cmd")
+	}
+	raw := cmd()
+	msg, ok := raw.(StateRmCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateRmCompleteMsg, got %T", raw)
+	}
+	if msg.Error != nil {
+		t.Fatalf("unexpected state rm error: %v", msg.Error)
+	}
+	if msg.BackupPath == "" {
+		t.Fatal("expected backup path")
+	}
+	if _, err := os.Stat(msg.BackupPath); err != nil {
+		t.Fatalf("expected backup file to exist: %v", err)
+	}
+	if mock.StatePullCalls != 1 {
+		t.Fatalf("expected one state pull call, got %d", mock.StatePullCalls)
+	}
+	if mock.StateRmCalls != 1 {
+		t.Fatalf("expected one state rm call, got %d", mock.StateRmCalls)
+	}
+}
+
+func TestBeginStateMvCreatesBackupAndRunsMove(t *testing.T) {
+	mock := setupMockExecutor(t)
+	workDir := t.TempDir()
+	mock.MockWorkDir = workDir
+	mock.StatePullResult = testutil.NewMockResult(`{"version":4}`, 0)
+	mock.StateMvResult = testutil.NewMockResult("Moved", 0)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.beginStateMv("null_resource.old", "null_resource.new")
+	if cmd == nil {
+		t.Fatal("expected non-nil state mv cmd")
+	}
+	raw := cmd()
+	msg, ok := raw.(StateMvCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateMvCompleteMsg, got %T", raw)
+	}
+	if msg.Error != nil {
+		t.Fatalf("unexpected state mv error: %v", msg.Error)
+	}
+	if msg.BackupPath == "" {
+		t.Fatal("expected backup path")
+	}
+	if _, err := os.Stat(msg.BackupPath); err != nil {
+		t.Fatalf("expected backup file to exist: %v", err)
+	}
+	if mock.StatePullCalls != 1 {
+		t.Fatalf("expected one state pull call, got %d", mock.StatePullCalls)
+	}
+	if mock.StateMvCalls != 1 {
+		t.Fatalf("expected one state mv call, got %d", mock.StateMvCalls)
+	}
+}
+
 // ============================================================================
 // handleRefreshComplete tests
 // ============================================================================

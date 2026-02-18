@@ -125,6 +125,25 @@ type StateShowCompleteMsg struct {
 	Error   error
 }
 
+// StateRmCompleteMsg signals state rm completion.
+type StateRmCompleteMsg struct {
+	Address    string
+	BackupPath string
+	Output     string
+	Error      error
+	Result     *terraform.ExecutionResult
+}
+
+// StateMvCompleteMsg signals state mv completion.
+type StateMvCompleteMsg struct {
+	Source      string
+	Destination string
+	BackupPath  string
+	Output      string
+	Error       error
+	Result      *terraform.ExecutionResult
+}
+
 // HistoryLoadedMsg delivers history entries.
 type HistoryLoadedMsg struct {
 	Entries []history.Entry

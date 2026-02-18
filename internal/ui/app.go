@@ -82,6 +82,8 @@ type Model struct {
 	stateListView      *views.StateListView
 	stateShowView      *views.StateShowView
 	stateListContent   *components.StateListContent
+	stateMoveSource    string
+	pendingConfirmCmd  tea.Cmd
 	resourcesActiveTab int // 0 = Resources, 1 = State
 	lastPlanOutput     string
 	config             *config.Config
@@ -412,6 +414,12 @@ func (m *Model) handleSecondaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return model, cmd, true
 	case StateShowCompleteMsg:
 		model, cmd := m.handleStateShowComplete(msg)
+		return model, cmd, true
+	case StateRmCompleteMsg:
+		model, cmd := m.handleStateRmComplete(msg)
+		return model, cmd, true
+	case StateMvCompleteMsg:
+		model, cmd := m.handleStateMvComplete(msg)
 		return model, cmd, true
 	default:
 		return m.handleTertiaryUpdate(msg)
@@ -804,13 +812,15 @@ func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, tea.Quit
 	case "y", "Y":
 		m.modalState = ModalNone
-		return true, m.beginApply()
+		return true, m.consumePendingConfirmCmd(m.beginApply())
 	case "n", "N", "esc":
 		m.modalState = ModalNone
+		m.pendingConfirmCmd = nil
 		return true, nil
 	case "ctrl+c":
 		m.cancelExecution()
 		m.modalState = ModalNone
+		m.pendingConfirmCmd = nil
 		return true, nil
 	default:
 		return true, nil
@@ -863,16 +873,31 @@ func (m *Model) showConfirmApplyModal() {
 	// Build the confirmation message with plan summary
 	summary := m.planSummaryVerbose()
 	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
+	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.beginApply())
+}
 
+func (m *Model) showConfirmModal(title, message, yesLabel string, yesCmd tea.Cmd) {
+	if m.helpModal == nil {
+		return
+	}
 	actions := []components.ModalAction{
-		{Key: "y", Label: "Yes, apply"},
+		{Key: "y", Label: yesLabel},
 		{Key: "n", Label: "No, cancel"},
 	}
-
-	m.helpModal.SetTitle("Confirm Apply")
+	m.helpModal.SetTitle(title)
 	m.helpModal.SetConfirm(message, actions)
 	m.helpModal.Show()
+	m.pendingConfirmCmd = yesCmd
 	m.modalState = ModalConfirmApply
+}
+
+func (m *Model) consumePendingConfirmCmd(fallback tea.Cmd) tea.Cmd {
+	if m.pendingConfirmCmd == nil {
+		return fallback
+	}
+	cmd := m.pendingConfirmCmd
+	m.pendingConfirmCmd = nil
+	return cmd
 }
 
 func (m *Model) canSwitchResourcesTab() bool {
