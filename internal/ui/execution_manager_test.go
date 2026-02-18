@@ -958,6 +958,31 @@ func TestHandleStateListCompleteWithError(t *testing.T) {
 	}
 }
 
+func TestStateListSessionOutputIncludesStderrOnError(t *testing.T) {
+	msg := StateListCompleteMsg{
+		Error:  errors.New("exit status 1"),
+		Output: "No state file was found\nRun terraform init first",
+	}
+
+	out := stateListSessionOutput(msg)
+	if !strings.Contains(out, "No state file was found") {
+		t.Fatalf("expected stderr details in session output, got %q", out)
+	}
+}
+
+func TestStateListResultOutputPrefersStderr(t *testing.T) {
+	result := &terraform.ExecutionResult{
+		Stdout: "stdout content",
+		Stderr: "stderr content",
+		Output: "combined content",
+	}
+
+	out := stateListResultOutput(result)
+	if out != "stderr content" {
+		t.Fatalf("expected stderr content, got %q", out)
+	}
+}
+
 // ============================================================================
 // handleStateShowComplete tests
 // ============================================================================
@@ -5768,5 +5793,46 @@ func TestBeginStateMvUsesCombinedResultOutputOnError(t *testing.T) {
 	}
 	if !strings.Contains(msg.Output, "destination address already exists") {
 		t.Fatalf("expected terraform stderr in output, got %q", msg.Output)
+	}
+}
+
+func TestHandleInitCompleteSuccess(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := InitCompleteMsg{Output: "Terraform has been successfully initialized!"}
+	model, cmd := m.handleInitComplete(msg)
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Fatal("expected success toast command")
+	}
+
+	if m.commandLogPanel == nil {
+		t.Fatal("expected command log panel")
+	}
+	if got := m.commandLogPanel.View(); !strings.Contains(got, "terraform init") {
+		t.Fatalf("expected init command log entry, got %q", got)
+	}
+}
+
+func TestHandleInitCompleteError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	msg := InitCompleteMsg{Error: errors.New("init failed")}
+	model, cmd := m.handleInitComplete(msg)
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if cmd == nil {
+		t.Fatal("expected error toast command")
 	}
 }

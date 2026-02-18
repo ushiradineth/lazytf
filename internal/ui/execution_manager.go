@@ -546,6 +546,89 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
+func (m *Model) beginInit(upgrade bool) tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	if m.planRunning || m.applyRunning || m.refreshRunning {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
+		return nil
+	}
+	initEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	if m.toast != nil {
+		if upgrade {
+			m.toast.ShowInfo("Running terraform init -upgrade...")
+		} else {
+			m.toast.ShowInfo("Running terraform init...")
+		}
+	}
+
+	var progressCmd tea.Cmd
+	if m.progressIndicator != nil {
+		progressCmd = m.progressIndicator.Start(components.OperationInit)
+	}
+
+	initCmd := func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		result, err := m.executor.Init(ctx, terraform.InitOptions{Upgrade: upgrade, Env: initEnv})
+		if err != nil {
+			return InitCompleteMsg{Error: err, Upgrade: upgrade}
+		}
+		if result == nil {
+			return InitCompleteMsg{Error: errors.New("init execution result missing"), Upgrade: upgrade}
+		}
+		return InitCompleteMsg{Output: strings.TrimSpace(result.Output), Result: result, Error: result.Error, Upgrade: upgrade}
+	}
+
+	if progressCmd != nil {
+		return tea.Batch(initCmd, progressCmd)
+	}
+	return initCmd
+}
+
+func (m *Model) handleInitComplete(msg InitCompleteMsg) (tea.Model, tea.Cmd) {
+	output := strings.TrimSpace(msg.Output)
+	if output == "" && msg.Error != nil {
+		output = msg.Error.Error()
+	}
+	if output == "" {
+		output = "Terraform init completed"
+	}
+
+	if m.commandLogPanel != nil {
+		command := "terraform init"
+		if msg.Upgrade {
+			command = "terraform init -upgrade"
+		}
+		m.commandLogPanel.AppendSessionLog("Initialized", command, output)
+	}
+
+	if msg.Error != nil {
+		if m.progressIndicator != nil {
+			m.progressIndicator.Fail()
+		}
+		m.addErrorDiagnostic("Init failed", msg.Error, output)
+		cmd := m.toastError(fmt.Sprintf("Init failed: %v", msg.Error))
+		return m, cmd
+	}
+
+	if m.progressIndicator != nil {
+		m.progressIndicator.Reset()
+	}
+	m.setDiagnostics(nil)
+	cmd := m.toastSuccess("Terraform initialized")
+	return m, cmd
+}
+
 func (m *Model) beginStateList() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
@@ -582,10 +665,10 @@ func (m *Model) beginStateList() tea.Cmd {
 			return StateListCompleteMsg{Error: err}
 		}
 		if result.Error != nil {
-			return StateListCompleteMsg{Error: result.Error}
+			return StateListCompleteMsg{Error: result.Error, Output: stateListResultOutput(result)}
 		}
 		resources := parseStateListResources(result.Stdout)
-		return StateListCompleteMsg{Resources: resources}
+		return StateListCompleteMsg{Resources: resources, Output: stateListResultOutput(result)}
 	}
 
 	if progressCmd != nil {
@@ -608,9 +691,9 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 			m.progressIndicator.Fail()
 		}
 		if m.stateListContent != nil {
-			m.stateListContent.SetError(msg.Error.Error())
+			m.stateListContent.SetError(stateListErrorText(msg))
 		}
-		m.addErrorDiagnostic("State list failed", msg.Error, "")
+		m.addErrorDiagnostic("State list failed", msg.Error, msg.Output)
 		var cmd tea.Cmd
 		if m.toast != nil {
 			cmd = m.toast.ShowError(fmt.Sprintf("State list failed: %v", msg.Error))
@@ -877,7 +960,11 @@ func (m *Model) showSelectedStateDetail() tea.Cmd {
 
 func stateListSessionOutput(msg StateListCompleteMsg) string {
 	if msg.Error != nil {
-		return msg.Error.Error()
+		return stateListErrorText(msg)
+	}
+	output := strings.TrimSpace(msg.Output)
+	if output != "" {
+		return output
 	}
 	if len(msg.Resources) == 0 {
 		return "0 resources"
@@ -887,6 +974,35 @@ func stateListSessionOutput(msg StateListCompleteMsg) string {
 		addresses[i] = r.Address
 	}
 	return fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+}
+
+func stateListErrorText(msg StateListCompleteMsg) string {
+	if msg.Error == nil {
+		return ""
+	}
+	output := strings.TrimSpace(msg.Output)
+	if output == "" {
+		return msg.Error.Error()
+	}
+	if output == msg.Error.Error() {
+		return output
+	}
+	return msg.Error.Error() + "\n\n" + output
+}
+
+func stateListResultOutput(result *terraform.ExecutionResult) string {
+	if result == nil {
+		return ""
+	}
+	stderr := strings.TrimSpace(result.Stderr)
+	if stderr != "" {
+		return stderr
+	}
+	stdout := strings.TrimSpace(result.Stdout)
+	if stdout != "" {
+		return stdout
+	}
+	return strings.TrimSpace(result.Output)
 }
 
 func parseStateListResources(stdout string) []terraform.StateResource {

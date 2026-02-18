@@ -31,7 +31,7 @@ func TestTerraformWorkflowIntegration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	initResult, err := exec.Init(ctx)
+	initResult, err := exec.Init(ctx, terraform.InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}

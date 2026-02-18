@@ -28,6 +28,7 @@ type MockExecutor struct {
 
 	// Last call arguments (for verification)
 	LastPlanOpts      terraform.PlanOptions
+	LastInitOpts      terraform.InitOptions
 	LastApplyOpts     terraform.ApplyOptions
 	LastRefreshOpts   terraform.RefreshOptions
 	LastValidateOpts  terraform.ValidateOptions
@@ -134,10 +135,11 @@ func NewMockOutputChannel(lines ...string) chan string {
 }
 
 // Init implements ExecutorInterface.
-func (m *MockExecutor) Init(_ context.Context) (*terraform.ExecutionResult, error) {
+func (m *MockExecutor) Init(_ context.Context, opts terraform.InitOptions) (*terraform.ExecutionResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.InitCalls++
+	m.LastInitOpts = opts
 
 	if m.InitErr != nil {
 		return nil, m.InitErr

@@ -119,6 +119,8 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleHistory, m.handleActionToggleHistory)
 
 	// Execution actions
+	r.RegisterHandler(keybinds.ActionInit, m.handleActionInit)
+	r.RegisterHandler(keybinds.ActionInitUpgrade, m.handleActionInitUpgrade)
 	r.RegisterHandler(keybinds.ActionPlan, m.handleActionPlan)
 	r.RegisterHandler(keybinds.ActionApply, m.handleActionApply)
 	r.RegisterHandler(keybinds.ActionRefresh, m.handleActionRefresh)
@@ -345,6 +347,20 @@ func (m *Model) handleActionToggleHistory(_ *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionPlan(_ *keybinds.Context) tea.Cmd {
 	return requestPlan()
+}
+
+func (m *Model) handleActionInit(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 1 {
+		return nil
+	}
+	return m.beginInit(false)
+}
+
+func (m *Model) handleActionInitUpgrade(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 1 {
+		return nil
+	}
+	return m.beginInit(true)
 }
 
 func (m *Model) handleActionApply(_ *keybinds.Context) tea.Cmd {

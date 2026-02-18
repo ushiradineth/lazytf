@@ -392,11 +392,16 @@ func TestExecutorInitAndShow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new executor: %v", err)
 	}
-	result, err := exec.Init(context.Background())
+	result, err := exec.Init(context.Background(), InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}
-	<-result.Done()
+	if result.ExitCode != 0 {
+		t.Fatalf("expected successful init, got exit code %d", result.ExitCode)
+	}
+	if !strings.Contains(result.Output, "stdout init") {
+		t.Fatalf("expected init output to be populated, got %q", result.Output)
+	}
 
 	planFile := filepath.Join(dir, "plan.tfplan")
 	if err := os.WriteFile(planFile, []byte("plan"), 0o600); err != nil {
@@ -411,6 +416,26 @@ func TestExecutorInitAndShow(t *testing.T) {
 	}
 	if showResult.Output != "" && !strings.Contains(showResult.Output, "show output") {
 		t.Fatalf("unexpected show output: %q", showResult.Output)
+	}
+}
+
+func TestExecutorInitUpgradeAddsFlag(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.Init(context.Background(), InitOptions{Upgrade: true})
+	if err != nil {
+		t.Fatalf("init error: %v", err)
+	}
+	if !strings.Contains(result.Output, "ARGS:init -upgrade") {
+		t.Fatalf("expected init -upgrade args, got %q", result.Output)
 	}
 }
 

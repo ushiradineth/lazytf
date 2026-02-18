@@ -20,7 +20,7 @@ func TestIntegrationPlanApplyWorkflow(t *testing.T) {
 	executor := newTerraformExecutor(t, workdir)
 
 	ctx := context.Background()
-	initResult, err := executor.Init(ctx)
+	initResult, err := executor.Init(ctx, terraform.InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestIntegrationPlanParsingModuleFixture(t *testing.T) {
 	executor := newTerraformExecutor(t, workdir)
 
 	ctx := context.Background()
-	initResult, err := executor.Init(ctx)
+	initResult, err := executor.Init(ctx, terraform.InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}

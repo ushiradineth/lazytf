@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -69,6 +70,111 @@ func TestHandleActionRefreshOutsideStateTabRequestsTerraformRefresh(t *testing.T
 	msg := cmd()
 	if _, ok := msg.(RequestRefreshMsg); !ok {
 		t.Fatalf("expected RequestRefreshMsg, got %T", msg)
+	}
+}
+
+func TestHandleActionInitOnStateTabRunsTerraformInit(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+
+	mock := setupMockExecutor(t)
+	mock.InitResult = testutil.NewMockResult("Terraform has been successfully initialized!", 0)
+	m.executor = mock
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionInit(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil init command")
+	}
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	foundInitComplete := false
+	for _, batchCmd := range batch {
+		if batchCmd == nil {
+			continue
+		}
+		if _, ok := batchCmd().(InitCompleteMsg); ok {
+			foundInitComplete = true
+			break
+		}
+	}
+	if !foundInitComplete {
+		t.Fatal("expected batch to include InitCompleteMsg command")
+	}
+	if mock.InitCalls != 1 {
+		t.Fatalf("expected one init call, got %d", mock.InitCalls)
+	}
+	if mock.LastInitOpts.Upgrade {
+		t.Fatal("expected standard init without upgrade")
+	}
+}
+
+func TestHandleActionInitUpgradeOnStateTabRunsTerraformInitUpgrade(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+
+	mock := setupMockExecutor(t)
+	mock.InitResult = testutil.NewMockResult("Terraform has been successfully initialized!", 0)
+	m.executor = mock
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionInitUpgrade(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil init upgrade command")
+	}
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	foundInitComplete := false
+	for _, batchCmd := range batch {
+		if batchCmd == nil {
+			continue
+		}
+		if _, ok := batchCmd().(InitCompleteMsg); ok {
+			foundInitComplete = true
+			break
+		}
+	}
+	if !foundInitComplete {
+		t.Fatal("expected batch to include InitCompleteMsg command")
+	}
+	if mock.InitCalls != 1 {
+		t.Fatalf("expected one init call, got %d", mock.InitCalls)
+	}
+	if !mock.LastInitOpts.Upgrade {
+		t.Fatal("expected init upgrade option")
+	}
+}
+
+func TestHandleActionInitOutsideStateTabNoop(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionInit(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil command outside state tab")
 	}
 }
 
