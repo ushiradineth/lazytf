@@ -336,6 +336,15 @@ func registerResourcesPanelBindings(r *Registry) {
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
 	})
+	r.Register(Binding{
+		Keys:        []string{"o"},
+		Action:      ActionPlanCompare,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "toggle plan compare",
+		Category:    "Resources Panel",
+	})
 
 	// Tab switching
 	r.Register(Binding{

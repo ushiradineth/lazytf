@@ -127,6 +127,9 @@ func (m *Model) handleEscKey() bool {
 	case ModeAbout:
 		m.mainArea.SetMode(ModeDiff)
 		return true
+	case ModePlanCompare:
+		m.mainArea.SetMode(ModeDiff)
+		return true
 	case ModeDiff, ModeLogs:
 		// Nothing to exit from these modes
 		return false

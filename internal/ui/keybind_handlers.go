@@ -133,6 +133,7 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
 	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
+	r.RegisterHandler(keybinds.ActionPlanCompare, m.handleActionPlanCompare)
 	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
 	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
 
@@ -685,4 +686,31 @@ func (m *Model) handleActionCopyAddress(ctx *keybinds.Context) tea.Cmd {
 		return m.toastError("Copy failed: " + err.Error())
 	}
 	return m.toastSuccess("Copied: " + address)
+}
+
+func (m *Model) handleActionPlanCompare(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 0 {
+		return nil
+	}
+	if m.mainArea == nil {
+		return nil
+	}
+	if m.mainArea.GetMode() == ModePlanCompare {
+		m.mainArea.SetMode(ModeDiff)
+		return nil
+	}
+	if m.plan == nil {
+		return m.toastInfo("No plan loaded for comparison")
+	}
+	previous, _, err := m.latestPlanOperation()
+	if err != nil {
+		return m.toastError("Failed to load previous plan: " + err.Error())
+	}
+	content := buildPlanCompareView(summarizePlan(m.plan), previous)
+	m.mainArea.SetPlanCompareContent(content)
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelMain)
+	}
+	m.updateLayout()
+	return nil
 }

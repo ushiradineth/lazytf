@@ -46,6 +46,7 @@ const (
 	ActionStateRemove     Action = "state_remove"
 	ActionStateMove       Action = "state_move"
 	ActionCopyAddress     Action = "copy_selected_address"
+	ActionPlanCompare     Action = "toggle_plan_compare"
 )
 
 // Tab actions.

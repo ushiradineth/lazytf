@@ -2,9 +2,11 @@ package ui
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -366,6 +368,54 @@ func TestHandleActionCopyAddressClipboardError(t *testing.T) {
 	cmd := m.handleActionCopyAddress(ctx)
 	if cmd == nil {
 		t.Fatal("expected non-nil toast cmd on copy error")
+	}
+}
+
+func TestHandleActionPlanCompareShowsCompareMode(t *testing.T) {
+	store, err := history.Open(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.historyStore = store
+	m.plan = &terraform.Plan{Resources: []terraform.ResourceChange{{Action: terraform.ActionCreate}}}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionPlanCompare(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil command when showing plan compare view")
+	}
+	if m.mainArea == nil || m.mainArea.GetMode() != ModePlanCompare {
+		t.Fatal("expected plan compare mode")
+	}
+}
+
+func TestHandleActionPlanCompareToggleBackToDiff(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	if m.mainArea == nil {
+		t.Fatal("expected main area")
+	}
+	m.mainArea.SetMode(ModePlanCompare)
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionPlanCompare(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil command when toggling compare off")
+	}
+	if m.mainArea.GetMode() != ModeDiff {
+		t.Fatal("expected diff mode")
 	}
 }
 
