@@ -4810,6 +4810,73 @@ func TestHandleModalConfirmApplyKeyEsc(t *testing.T) {
 	_ = cmd
 }
 
+func TestShowStateMoveDestinationModal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.showStateMoveDestinationModal("null_resource.a", "module.target.null_resource.a")
+	if m.modalState != ModalStateMoveDestination {
+		t.Fatal("expected destination modal state")
+	}
+	if m.stateMoveSource != "null_resource.a" {
+		t.Fatalf("unexpected source: %q", m.stateMoveSource)
+	}
+	if m.stateMoveInput != "module.target.null_resource.a" {
+		t.Fatalf("unexpected destination input: %q", m.stateMoveInput)
+	}
+}
+
+func TestHandleStateMoveDestinationInputKeyEnterShowsConfirm(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.executor = setupMockExecutor(t)
+
+	m.stateMoveSource = "null_resource.a"
+	m.stateMoveInput = "module.target.null_resource.a"
+	m.modalState = ModalStateMoveDestination
+
+	handled, cmd := m.handleStateMoveDestinationInputKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("expected key to be handled")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil command on successful transition to confirm modal")
+	}
+	if m.modalState != ModalConfirmApply {
+		t.Fatalf("expected confirm modal state, got %v", m.modalState)
+	}
+	if m.pendingConfirmCmd == nil {
+		t.Fatal("expected pending confirm command to be set")
+	}
+}
+
+func TestHandleStateMoveDestinationInputKeyBackspace(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.stateMoveSource = "null_resource.a"
+	m.stateMoveInput = "module.target.null_resource.a"
+	m.modalState = ModalStateMoveDestination
+
+	handled, cmd := m.handleStateMoveDestinationInputKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	if !handled {
+		t.Fatal("expected key to be handled")
+	}
+	_ = cmd
+	if strings.HasSuffix(m.stateMoveInput, "a") {
+		t.Fatalf("expected destination input to be shortened, got %q", m.stateMoveInput)
+	}
+}
+
 func TestPlanSummaryWithChanges(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

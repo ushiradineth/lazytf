@@ -214,3 +214,6 @@ type ToggleAllGroupsMsg struct{}
 type SwitchResourcesTabMsg struct {
 	Direction int // -1 for previous, +1 for next
 }
+
+// StateMoveCursorBlinkMsg toggles cursor visibility in state move input modal.
+type StateMoveCursorBlinkMsg struct{}

@@ -350,7 +350,10 @@ func (m *Model) handleActionApply(_ *keybinds.Context) tea.Cmd {
 	return requestApply()
 }
 
-func (m *Model) handleActionRefresh(_ *keybinds.Context) tea.Cmd {
+func (m *Model) handleActionRefresh(ctx *keybinds.Context) tea.Cmd {
+	if ctx != nil && ctx.FocusedPanel == keybinds.PanelResources && m.resourcesActiveTab == 1 {
+		return m.beginStateList()
+	}
 	return requestRefresh()
 }
 
@@ -604,7 +607,7 @@ func (m *Model) handleActionSelectEnv(_ *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionConfirmYes(_ *keybinds.Context) tea.Cmd {
 	m.modalState = ModalNone
-	return m.consumePendingConfirmCmd(m.beginApply())
+	return m.consumePendingConfirmCmd(m.beginApply)
 }
 
 func (m *Model) handleActionConfirmNo(_ *keybinds.Context) tea.Cmd {
@@ -636,21 +639,8 @@ func (m *Model) handleActionStateMove(ctx *keybinds.Context) tea.Cmd {
 	if selected == nil {
 		return m.toastInfo("No state resource selected")
 	}
-	if m.stateMoveSource == "" {
-		m.stateMoveSource = selected.Address
-		return m.toastInfo("Move source selected: " + selected.Address + ". Select destination and press m again")
-	}
-	if m.stateMoveSource == selected.Address {
-		m.stateMoveSource = ""
-		return m.toastInfo("Move source cleared")
-	}
-	source := m.stateMoveSource
-	destination := selected.Address
-	message := "This will move Terraform state to a new address.\n\n" +
-		"From:\n  " + source + "\n\nTo:\n  " + destination +
-		"\n\nA state backup will be created before move. Continue?"
-	m.showConfirmModal("Confirm State Move", message, "Yes, move", m.beginStateMv(source, destination))
-	return nil
+	m.showStateMoveDestinationModal(selected.Address, selected.Address)
+	return m.stateMoveCursorTickCmd()
 }
 
 func (m *Model) canRunStateMutation(ctx *keybinds.Context) bool {

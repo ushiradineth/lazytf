@@ -645,6 +645,10 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 		return m, cmd
 	}
 
+	if m.mainArea != nil && m.mainArea.GetMode() == ModeStateShow {
+		m.mainArea.SetStateContent("", "No resources in state. Press 'r' to refresh.")
+	}
+
 	return m, nil
 }
 
@@ -721,14 +725,15 @@ func (m *Model) beginStateRm(address string) tea.Cmd {
 			return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Error: err}
 		}
 		if result.Error != nil {
-			return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Stdout, Error: result.Error, Result: result}
+			return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Output, Error: result.Error, Result: result}
 		}
-		return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Stdout, Result: result}
+		return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Output, Result: result}
 	}
 }
 
 func (m *Model) handleStateRmComplete(msg StateRmCompleteMsg) (tea.Model, tea.Cmd) {
 	m.stateMoveSource = ""
+	m.stateMoveInput = ""
 	m.pendingConfirmCmd = nil
 	m.appendSessionLog("State removed", "terraform state rm "+msg.Address, stateMutationSessionOutput(msg.Output, msg.Error, msg.BackupPath))
 
@@ -774,14 +779,15 @@ func (m *Model) beginStateMv(source, destination string) tea.Cmd {
 			return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Error: err}
 		}
 		if result.Error != nil {
-			return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Stdout, Error: result.Error, Result: result}
+			return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Output, Error: result.Error, Result: result}
 		}
-		return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Stdout, Result: result}
+		return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Output, Result: result}
 	}
 }
 
 func (m *Model) handleStateMvComplete(msg StateMvCompleteMsg) (tea.Model, tea.Cmd) {
 	m.stateMoveSource = ""
+	m.stateMoveInput = ""
 	m.pendingConfirmCmd = nil
 	cmdText := "terraform state mv " + msg.Source + " " + msg.Destination
 	m.appendSessionLog("State moved", cmdText, stateMutationSessionOutput(msg.Output, msg.Error, msg.BackupPath))
@@ -804,13 +810,21 @@ func (m *Model) handleStateMvComplete(msg StateMvCompleteMsg) (tea.Model, tea.Cm
 }
 
 func stateMutationSessionOutput(output string, err error, backupPath string) string {
+	trimmedOutput := strings.TrimSpace(output)
 	if err != nil {
-		if backupPath == "" {
-			return err.Error()
+		result := strings.TrimSpace(err.Error())
+		if trimmedOutput != "" {
+			result = trimmedOutput
+			if !strings.Contains(result, err.Error()) {
+				result += "\n" + err.Error()
+			}
 		}
-		return err.Error() + "\nbackup: " + backupPath
+		if backupPath == "" {
+			return result
+		}
+		return result + "\nbackup: " + backupPath
 	}
-	result := strings.TrimSpace(output)
+	result := trimmedOutput
 	if result == "" {
 		result = "State operation complete"
 	}

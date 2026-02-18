@@ -3,10 +3,74 @@ package ui
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
 )
+
+func TestHandleActionRefreshOnStateTabLoadsStateList(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+
+	mock := setupMockExecutor(t)
+	mock.StateListResult = testutil.NewMockResult("null_resource.example", 0)
+	m.executor = mock
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionRefresh(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	foundStateList := false
+	for _, batchCmd := range batch {
+		if batchCmd == nil {
+			continue
+		}
+		if _, ok := batchCmd().(StateListCompleteMsg); ok {
+			foundStateList = true
+			break
+		}
+	}
+	if !foundStateList {
+		t.Fatal("expected batch to include StateListCompleteMsg command")
+	}
+	if mock.StateListCalls != 1 {
+		t.Fatalf("expected one state list call, got %d", mock.StateListCalls)
+	}
+}
+
+func TestHandleActionRefreshOutsideStateTabRequestsTerraformRefresh(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionRefresh(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+
+	msg := cmd()
+	if _, ok := msg.(RequestRefreshMsg); !ok {
+		t.Fatalf("expected RequestRefreshMsg, got %T", msg)
+	}
+}
 
 func TestConvertPanelID(t *testing.T) {
 	tests := []struct {
@@ -234,7 +298,7 @@ func TestHandleActionStateRemoveShowsConfirmModal(t *testing.T) {
 	}
 }
 
-func TestHandleActionStateMoveTwoStepSelection(t *testing.T) {
+func TestHandleActionStateMoveShowsDestinationInput(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
 	m.width = 100
@@ -247,22 +311,16 @@ func TestHandleActionStateMoveTwoStepSelection(t *testing.T) {
 	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
 	cmd := m.handleActionStateMove(ctx)
 	if cmd == nil {
-		t.Fatal("expected non-nil toast cmd for source selection")
+		t.Fatal("expected non-nil cursor blink command for destination input modal")
 	}
 	if m.stateMoveSource != "null_resource.a" {
-		t.Fatalf("expected source selection, got %q", m.stateMoveSource)
+		t.Fatalf("expected source to match selected item, got %q", m.stateMoveSource)
 	}
-
-	m.stateListContent.MoveDown()
-	cmd = m.handleActionStateMove(ctx)
-	if cmd != nil {
-		t.Fatal("expected nil cmd while showing move confirmation")
+	if m.modalState != ModalStateMoveDestination {
+		t.Fatalf("expected destination input modal state, got %v", m.modalState)
 	}
-	if m.modalState != ModalConfirmApply {
-		t.Fatalf("expected confirm modal state, got %v", m.modalState)
-	}
-	if m.pendingConfirmCmd == nil {
-		t.Fatal("expected pending confirm command for state move")
+	if m.pendingConfirmCmd != nil {
+		t.Fatal("expected no pending confirm command before destination input is confirmed")
 	}
 }
 

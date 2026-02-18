@@ -371,7 +371,7 @@ func registerExecutionBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         1,
 		Condition:   ConditionExecutionMode,
-		Description: "refresh",
+		Description: "reload state list",
 		Category:    "Execution",
 	})
 	r.Register(Binding{

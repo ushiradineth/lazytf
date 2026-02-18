@@ -917,6 +917,30 @@ func TestHandleStateListCompleteEmpty(t *testing.T) {
 	}
 }
 
+func TestHandleStateListCompleteEmptyClearsStaleStateDetails(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.mainArea == nil {
+		t.Fatal("expected non-nil main area")
+	}
+	m.mainArea.SetStateContent("null_resource.example", "stale content")
+
+	msg := StateListCompleteMsg{Resources: []terraform.StateResource{}}
+	model, _ := m.handleStateListComplete(msg)
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+
+	view := m.mainArea.View()
+	if !strings.Contains(view, "No resources in state. Press 'r' to refresh.") {
+		t.Fatal("expected main area to show empty state message")
+	}
+}
+
 func TestHandleStateListCompleteWithError(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
@@ -4369,6 +4393,45 @@ func TestHandleModalConfirmApplyKeyYesExec(t *testing.T) {
 	}
 }
 
+func TestHandleModalConfirmApplyKeyYesUsesPendingCmdWithoutStartingApply(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.modalState = ModalConfirmApply
+
+	pendingCalled := false
+	m.pendingConfirmCmd = func() tea.Msg {
+		pendingCalled = true
+		return nil
+	}
+
+	handled, cmd := m.handleModalConfirmApplyKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if !handled {
+		t.Error("expected handled to be true")
+	}
+	if m.modalState != ModalNone {
+		t.Error("expected modalState to be ModalNone")
+	}
+	if m.applyRunning {
+		t.Error("expected applyRunning to remain false")
+	}
+	if m.pendingConfirmCmd != nil {
+		t.Error("expected pendingConfirmCmd to be consumed")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+	_ = cmd()
+	if !pendingCalled {
+		t.Error("expected pending confirm command to run")
+	}
+}
+
 func TestHandleModalConfirmApplyKeyNoExec(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.modalState = ModalConfirmApply
@@ -5659,4 +5722,51 @@ func TestHandleSwitchResourcesTabToStateListTab(t *testing.T) {
 	}
 	_ = cmd
 	_ = handled
+}
+
+func TestStateMutationSessionOutputIncludesTerraformOutputOnError(t *testing.T) {
+	err := errors.New("exit status 1")
+	output := "Error: Invalid target address\n\nDestination address already exists"
+
+	result := stateMutationSessionOutput(output, err, "/tmp/backup.tfstate")
+	if !strings.Contains(result, "Destination address already exists") {
+		t.Fatalf("expected terraform error output in session log, got: %q", result)
+	}
+	if !strings.Contains(result, "backup: /tmp/backup.tfstate") {
+		t.Fatalf("expected backup path in session log, got: %q", result)
+	}
+}
+
+func TestBeginStateMvUsesCombinedResultOutputOnError(t *testing.T) {
+	mock := setupMockExecutor(t)
+	workDir := t.TempDir()
+	mock.MockWorkDir = workDir
+	mock.StatePullResult = testutil.NewMockResult(`{"version":4}`, 0)
+
+	result := testutil.NewMockErrorResult("Error: destination address already exists", errors.New("exit status 1"))
+	result.Output = "Error: destination address already exists"
+	mock.StateMvResult = result
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.beginStateMv("null_resource.example", "null_resource.example2")
+	if cmd == nil {
+		t.Fatal("expected non-nil state mv cmd")
+	}
+	raw := cmd()
+	msg, ok := raw.(StateMvCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateMvCompleteMsg, got %T", raw)
+	}
+	if msg.Error == nil {
+		t.Fatal("expected state mv error")
+	}
+	if !strings.Contains(msg.Output, "destination address already exists") {
+		t.Fatalf("expected terraform stderr in output, got %q", msg.Output)
+	}
 }

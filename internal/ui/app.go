@@ -83,6 +83,8 @@ type Model struct {
 	stateShowView      *views.StateShowView
 	stateListContent   *components.StateListContent
 	stateMoveSource    string
+	stateMoveInput     string
+	stateMoveCursorOn  bool
 	pendingConfirmCmd  tea.Cmd
 	resourcesActiveTab int // 0 = Resources, 1 = State
 	lastPlanOutput     string
@@ -140,6 +142,7 @@ const (
 	ModalHelp
 	ModalSettings
 	ModalConfirmApply
+	ModalStateMoveDestination
 	ModalTheme
 )
 
@@ -447,6 +450,15 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, cmd, true
 		}
 		return m, nil, true
+	case StateMoveCursorBlinkMsg:
+		if m.modalState != ModalStateMoveDestination {
+			m.stateMoveCursorOn = false
+			return m, nil, true
+		}
+		m.stateMoveCursorOn = !m.stateMoveCursorOn
+		m.updateStateMoveDestinationModal()
+		cmd := m.stateMoveCursorTickCmd()
+		return m, cmd, true
 	case components.EnvironmentChangedMsg:
 		model, cmd := m.handleEnvironmentChanged(msg)
 		return model, cmd, true
@@ -755,10 +767,77 @@ func (m *Model) handlePriorityKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if handled, cmd := m.handleEnvironmentPanelKey(msg); handled {
 		return true, cmd
 	}
+	if handled, cmd := m.handleStateMoveDestinationInputKey(msg); handled {
+		return true, cmd
+	}
 	if m.inputCaptured() {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (m *Model) handleStateMoveDestinationInputKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m.modalState != ModalStateMoveDestination {
+		return false, nil
+	}
+
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.modalState = ModalNone
+		m.stateMoveCursorOn = false
+		if m.helpModal != nil {
+			m.helpModal.Hide()
+		}
+		return true, nil
+	case tea.KeyCtrlC:
+		m.modalState = ModalNone
+		m.stateMoveCursorOn = false
+		if m.helpModal != nil {
+			m.helpModal.Hide()
+		}
+		return true, nil
+	case tea.KeyEnter:
+		destination := strings.TrimSpace(m.stateMoveInput)
+		source := strings.TrimSpace(m.stateMoveSource)
+		if destination == "" {
+			return true, m.toastInfo("Destination address cannot be empty")
+		}
+		if source == "" {
+			m.modalState = ModalNone
+			m.stateMoveCursorOn = false
+			if m.helpModal != nil {
+				m.helpModal.Hide()
+			}
+			return true, m.toastInfo("Move source cleared. Select source and press m again")
+		}
+		if destination == source {
+			return true, m.toastInfo("Destination must be different from source")
+		}
+		m.modalState = ModalNone
+		m.stateMoveCursorOn = false
+		message := "This will move Terraform state to a new address.\n\n" +
+			"From:\n  " + source + "\n\nTo:\n  " + destination +
+			"\n\nA state backup will be created before move. Continue?"
+		m.showConfirmModal("Confirm State Move", message, "Yes, move", m.beginStateMv(source, destination))
+		return true, nil
+	case tea.KeyBackspace, tea.KeyDelete:
+		if m.stateMoveInput != "" {
+			runes := []rune(m.stateMoveInput)
+			m.stateMoveInput = string(runes[:len(runes)-1])
+		}
+		m.stateMoveCursorOn = true
+		m.updateStateMoveDestinationModal()
+		return true, m.stateMoveCursorTickCmd()
+	case tea.KeyRunes:
+		if len(msg.Runes) > 0 {
+			m.stateMoveInput += string(msg.Runes)
+			m.stateMoveCursorOn = true
+			m.updateStateMoveDestinationModal()
+		}
+		return true, m.stateMoveCursorTickCmd()
+	default:
+		return true, nil
+	}
 }
 
 func (m *Model) handleNonMainExecutionKey(msg tea.KeyMsg) (bool, tea.Cmd) {
@@ -812,7 +891,7 @@ func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, tea.Quit
 	case "y", "Y":
 		m.modalState = ModalNone
-		return true, m.consumePendingConfirmCmd(m.beginApply())
+		return true, m.consumePendingConfirmCmd(m.beginApply)
 	case "n", "N", "esc":
 		m.modalState = ModalNone
 		m.pendingConfirmCmd = nil
@@ -891,9 +970,52 @@ func (m *Model) showConfirmModal(title, message, yesLabel string, yesCmd tea.Cmd
 	m.modalState = ModalConfirmApply
 }
 
-func (m *Model) consumePendingConfirmCmd(fallback tea.Cmd) tea.Cmd {
+func (m *Model) showStateMoveDestinationModal(source, initialDestination string) {
+	if m.helpModal == nil {
+		return
+	}
+	m.stateMoveSource = source
+	m.stateMoveInput = initialDestination
+	m.stateMoveCursorOn = true
+	m.modalState = ModalStateMoveDestination
+	m.updateStateMoveDestinationModal()
+	m.helpModal.Show()
+}
+
+func (m *Model) updateStateMoveDestinationModal() {
+	if m.helpModal == nil {
+		return
+	}
+	inputLine := m.stateMoveInput
+	if m.stateMoveCursorOn {
+		inputLine += lipgloss.NewStyle().Reverse(true).Render(" ")
+	}
+	if strings.TrimSpace(inputLine) == "" {
+		inputLine = lipgloss.NewStyle().Reverse(true).Render(" ")
+	}
+	message := "Move source:\n  " + m.stateMoveSource +
+		"\n\nDestination address:\n  " + inputLine +
+		"\n\nType destination, then press Enter to continue."
+	actions := []components.ModalAction{
+		{Key: "enter", Label: "Continue"},
+		{Key: "esc", Label: "Cancel"},
+	}
+	m.helpModal.SetTitle("State Move Destination")
+	m.helpModal.SetConfirm(message, actions)
+}
+
+func (m *Model) stateMoveCursorTickCmd() tea.Cmd {
+	return tea.Tick(530*time.Millisecond, func(time.Time) tea.Msg {
+		return StateMoveCursorBlinkMsg{}
+	})
+}
+
+func (m *Model) consumePendingConfirmCmd(fallback func() tea.Cmd) tea.Cmd {
 	if m.pendingConfirmCmd == nil {
-		return fallback
+		if fallback == nil {
+			return nil
+		}
+		return fallback()
 	}
 	cmd := m.pendingConfirmCmd
 	m.pendingConfirmCmd = nil
@@ -1122,6 +1244,9 @@ func (m *Model) applyViewOverlays(view string) string {
 		view = m.helpModal.Overlay(view)
 	}
 	if m.modalState == ModalConfirmApply && m.helpModal != nil {
+		view = m.helpModal.Overlay(view)
+	}
+	if m.modalState == ModalStateMoveDestination && m.helpModal != nil {
 		view = m.helpModal.Overlay(view)
 	}
 	if m.modalState == ModalTheme && m.themeModal != nil {
