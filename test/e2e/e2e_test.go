@@ -23,7 +23,7 @@ func TestE2EPlanApplyHistory(t *testing.T) {
 	executor := newTerraformExecutor(t, workdir)
 
 	ctx := context.Background()
-	initResult, err := executor.Init(ctx)
+	initResult, err := executor.Init(ctx, terraform.InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestE2EPlanModuleFixture(t *testing.T) {
 	executor := newTerraformExecutor(t, workdir)
 
 	ctx := context.Background()
-	initResult, err := executor.Init(ctx)
+	initResult, err := executor.Init(ctx, terraform.InitOptions{})
 	if err != nil {
 		t.Fatalf("init error: %v", err)
 	}

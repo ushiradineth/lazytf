@@ -28,12 +28,13 @@ const (
 
 // Execution actions (require execution mode).
 const (
-	ActionInit     Action = "init"
-	ActionPlan     Action = "plan"
-	ActionApply    Action = "apply"
-	ActionRefresh  Action = "refresh"
-	ActionValidate Action = "validate"
-	ActionFormat   Action = "format"
+	ActionInit        Action = "init"
+	ActionInitUpgrade Action = "init_upgrade"
+	ActionPlan        Action = "plan"
+	ActionApply       Action = "apply"
+	ActionRefresh     Action = "refresh"
+	ActionValidate    Action = "validate"
+	ActionFormat      Action = "format"
 )
 
 // Filter actions (resources tab only).

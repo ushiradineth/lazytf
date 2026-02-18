@@ -546,7 +546,7 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	return m, cmd
 }
 
-func (m *Model) beginInit() tea.Cmd {
+func (m *Model) beginInit(upgrade bool) tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
 		return nil
@@ -557,8 +557,18 @@ func (m *Model) beginInit() tea.Cmd {
 		}
 		return nil
 	}
+	initEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
 	if m.toast != nil {
-		m.toast.ShowInfo("Running terraform init...")
+		if upgrade {
+			m.toast.ShowInfo("Running terraform init -upgrade...")
+		} else {
+			m.toast.ShowInfo("Running terraform init...")
+		}
 	}
 
 	var progressCmd tea.Cmd
@@ -569,14 +579,14 @@ func (m *Model) beginInit() tea.Cmd {
 	initCmd := func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		result, err := m.executor.Init(ctx)
+		result, err := m.executor.Init(ctx, terraform.InitOptions{Upgrade: upgrade, Env: initEnv})
 		if err != nil {
-			return InitCompleteMsg{Error: err}
+			return InitCompleteMsg{Error: err, Upgrade: upgrade}
 		}
 		if result == nil {
-			return InitCompleteMsg{Error: errors.New("init execution result missing")}
+			return InitCompleteMsg{Error: errors.New("init execution result missing"), Upgrade: upgrade}
 		}
-		return InitCompleteMsg{Output: strings.TrimSpace(result.Output), Result: result, Error: result.Error}
+		return InitCompleteMsg{Output: strings.TrimSpace(result.Output), Result: result, Error: result.Error, Upgrade: upgrade}
 	}
 
 	if progressCmd != nil {
@@ -595,7 +605,11 @@ func (m *Model) handleInitComplete(msg InitCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("Initialized", "terraform init", output)
+		command := "terraform init"
+		if msg.Upgrade {
+			command = "terraform init -upgrade"
+		}
+		m.commandLogPanel.AppendSessionLog("Initialized", command, output)
 	}
 
 	if msg.Error != nil {

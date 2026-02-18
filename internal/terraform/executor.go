@@ -127,6 +127,13 @@ type RefreshOptions struct {
 	Env     []string
 }
 
+// InitOptions controls init execution.
+type InitOptions struct {
+	Upgrade bool
+	Timeout time.Duration
+	Env     []string
+}
+
 // ValidateOptions controls validate execution.
 type ValidateOptions struct {
 	Timeout time.Duration
@@ -220,8 +227,13 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 }
 
 // Init runs terraform init.
-func (e *Executor) Init(ctx context.Context) (*ExecutionResult, error) {
-	result, _, err := e.run(ctx, []string{"init"}, execOptions{streamOutput: false})
+func (e *Executor) Init(ctx context.Context, opts InitOptions) (*ExecutionResult, error) {
+	args := []string{"init"}
+	if opts.Upgrade {
+		args = append(args, "-upgrade")
+	}
+
+	result, _, err := e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: false})
 	if err != nil {
 		return nil, err
 	}

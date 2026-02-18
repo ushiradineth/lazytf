@@ -394,6 +394,16 @@ func registerExecutionBindings(r *Registry) {
 		Category:    "Execution",
 	})
 	r.Register(Binding{
+		Keys:        []string{"I"},
+		Action:      ActionInitUpgrade,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         1,
+		Condition:   ConditionExecutionMode,
+		Description: "init upgrade",
+		Category:    "Execution",
+	})
+	r.Register(Binding{
 		Keys:        []string{"r"},
 		Action:      ActionRefresh,
 		Scope:       ScopePanelTab,

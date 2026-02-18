@@ -106,9 +106,10 @@ type FormatCompleteMsg struct {
 
 // InitCompleteMsg signals init completion.
 type InitCompleteMsg struct {
-	Output string
-	Error  error
-	Result *terraform.ExecutionResult
+	Output  string
+	Error   error
+	Result  *terraform.ExecutionResult
+	Upgrade bool
 }
 
 // StateListStartMsg is sent when state list begins.

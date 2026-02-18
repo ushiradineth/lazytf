@@ -6,7 +6,7 @@ import "context"
 // This interface enables dependency injection and testing.
 type ExecutorInterface interface {
 	// Init runs terraform init.
-	Init(ctx context.Context) (*ExecutionResult, error)
+	Init(ctx context.Context, opts InitOptions) (*ExecutionResult, error)
 
 	// Plan runs terraform plan with streaming output.
 	Plan(ctx context.Context, opts PlanOptions) (*ExecutionResult, <-chan string, error)
