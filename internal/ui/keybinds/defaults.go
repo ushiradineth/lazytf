@@ -336,6 +336,15 @@ func registerResourcesPanelBindings(r *Registry) {
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
 	})
+	r.Register(Binding{
+		Keys:        []string{"g"},
+		Action:      ActionDependencyGraph,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "toggle dependency graph",
+		Category:    "Resources Panel",
+	})
 
 	// Tab switching
 	r.Register(Binding{

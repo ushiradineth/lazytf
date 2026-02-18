@@ -133,6 +133,7 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
 	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
+	r.RegisterHandler(keybinds.ActionDependencyGraph, m.handleActionDependencyGraph)
 	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
 	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
 
@@ -685,4 +686,26 @@ func (m *Model) handleActionCopyAddress(ctx *keybinds.Context) tea.Cmd {
 		return m.toastError("Copy failed: " + err.Error())
 	}
 	return m.toastSuccess("Copied: " + address)
+}
+
+func (m *Model) handleActionDependencyGraph(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 0 {
+		return nil
+	}
+	if m.mainArea == nil {
+		return nil
+	}
+	if m.mainArea.GetMode() == ModeDependencyGraph {
+		m.mainArea.SetMode(ModeDiff)
+		return nil
+	}
+	if m.plan == nil || len(m.plan.Resources) == 0 {
+		return m.toastInfo("No plan loaded for dependency graph")
+	}
+	m.mainArea.SetDependencyGraphContent(BuildDependencyGraphView(m.plan.Resources))
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelMain)
+	}
+	m.updateLayout()
+	return nil
 }

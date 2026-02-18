@@ -369,6 +369,53 @@ func TestHandleActionCopyAddressClipboardError(t *testing.T) {
 	}
 }
 
+func TestHandleActionDependencyGraphShowsGraph(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.plan = &terraform.Plan{
+		Resources: []terraform.ResourceChange{{
+			Address: "null_resource.example",
+			Action:  terraform.ActionCreate,
+			Change:  &terraform.Change{After: map[string]any{}},
+		}},
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionDependencyGraph(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil cmd when showing dependency graph")
+	}
+	if m.mainArea == nil || m.mainArea.GetMode() != ModeDependencyGraph {
+		t.Fatal("expected dependency graph mode")
+	}
+}
+
+func TestHandleActionDependencyGraphToggleBackToDiff(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	if m.mainArea == nil {
+		t.Fatal("expected main area")
+	}
+	m.mainArea.SetMode(ModeDependencyGraph)
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionDependencyGraph(ctx)
+	if cmd != nil {
+		t.Fatal("expected nil cmd when toggling graph off")
+	}
+	if m.mainArea.GetMode() != ModeDiff {
+		t.Fatal("expected diff mode after toggle")
+	}
+}
+
 func TestHandleActionStateRemoveShowsConfirmModal(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

@@ -46,6 +46,7 @@ const (
 	ActionStateRemove     Action = "state_remove"
 	ActionStateMove       Action = "state_move"
 	ActionCopyAddress     Action = "copy_selected_address"
+	ActionDependencyGraph Action = "show_dependency_graph"
 )
 
 // Tab actions.
