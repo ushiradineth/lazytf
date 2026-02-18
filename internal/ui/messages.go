@@ -204,6 +204,23 @@ type ToggleFilterMsg struct {
 	Action terraform.ActionType
 }
 
+// FilterPreset identifies a predefined filter combination.
+type FilterPreset string
+
+const (
+	// FilterPresetAll enables all action filters.
+	FilterPresetAll FilterPreset = "all"
+	// FilterPresetSafe enables create and update filters only.
+	FilterPresetSafe FilterPreset = "safe"
+	// FilterPresetDestructive enables delete and replace filters only.
+	FilterPresetDestructive FilterPreset = "destructive"
+)
+
+// ApplyFilterPresetMsg applies a predefined filter combination.
+type ApplyFilterPresetMsg struct {
+	Preset FilterPreset
+}
+
 // ToggleStatusMsg toggles the status column in the resource list.
 type ToggleStatusMsg struct{}
 

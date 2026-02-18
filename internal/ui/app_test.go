@@ -4476,6 +4476,52 @@ func TestHandleToggleFilter(t *testing.T) {
 	}
 }
 
+func TestApplyFilterPreset(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.applyFilterPreset(FilterPresetSafe)
+	if !m.filterCreate || !m.filterUpdate || m.filterDelete || m.filterReplace {
+		t.Fatal("expected safe preset to enable create/update only")
+	}
+
+	m.applyFilterPreset(FilterPresetDestructive)
+	if m.filterCreate || m.filterUpdate || !m.filterDelete || !m.filterReplace {
+		t.Fatal("expected destructive preset to enable delete/replace only")
+	}
+
+	m.applyFilterPreset(FilterPresetAll)
+	if !m.filterCreate || !m.filterUpdate || !m.filterDelete || !m.filterReplace {
+		t.Fatal("expected all preset to enable all filters")
+	}
+}
+
+func TestHandleTertiaryUpdateApplyFilterPresetMsg(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	model, cmd, handled := m.handleTertiaryUpdate(ApplyFilterPresetMsg{Preset: FilterPresetDestructive})
+	if !handled {
+		t.Fatal("expected message to be handled")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	updated, ok := model.(*Model)
+	if !ok {
+		t.Fatal("expected model pointer")
+	}
+	if updated.filterCreate || updated.filterUpdate || !updated.filterDelete || !updated.filterReplace {
+		t.Fatal("expected destructive preset to be applied")
+	}
+}
+
 func TestHandleRequestApplyNoPlan(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

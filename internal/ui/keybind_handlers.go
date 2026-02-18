@@ -130,6 +130,9 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleUpdate, m.handleActionToggleUpdate)
 	r.RegisterHandler(keybinds.ActionToggleDelete, m.handleActionToggleDelete)
 	r.RegisterHandler(keybinds.ActionToggleReplace, m.handleActionToggleReplace)
+	r.RegisterHandler(keybinds.ActionPresetAll, m.handleActionPresetAll)
+	r.RegisterHandler(keybinds.ActionPresetSafe, m.handleActionPresetSafe)
+	r.RegisterHandler(keybinds.ActionPresetDestruct, m.handleActionPresetDestructive)
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
 	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
@@ -383,6 +386,21 @@ func (m *Model) handleActionToggleDelete(_ *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionToggleReplace(_ *keybinds.Context) tea.Cmd {
 	m.handleToggleFilter(terraform.ActionReplace)
+	return nil
+}
+
+func (m *Model) handleActionPresetAll(_ *keybinds.Context) tea.Cmd {
+	m.applyFilterPreset(FilterPresetAll)
+	return nil
+}
+
+func (m *Model) handleActionPresetSafe(_ *keybinds.Context) tea.Cmd {
+	m.applyFilterPreset(FilterPresetSafe)
+	return nil
+}
+
+func (m *Model) handleActionPresetDestructive(_ *keybinds.Context) tea.Cmd {
+	m.applyFilterPreset(FilterPresetDestructive)
 	return nil
 }
 

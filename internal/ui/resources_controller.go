@@ -60,6 +60,8 @@ func (c *ResourcesPanelController) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 // handleResourcesTabKey handles keys when the Resources tab is active.
+//
+//nolint:gocyclo // Key routing is a flat key-to-command switch.
 func (c *ResourcesPanelController) handleResourcesTabKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	// Execution actions - only work on Resources tab
@@ -83,6 +85,12 @@ func (c *ResourcesPanelController) handleResourcesTabKey(msg tea.KeyMsg) (bool, 
 		return true, toggleFilter(terraform.ActionDelete)
 	case "r":
 		return true, toggleFilter(terraform.ActionReplace)
+	case "A":
+		return true, applyFilterPreset(FilterPresetAll)
+	case "M":
+		return true, applyFilterPreset(FilterPresetSafe)
+	case "X":
+		return true, applyFilterPreset(FilterPresetDestructive)
 	case "t":
 		return true, toggleAllGroups()
 	case "s":
@@ -139,6 +147,12 @@ func requestFormat() tea.Cmd {
 func toggleFilter(action terraform.ActionType) tea.Cmd {
 	return func() tea.Msg {
 		return ToggleFilterMsg{Action: action}
+	}
+}
+
+func applyFilterPreset(preset FilterPreset) tea.Cmd {
+	return func() tea.Msg {
+		return ApplyFilterPresetMsg{Preset: preset}
 	}
 }
 

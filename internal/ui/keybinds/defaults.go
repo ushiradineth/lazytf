@@ -259,6 +259,27 @@ func registerResourcesPanelBindings(r *Registry) {
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
+		Keys:        []string{"A"},
+		Action:      ActionPresetAll,
+		Scope:       ScopeGlobal,
+		Description: "preset all actions",
+		Category:    "Resources Panel",
+	})
+	r.Register(Binding{
+		Keys:        []string{"M"},
+		Action:      ActionPresetSafe,
+		Scope:       ScopeGlobal,
+		Description: "preset safe changes",
+		Category:    "Resources Panel",
+	})
+	r.Register(Binding{
+		Keys:        []string{"X"},
+		Action:      ActionPresetDestruct,
+		Scope:       ScopeGlobal,
+		Description: "preset destructive",
+		Category:    "Resources Panel",
+	})
+	r.Register(Binding{
 		Keys:        []string{"t"},
 		Action:      ActionToggleAllGroups,
 		Scope:       ScopeGlobal,
@@ -304,6 +325,36 @@ func registerResourcesPanelBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         0,
 		Description: "toggle replace filter",
+		Category:    "Resources Panel",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"A"},
+		Action:      ActionPresetAll,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "preset all actions",
+		Category:    "Resources Panel",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"M"},
+		Action:      ActionPresetSafe,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "preset safe changes",
+		Category:    "Resources Panel",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"X"},
+		Action:      ActionPresetDestruct,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "preset destructive",
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})

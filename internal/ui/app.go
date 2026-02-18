@@ -487,6 +487,9 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case ToggleFilterMsg:
 		m.handleToggleFilter(msg.Action)
 		return m, nil, true
+	case ApplyFilterPresetMsg:
+		m.applyFilterPreset(msg.Preset)
+		return m, nil, true
 	case ToggleStatusMsg:
 		m.resourceList.SetShowStatus(!m.resourceList.ShowStatus())
 		return m, nil, true
@@ -558,6 +561,45 @@ func (m *Model) handleToggleFilter(action terraform.ActionType) {
 		return
 	}
 	m.saveFilterPreferences()
+}
+
+func (m *Model) applyFilterPreset(preset FilterPreset) {
+	switch preset {
+	case FilterPresetAll:
+		m.setFilterState(true, true, true, true)
+		if m.toast != nil {
+			_ = m.toast.ShowInfo("Filter preset: all actions")
+		}
+	case FilterPresetSafe:
+		m.setFilterState(true, true, false, false)
+		if m.toast != nil {
+			_ = m.toast.ShowInfo("Filter preset: safe changes")
+		}
+	case FilterPresetDestructive:
+		m.setFilterState(false, false, true, true)
+		if m.toast != nil {
+			_ = m.toast.ShowInfo("Filter preset: destructive changes")
+		}
+	default:
+		return
+	}
+	m.saveFilterPreferences()
+}
+
+func (m *Model) setFilterState(create, update, del, replace bool) {
+	m.filterCreate = create
+	m.filterUpdate = update
+	m.filterDelete = del
+	m.filterReplace = replace
+
+	if m.resourceList == nil {
+		return
+	}
+
+	m.resourceList.SetFilter(terraform.ActionCreate, m.filterCreate)
+	m.resourceList.SetFilter(terraform.ActionUpdate, m.filterUpdate)
+	m.resourceList.SetFilter(terraform.ActionDelete, m.filterDelete)
+	m.resourceList.SetFilter(terraform.ActionReplace, m.filterReplace)
 }
 
 func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) tea.Model {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -366,6 +367,38 @@ func TestHandleActionCopyAddressClipboardError(t *testing.T) {
 	cmd := m.handleActionCopyAddress(ctx)
 	if cmd == nil {
 		t.Fatal("expected non-nil toast cmd on copy error")
+	}
+}
+
+func TestHandleActionPresetSafe(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionPresetSafe(nil)
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if !m.filterCreate || !m.filterUpdate || m.filterDelete || m.filterReplace {
+		t.Fatal("expected safe preset to enable create/update only")
+	}
+}
+
+func TestHandleActionPresetDestructive(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.handleActionPresetDestructive(nil)
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if m.filterCreate || m.filterUpdate || !m.filterDelete || !m.filterReplace {
+		t.Fatal("expected destructive preset to enable delete/replace only")
 	}
 }
 
