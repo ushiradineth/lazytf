@@ -43,6 +43,7 @@ const (
 	ActionToggleReplace   Action = "toggle_filter_replace"
 	ActionToggleAllGroups Action = "toggle_all_groups"
 	ActionToggleStatus    Action = "toggle_status"
+	ActionCopyAddress     Action = "copy_selected_address"
 )
 
 // Tab actions.
