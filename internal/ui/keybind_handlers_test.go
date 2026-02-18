@@ -1,10 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -272,6 +272,100 @@ func TestHandleActionSelectPanelNone(t *testing.T) {
 	cmd := m.handleActionSelect(ctx)
 	if cmd != nil {
 		t.Error("expected nil cmd for PanelNone")
+	}
+}
+
+func TestHandleActionCopyAddressResourcesTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.resourceList.SetFilter(terraform.ActionCreate, true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{
+		Address: "aws_instance.example",
+		Action:  terraform.ActionCreate,
+		Change:  &terraform.Change{Actions: []string{"create"}},
+	}})
+	m.resourceList.SetSelectedIndex(0)
+	if m.resourceList.GetSelectedResource() == nil {
+		t.Fatal("expected selected resource")
+	}
+
+	original := clipboardCopy
+	t.Cleanup(func() { clipboardCopy = original })
+	copied := ""
+	clipboardCopy = func(value string) error {
+		copied = value
+		return nil
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionCopyAddress(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil toast cmd")
+	}
+	if copied != "aws_instance.example" {
+		t.Fatalf("expected copied address, got %q", copied)
+	}
+}
+
+func TestHandleActionCopyAddressStateTab(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 1
+	m.stateListContent.SetResources([]terraform.StateResource{{Address: "null_resource.example"}})
+	if m.stateListContent.GetSelected() == nil {
+		t.Fatal("expected selected state resource")
+	}
+
+	original := clipboardCopy
+	t.Cleanup(func() { clipboardCopy = original })
+	copied := ""
+	clipboardCopy = func(value string) error {
+		copied = value
+		return nil
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionCopyAddress(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil toast cmd")
+	}
+	if copied != "null_resource.example" {
+		t.Fatalf("expected copied state address, got %q", copied)
+	}
+}
+
+func TestHandleActionCopyAddressClipboardError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.resourceList.SetFilter(terraform.ActionCreate, true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{
+		Address: "aws_instance.example",
+		Action:  terraform.ActionCreate,
+		Change:  &terraform.Change{Actions: []string{"create"}},
+	}})
+	m.resourceList.SetSelectedIndex(0)
+
+	original := clipboardCopy
+	t.Cleanup(func() { clipboardCopy = original })
+	clipboardCopy = func(_ string) error {
+		return errors.New("clipboard unavailable")
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	cmd := m.handleActionCopyAddress(ctx)
+	if cmd == nil {
+		t.Fatal("expected non-nil toast cmd on copy error")
 	}
 }
 

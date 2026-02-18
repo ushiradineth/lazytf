@@ -317,6 +317,25 @@ func registerResourcesPanelBindings(r *Registry) {
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})
+	r.Register(Binding{
+		Keys:        []string{"y"},
+		Action:      ActionCopyAddress,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "copy selected address",
+		Category:    "Resources Panel",
+	})
+	r.Register(Binding{
+		Keys:        []string{"y"},
+		Action:      ActionCopyAddress,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         1,
+		Description: "copy selected address",
+		Category:    "Resources Panel",
+		Condition:   ConditionExecutionMode,
+	})
 
 	// Tab switching
 	r.Register(Binding{

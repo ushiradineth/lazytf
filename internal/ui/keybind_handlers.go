@@ -132,6 +132,7 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionToggleReplace, m.handleActionToggleReplace)
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
+	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
 	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
 	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
 
@@ -654,4 +655,34 @@ func (m *Model) canRunStateMutation(ctx *keybinds.Context) bool {
 		return false
 	}
 	return true
+}
+
+func (m *Model) handleActionCopyAddress(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources {
+		return nil
+	}
+
+	address := ""
+	switch m.resourcesActiveTab {
+	case 0:
+		if m.resourceList != nil {
+			if selected := m.resourceList.GetSelectedResource(); selected != nil {
+				address = selected.Address
+			}
+		}
+	case 1:
+		if m.stateListContent != nil {
+			if selected := m.stateListContent.GetSelected(); selected != nil {
+				address = selected.Address
+			}
+		}
+	}
+
+	if address == "" {
+		return m.toastInfo("No resource selected")
+	}
+	if err := clipboardCopy(address); err != nil {
+		return m.toastError("Copy failed: " + err.Error())
+	}
+	return m.toastSuccess("Copied: " + address)
 }
