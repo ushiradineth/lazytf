@@ -303,7 +303,10 @@ func TestProgressOperationConstants(t *testing.T) {
 	if OperationFormat != 5 {
 		t.Error("expected OperationFormat to be 5")
 	}
-	if OperationStateList != 6 {
-		t.Error("expected OperationStateList to be 6")
+	if OperationInit != 6 {
+		t.Error("expected OperationInit to be 6")
+	}
+	if OperationStateList != 7 {
+		t.Error("expected OperationStateList to be 7")
 	}
 }
