@@ -742,7 +742,7 @@ func (m *Model) handleStateRmComplete(msg StateRmCompleteMsg) (tea.Model, tea.Cm
 	if strings.TrimSpace(msg.Output) != "" {
 		m.setFormattedLogOutput(msg.Output)
 	}
-	var cmds []tea.Cmd
+	cmds := make([]tea.Cmd, 0, 3)
 	cmds = append(cmds, m.toastSuccess("State removed (backup: "+msg.BackupPath+")"))
 	cmds = append(cmds, m.beginStateList())
 	cmds = append(cmds, m.recordOperationCmd("state-rm", []string{msg.Address}, false, time.Now(), msg.Result, msg.Output, nil))
@@ -796,7 +796,7 @@ func (m *Model) handleStateMvComplete(msg StateMvCompleteMsg) (tea.Model, tea.Cm
 	if strings.TrimSpace(msg.Output) != "" {
 		m.setFormattedLogOutput(msg.Output)
 	}
-	var cmds []tea.Cmd
+	cmds := make([]tea.Cmd, 0, 3)
 	cmds = append(cmds, m.toastSuccess("State moved (backup: "+msg.BackupPath+")"))
 	cmds = append(cmds, m.beginStateList())
 	cmds = append(cmds, m.recordOperationCmd("state-mv", []string{msg.Source, msg.Destination}, false, time.Now(), msg.Result, msg.Output, nil))
