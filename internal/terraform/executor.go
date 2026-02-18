@@ -566,8 +566,8 @@ func finalizeExecution(
 	defer cancel()
 	defer close(result.done)
 
-	waitErr := cmd.Wait()
 	wg.Wait()
+	waitErr := cmd.Wait()
 	close(streamErrs)
 
 	streamErr := collectStreamError(streamErrs)

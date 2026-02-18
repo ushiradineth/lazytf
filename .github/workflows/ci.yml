@@ -11,6 +11,65 @@ permissions:
   contents: read
 
 jobs:
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Signed-off-by trailers
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          while IFS= read -r commit; do
+            if ! git show -s --format=%B "$commit" | grep -qi '^Signed-off-by:'; then
+              echo "::error::Commit $commit is missing a Signed-off-by trailer"
+              missing=1
+            fi
+          done < <(git rev-list --no-merges "${BASE_SHA}..${HEAD_SHA}")
+
+          if [ "$missing" -ne 0 ]; then
+            echo "One or more commits are missing Signed-off-by trailers"
+            exit 1
+          fi
+
+  generate:
+    name: Generate Freshness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+
+      - name: Setup just
+        uses: taiki-e/install-action@just
+
+      - name: Run generators
+        run: just generate
+
+      - name: Verify generated files are committed
+        run: |
+          set -euo pipefail
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git diff --stat
+            echo "::error::Generated files are out of date. Run 'just generate' and commit the changes."
+            exit 1
+          fi
+
   verify:
     name: Verify
     runs-on: ubuntu-latest
