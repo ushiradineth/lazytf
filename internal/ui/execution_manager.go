@@ -628,6 +628,9 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	if m.stateListContent != nil {
 		m.stateListContent.SetResources(msg.Resources)
 	}
+	if m.stateMoveSource != "" && !containsStateAddress(msg.Resources, m.stateMoveSource) {
+		m.stateMoveSource = ""
+	}
 
 	// Initialize state list view if needed (for full screen view)
 	if m.stateListView == nil {
@@ -640,6 +643,10 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 	if len(msg.Resources) > 0 {
 		cmd := m.showSelectedStateDetail()
 		return m, cmd
+	}
+
+	if m.mainArea != nil && m.mainArea.GetMode() == ModeStateShow {
+		m.mainArea.SetStateContent("", "No resources in state. Press 'r' to refresh.")
 	}
 
 	return m, nil
@@ -693,6 +700,169 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 	return m, nil
 }
 
+func (m *Model) beginStateRm(address string) tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		backupPath, backupErr := m.backupStateToFile(ctx, stateEnv)
+		if backupErr != nil {
+			return StateRmCompleteMsg{Address: address, Error: fmt.Errorf("backup state: %w", backupErr)}
+		}
+
+		result, err := m.executor.StateRm(ctx, address, terraform.StateRmOptions{Env: stateEnv})
+		if err != nil {
+			return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Error: err}
+		}
+		if result.Error != nil {
+			return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Output, Error: result.Error, Result: result}
+		}
+		return StateRmCompleteMsg{Address: address, BackupPath: backupPath, Output: result.Output, Result: result}
+	}
+}
+
+func (m *Model) handleStateRmComplete(msg StateRmCompleteMsg) (tea.Model, tea.Cmd) {
+	m.stateMoveSource = ""
+	m.stateMoveInput = ""
+	m.pendingConfirmCmd = nil
+	m.appendSessionLog("State removed", "terraform state rm "+msg.Address, stateMutationSessionOutput(msg.Output, msg.Error, msg.BackupPath))
+
+	if msg.Error != nil {
+		m.addErrorDiagnostic("State remove failed", msg.Error, msg.Output)
+		cmd := m.toastError(fmt.Sprintf("State remove failed: %v", msg.Error))
+		return m, cmd
+	}
+
+	m.setDiagnostics(nil)
+	if strings.TrimSpace(msg.Output) != "" {
+		m.setFormattedLogOutput(msg.Output)
+	}
+	cmds := make([]tea.Cmd, 0, 3)
+	cmds = append(cmds, m.toastSuccess("State removed (backup: "+msg.BackupPath+")"))
+	cmds = append(cmds, m.beginStateList())
+	cmds = append(cmds, m.recordOperationCmd("state-rm", []string{msg.Address}, false, time.Now(), msg.Result, msg.Output, nil))
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) beginStateMv(source, destination string) tea.Cmd {
+	if m.executor == nil {
+		m.err = errors.New("terraform executor not configured")
+		return nil
+	}
+	stateEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		m.err = err
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		backupPath, backupErr := m.backupStateToFile(ctx, stateEnv)
+		if backupErr != nil {
+			return StateMvCompleteMsg{Source: source, Destination: destination, Error: fmt.Errorf("backup state: %w", backupErr)}
+		}
+
+		result, err := m.executor.StateMv(ctx, source, destination, terraform.StateMvOptions{Env: stateEnv})
+		if err != nil {
+			return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Error: err}
+		}
+		if result.Error != nil {
+			return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Output, Error: result.Error, Result: result}
+		}
+		return StateMvCompleteMsg{Source: source, Destination: destination, BackupPath: backupPath, Output: result.Output, Result: result}
+	}
+}
+
+func (m *Model) handleStateMvComplete(msg StateMvCompleteMsg) (tea.Model, tea.Cmd) {
+	m.stateMoveSource = ""
+	m.stateMoveInput = ""
+	m.pendingConfirmCmd = nil
+	cmdText := "terraform state mv " + msg.Source + " " + msg.Destination
+	m.appendSessionLog("State moved", cmdText, stateMutationSessionOutput(msg.Output, msg.Error, msg.BackupPath))
+
+	if msg.Error != nil {
+		m.addErrorDiagnostic("State move failed", msg.Error, msg.Output)
+		cmd := m.toastError(fmt.Sprintf("State move failed: %v", msg.Error))
+		return m, cmd
+	}
+
+	m.setDiagnostics(nil)
+	if strings.TrimSpace(msg.Output) != "" {
+		m.setFormattedLogOutput(msg.Output)
+	}
+	cmds := make([]tea.Cmd, 0, 3)
+	cmds = append(cmds, m.toastSuccess("State moved (backup: "+msg.BackupPath+")"))
+	cmds = append(cmds, m.beginStateList())
+	cmds = append(cmds, m.recordOperationCmd("state-mv", []string{msg.Source, msg.Destination}, false, time.Now(), msg.Result, msg.Output, nil))
+	return m, tea.Batch(cmds...)
+}
+
+func stateMutationSessionOutput(output string, err error, backupPath string) string {
+	trimmedOutput := strings.TrimSpace(output)
+	if err != nil {
+		result := strings.TrimSpace(err.Error())
+		if trimmedOutput != "" {
+			result = trimmedOutput
+			if !strings.Contains(result, err.Error()) {
+				result += "\n" + err.Error()
+			}
+		}
+		if backupPath == "" {
+			return result
+		}
+		return result + "\nbackup: " + backupPath
+	}
+	result := trimmedOutput
+	if result == "" {
+		result = "State operation complete"
+	}
+	if backupPath != "" {
+		result += "\nbackup: " + backupPath
+	}
+	return result
+}
+
+func (m *Model) backupStateToFile(ctx context.Context, env []string) (string, error) {
+	result, err := m.executor.StatePull(ctx, terraform.StatePullOptions{Env: env})
+	if err != nil {
+		return "", err
+	}
+	if result.Error != nil {
+		return "", result.Error
+	}
+	if strings.TrimSpace(result.Stdout) == "" {
+		return "", errors.New("empty state pull output")
+	}
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = "."
+	}
+	backupDir := filepath.Join(workDir, ".lazytf", "backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return "", fmt.Errorf("create state backup dir: %w", err)
+	}
+	backupPath := filepath.Join(backupDir, "state-"+time.Now().Format("20060102-150405")+".tfstate")
+	if err := os.WriteFile(backupPath, []byte(result.Stdout), 0o600); err != nil {
+		return "", fmt.Errorf("write state backup: %w", err)
+	}
+	return backupPath, nil
+}
+
 // showSelectedStateDetail loads and shows the currently selected state resource in the main area.
 func (m *Model) showSelectedStateDetail() tea.Cmd {
 	if m.stateListContent == nil {
@@ -730,6 +900,15 @@ func parseStateListResources(stdout string) []terraform.StateResource {
 		}
 	}
 	return resources
+}
+
+func containsStateAddress(resources []terraform.StateResource, address string) bool {
+	for _, resource := range resources {
+		if resource.Address == address {
+			return true
+		}
+	}
+	return false
 }
 
 func stateShowSessionOutput(msg StateShowCompleteMsg) string {

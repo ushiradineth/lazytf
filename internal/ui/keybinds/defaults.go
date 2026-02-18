@@ -360,6 +360,7 @@ func registerResourcesPanelBindings(r *Registry) {
 	})
 }
 
+//nolint:funlen // Keybind registration is naturally verbose
 func registerExecutionBindings(r *Registry) {
 	// Terraform commands (Resources tab only in execution mode)
 	r.Register(Binding{
@@ -389,7 +390,7 @@ func registerExecutionBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         1,
 		Condition:   ConditionExecutionMode,
-		Description: "refresh",
+		Description: "reload state list",
 		Category:    "Execution",
 	})
 	r.Register(Binding{
@@ -410,6 +411,26 @@ func registerExecutionBindings(r *Registry) {
 		Tab:         0,
 		Condition:   ConditionExecutionMode,
 		Description: "format",
+		Category:    "Execution",
+	})
+	r.Register(Binding{
+		Keys:        []string{"x"},
+		Action:      ActionStateRemove,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         1,
+		Condition:   ConditionExecutionMode,
+		Description: "remove selected state",
+		Category:    "Execution",
+	})
+	r.Register(Binding{
+		Keys:        []string{"m"},
+		Action:      ActionStateMove,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         1,
+		Condition:   ConditionExecutionMode,
+		Description: "move selected state",
 		Category:    "Execution",
 	})
 	// History toggle (global in execution mode with history enabled)

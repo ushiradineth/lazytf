@@ -43,6 +43,8 @@ const (
 	ActionToggleReplace   Action = "toggle_filter_replace"
 	ActionToggleAllGroups Action = "toggle_all_groups"
 	ActionToggleStatus    Action = "toggle_status"
+	ActionStateRemove     Action = "state_remove"
+	ActionStateMove       Action = "state_move"
 	ActionCopyAddress     Action = "copy_selected_address"
 )
 

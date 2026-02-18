@@ -35,6 +35,9 @@ type ExecutorInterface interface {
 	// StateMv runs terraform state mv for source and destination addresses.
 	StateMv(ctx context.Context, srcAddress, dstAddress string, opts StateMvOptions) (*ExecutionResult, error)
 
+	// StatePull runs terraform state pull and returns raw state output.
+	StatePull(ctx context.Context, opts StatePullOptions) (*ExecutionResult, error)
+
 	// Show runs terraform show on a plan file.
 	Show(ctx context.Context, planFile string, opts ShowOptions) (*ExecutionResult, error)
 

@@ -125,6 +125,25 @@ type StateShowCompleteMsg struct {
 	Error   error
 }
 
+// StateRmCompleteMsg signals state rm completion.
+type StateRmCompleteMsg struct {
+	Address    string
+	BackupPath string
+	Output     string
+	Error      error
+	Result     *terraform.ExecutionResult
+}
+
+// StateMvCompleteMsg signals state mv completion.
+type StateMvCompleteMsg struct {
+	Source      string
+	Destination string
+	BackupPath  string
+	Output      string
+	Error       error
+	Result      *terraform.ExecutionResult
+}
+
 // HistoryLoadedMsg delivers history entries.
 type HistoryLoadedMsg struct {
 	Entries []history.Entry
@@ -195,3 +214,6 @@ type ToggleAllGroupsMsg struct{}
 type SwitchResourcesTabMsg struct {
 	Direction int // -1 for previous, +1 for next
 }
+
+// StateMoveCursorBlinkMsg toggles cursor visibility in state move input modal.
+type StateMoveCursorBlinkMsg struct{}

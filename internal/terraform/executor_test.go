@@ -1149,6 +1149,31 @@ func TestExecutorStateMvEmptyAddresses(t *testing.T) {
 	}
 }
 
+func TestExecutorStatePullWithOptions(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+
+	exec, err := NewExecutor(dir, WithTerraformPath(tfPath))
+	if err != nil {
+		t.Fatalf("new executor: %v", err)
+	}
+
+	result, err := exec.StatePull(context.Background(), StatePullOptions{})
+	if err != nil {
+		t.Fatalf("state pull error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result from state pull")
+	}
+	<-result.Done()
+	if !strings.Contains(result.Stdout, "ARGS:state pull") {
+		t.Fatalf("unexpected state pull args: %q", result.Stdout)
+	}
+}
+
 func TestExecutorFormatSuccess(t *testing.T) {
 	if runtime.GOOS == consts.OSWindows {
 		t.Skip("shell script test not supported on windows")
