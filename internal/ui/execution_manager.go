@@ -651,10 +651,10 @@ func (m *Model) beginStateList() tea.Cmd {
 			return StateListCompleteMsg{Error: err}
 		}
 		if result.Error != nil {
-			return StateListCompleteMsg{Error: result.Error}
+			return StateListCompleteMsg{Error: result.Error, Output: stateListResultOutput(result)}
 		}
 		resources := parseStateListResources(result.Stdout)
-		return StateListCompleteMsg{Resources: resources}
+		return StateListCompleteMsg{Resources: resources, Output: stateListResultOutput(result)}
 	}
 
 	if progressCmd != nil {
@@ -677,9 +677,9 @@ func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, te
 			m.progressIndicator.Fail()
 		}
 		if m.stateListContent != nil {
-			m.stateListContent.SetError(msg.Error.Error())
+			m.stateListContent.SetError(stateListErrorText(msg))
 		}
-		m.addErrorDiagnostic("State list failed", msg.Error, "")
+		m.addErrorDiagnostic("State list failed", msg.Error, msg.Output)
 		var cmd tea.Cmd
 		if m.toast != nil {
 			cmd = m.toast.ShowError(fmt.Sprintf("State list failed: %v", msg.Error))
@@ -946,7 +946,11 @@ func (m *Model) showSelectedStateDetail() tea.Cmd {
 
 func stateListSessionOutput(msg StateListCompleteMsg) string {
 	if msg.Error != nil {
-		return msg.Error.Error()
+		return stateListErrorText(msg)
+	}
+	output := strings.TrimSpace(msg.Output)
+	if output != "" {
+		return output
 	}
 	if len(msg.Resources) == 0 {
 		return "0 resources"
@@ -956,6 +960,35 @@ func stateListSessionOutput(msg StateListCompleteMsg) string {
 		addresses[i] = r.Address
 	}
 	return fmt.Sprintf("%d resources\n%s", len(msg.Resources), strings.Join(addresses, "\n"))
+}
+
+func stateListErrorText(msg StateListCompleteMsg) string {
+	if msg.Error == nil {
+		return ""
+	}
+	output := strings.TrimSpace(msg.Output)
+	if output == "" {
+		return msg.Error.Error()
+	}
+	if output == msg.Error.Error() {
+		return output
+	}
+	return msg.Error.Error() + "\n\n" + output
+}
+
+func stateListResultOutput(result *terraform.ExecutionResult) string {
+	if result == nil {
+		return ""
+	}
+	stderr := strings.TrimSpace(result.Stderr)
+	if stderr != "" {
+		return stderr
+	}
+	stdout := strings.TrimSpace(result.Stdout)
+	if stdout != "" {
+		return stdout
+	}
+	return strings.TrimSpace(result.Output)
 }
 
 func parseStateListResources(stdout string) []terraform.StateResource {

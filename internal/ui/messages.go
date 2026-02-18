@@ -117,6 +117,7 @@ type StateListStartMsg struct{}
 // StateListCompleteMsg signals state list completion.
 type StateListCompleteMsg struct {
 	Resources []terraform.StateResource
+	Output    string
 	Error     error
 }
 

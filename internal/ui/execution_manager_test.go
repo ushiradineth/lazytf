@@ -958,6 +958,31 @@ func TestHandleStateListCompleteWithError(t *testing.T) {
 	}
 }
 
+func TestStateListSessionOutputIncludesStderrOnError(t *testing.T) {
+	msg := StateListCompleteMsg{
+		Error:  errors.New("exit status 1"),
+		Output: "No state file was found\nRun terraform init first",
+	}
+
+	out := stateListSessionOutput(msg)
+	if !strings.Contains(out, "No state file was found") {
+		t.Fatalf("expected stderr details in session output, got %q", out)
+	}
+}
+
+func TestStateListResultOutputPrefersStderr(t *testing.T) {
+	result := &terraform.ExecutionResult{
+		Stdout: "stdout content",
+		Stderr: "stderr content",
+		Output: "combined content",
+	}
+
+	out := stateListResultOutput(result)
+	if out != "stderr content" {
+		t.Fatalf("expected stderr content, got %q", out)
+	}
+}
+
 // ============================================================================
 // handleStateShowComplete tests
 // ============================================================================
