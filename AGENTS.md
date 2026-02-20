@@ -26,7 +26,9 @@ Preferred local commands (`Justfile`):
 - `just test` (verbose + race: `go test -v -race ./...`)
 - `just test-coverage` (writes `coverage.out` and `coverage.html`)
 - `just security` (`govulncheck ./...`)
+- `just dco` (checks `Signed-off-by` trailers on commits since `origin/main`)
 - `just check-all` (fmt + vet + lint + coverage + security)
+- `just ci` (tidy + dco + vet + lint + coverage + build + security)
 
 ## Testing
 confidence: high

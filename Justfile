@@ -179,6 +179,30 @@ generate:
 
 # ===== Combined Quality Checks =====
 
+# Check DCO sign-offs on commits since origin/main
+dco:
+    @echo "Checking DCO sign-offs..."
+    @git fetch origin main --quiet
+    @COMMITS=$(git rev-list --no-merges origin/main..HEAD); \
+    if [ -z "$COMMITS" ]; then \
+        echo "✓ No commits to check"; \
+        exit 0; \
+    fi; \
+    MISSING=0; \
+    for COMMIT in $COMMITS; do \
+        if ! git log -1 --pretty=%B "$COMMIT" | grep -qi '^Signed-off-by:'; then \
+            echo "❌ Missing Signed-off-by in commit $COMMIT"; \
+            git log -1 --pretty='format:%h %s' "$COMMIT"; \
+            MISSING=1; \
+        fi; \
+    done; \
+    if [ "$MISSING" -ne 0 ]; then \
+        echo "DCO check failed. Add sign-off with: git commit --amend -s"; \
+        echo "For multiple commits: git rebase --signoff origin/main"; \
+        exit 1; \
+    fi; \
+    echo "✓ DCO sign-off check passed"
+
 # Run all quality checks
 check: fmt vet lint test
     @echo "✓ All checks passed!"
@@ -188,7 +212,7 @@ check-all: fmt vet lint test-coverage security
     @echo "✓ All checks and coverage complete!"
 
 # Run CI checks locally (mirrors GitHub Actions CI)
-ci: tidy vet lint test-coverage build security
+ci: tidy dco vet lint test-coverage build security
     @echo "✓ All CI checks passed locally!"
 
 # Comprehensive code quality report (like Credo for Elixir)
