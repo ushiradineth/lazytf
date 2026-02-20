@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -85,6 +87,7 @@ func (m *Model) handlePlanOutput(msg PlanOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	cmd := m.streamPlanOutputCmd()
 	return m, cmd
 }
@@ -96,6 +99,7 @@ func (m *Model) handleApplyOutput(msg ApplyOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	if m.operationState != nil {
 		m.operationState.ParseApplyLine(msg.Line)
 		if m.resourceList != nil {
@@ -110,8 +114,25 @@ func (m *Model) handleRefreshOutput(msg RefreshOutputMsg) (tea.Model, tea.Cmd) {
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
+	m.updateStateLockStatus(msg.Line)
 	cmd := m.streamRefreshOutputCmd()
 	return m, cmd
+}
+
+func (m *Model) updateStateLockStatus(line string) {
+	if m.progressIndicator == nil {
+		return
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	if strings.Contains(normalized, "acquiring state lock") {
+		m.progressIndicator.SetDetail("waiting for state lock")
+		return
+	}
+
+	if strings.Contains(normalized, "releasing state lock") || strings.Contains(normalized, "acquired state lock") {
+		m.progressIndicator.SetDetail("")
+	}
 }
 
 func (m *Model) canSwitchResourcesTab() bool {
