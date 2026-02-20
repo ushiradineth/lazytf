@@ -441,6 +441,35 @@ func TestBeginStateShowWithMockExecutorError(t *testing.T) {
 	}
 }
 
+func TestBeginStateShowWithMockResultErrorIncludesOutput(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.StateShowResult = testutil.NewMockErrorResult("resource not found in state", errors.New("exit status 1"))
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	cmd := m.beginStateShow("nonexistent.resource")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+
+	msg := cmd()
+	completeMsg, ok := msg.(StateShowCompleteMsg)
+	if !ok {
+		t.Fatalf("expected StateShowCompleteMsg, got %T", msg)
+	}
+	if completeMsg.Error == nil {
+		t.Fatal("expected error in message")
+	}
+	if !strings.Contains(completeMsg.Output, "resource not found in state") {
+		t.Fatalf("expected stderr output, got %q", completeMsg.Output)
+	}
+}
+
 func TestBeginStateShowWithMockDifferentAddresses(t *testing.T) {
 	mock := setupMockExecutor(t)
 
@@ -1023,6 +1052,19 @@ func TestHandleStateShowCompleteResourceNotFound(t *testing.T) {
 	model, _ := m.handleStateShowComplete(msg)
 	if model == nil {
 		t.Fatal("expected non-nil model")
+	}
+}
+
+func TestStateShowSessionOutputIncludesErrorOutput(t *testing.T) {
+	msg := StateShowCompleteMsg{
+		Address: "nonexistent.resource",
+		Error:   errors.New("exit status 1"),
+		Output:  "resource does not exist",
+	}
+
+	out := stateShowSessionOutput(msg)
+	if !strings.Contains(out, "resource does not exist") {
+		t.Fatalf("expected stderr details in session output, got %q", out)
 	}
 }
 
@@ -1901,6 +1943,35 @@ func TestBeginValidateExecuteCommandExecutorError(t *testing.T) {
 	}
 }
 
+func TestBeginValidateExecuteCommandResultErrorIncludesOutput(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.ValidateResult = testutil.NewMockErrorResult(
+		"Error: Missing required provider",
+		errors.New("exit status 1"),
+	)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+
+	cmd := m.beginValidate()
+	msg := cmd()
+	completeMsg, ok := msg.(ValidateCompleteMsg)
+	if !ok {
+		t.Fatalf("expected ValidateCompleteMsg, got %T", msg)
+	}
+	if completeMsg.Error == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(completeMsg.RawOutput, "Missing required provider") {
+		t.Fatalf("expected stderr in raw output, got %q", completeMsg.RawOutput)
+	}
+}
+
 func TestBeginValidateExecuteCommandParseError(t *testing.T) {
 	mock := setupMockExecutor(t)
 	mock.ValidateResult = testutil.NewMockResult(`invalid json`, 0)
@@ -2033,6 +2104,35 @@ func TestBeginFormatExecuteCommandError(t *testing.T) {
 
 	if completeMsg.Error == nil {
 		t.Error("expected error")
+	}
+}
+
+func TestBeginFormatExecuteCommandResultError(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.FormatResult = testutil.NewMockErrorResult("Error: invalid path", errors.New("exit status 1"))
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+
+	cmd := m.beginFormat()
+	msg := cmd()
+	completeMsg, ok := msg.(FormatCompleteMsg)
+	if !ok {
+		t.Fatalf("expected FormatCompleteMsg, got %T", msg)
+	}
+	if completeMsg.Error == nil {
+		t.Fatal("expected format error")
+	}
+	if completeMsg.ExecResult == nil {
+		t.Fatal("expected execution result to be included")
+	}
+	if !strings.Contains(completeMsg.ExecResult.Output, "invalid path") {
+		t.Fatalf("expected stderr output, got %q", completeMsg.ExecResult.Output)
 	}
 }
 

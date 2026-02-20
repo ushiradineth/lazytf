@@ -358,14 +358,21 @@ func (m *Model) beginValidate() tea.Cmd {
 		if err != nil {
 			return ValidateCompleteMsg{Error: err}
 		}
+		if result == nil {
+			return ValidateCompleteMsg{Error: errors.New("validate execution result missing")}
+		}
+		rawOutput := strings.TrimSpace(result.Output)
+		if result.Error != nil {
+			return ValidateCompleteMsg{Error: result.Error, RawOutput: rawOutput, ExecResult: result}
+		}
 		// Parse JSON output
 		var validateResult terraform.ValidateResult
-		if result != nil && result.Stdout != "" {
+		if result.Stdout != "" {
 			if parseErr := json.Unmarshal([]byte(result.Stdout), &validateResult); parseErr != nil {
-				return ValidateCompleteMsg{Error: parseErr, RawOutput: result.Stdout, ExecResult: result}
+				return ValidateCompleteMsg{Error: parseErr, RawOutput: rawOutput, ExecResult: result}
 			}
 		}
-		return ValidateCompleteMsg{Result: &validateResult, RawOutput: result.Stdout, ExecResult: result}
+		return ValidateCompleteMsg{Result: &validateResult, RawOutput: rawOutput, ExecResult: result}
 	}
 
 	if progressCmd != nil {
@@ -379,7 +386,9 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	// Log to session history
 	output := msg.RawOutput
 	if msg.Error != nil {
-		output = msg.Error.Error()
+		if strings.TrimSpace(output) == "" {
+			output = msg.Error.Error()
+		}
 	} else if msg.Result != nil {
 		if msg.Result.Valid {
 			output = "Configuration is valid"
@@ -449,7 +458,7 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	return m, cmd
 }
 
-//nolint:gocognit // Command setup with error handling has inherent complexity
+//nolint:gocognit,gocyclo // Command setup with error handling has inherent complexity.
 func (m *Model) beginFormat() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
@@ -486,9 +495,15 @@ func (m *Model) beginFormat() tea.Cmd {
 		if err != nil {
 			return FormatCompleteMsg{Error: err}
 		}
+		if result == nil {
+			return FormatCompleteMsg{Error: errors.New("format execution result missing")}
+		}
+		if result.Error != nil {
+			return FormatCompleteMsg{Error: result.Error, ExecResult: result}
+		}
 		// Parse output - each line is a changed file
 		var changedFiles []string
-		if result != nil && result.Stdout != "" {
+		if result.Stdout != "" {
 			for _, line := range strings.Split(result.Stdout, "\n") {
 				if trimmed := strings.TrimSpace(line); trimmed != "" {
 					changedFiles = append(changedFiles, trimmed)
@@ -509,7 +524,7 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 	var formatOutput string
 	switch {
 	case msg.Error != nil:
-		formatOutput = msg.Error.Error()
+		formatOutput = formatResultOutput(msg)
 	case len(msg.ChangedFiles) == 0:
 		formatOutput = "No files changed"
 	default:
@@ -524,7 +539,7 @@ func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd)
 		if m.progressIndicator != nil {
 			m.progressIndicator.Fail()
 		}
-		m.addErrorDiagnostic("Format failed", msg.Error, "")
+		m.addErrorDiagnostic("Format failed", msg.Error, formatResultOutput(msg))
 		cmd := m.toastError(fmt.Sprintf("Format failed: %v", msg.Error))
 		return m, cmd
 	}
@@ -755,10 +770,13 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 		if err != nil {
 			return StateShowCompleteMsg{Address: address, Error: err}
 		}
-		if result.Error != nil {
-			return StateShowCompleteMsg{Address: address, Error: result.Error}
+		if result == nil {
+			return StateShowCompleteMsg{Address: address, Error: errors.New("state show execution result missing")}
 		}
-		return StateShowCompleteMsg{Address: address, Output: result.Stdout}
+		if result.Error != nil {
+			return StateShowCompleteMsg{Address: address, Error: result.Error, Output: stateShowResultOutput(result)}
+		}
+		return StateShowCompleteMsg{Address: address, Output: stateShowResultOutput(result)}
 	}
 }
 
@@ -766,7 +784,7 @@ func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, te
 	m.appendSessionLog("State shown", "terraform state show "+msg.Address, stateShowSessionOutput(msg))
 
 	if msg.Error != nil {
-		m.addErrorDiagnostic("State show failed", msg.Error, "")
+		m.addErrorDiagnostic("State show failed", msg.Error, msg.Output)
 		var cmd tea.Cmd
 		if m.toast != nil {
 			cmd = m.toast.ShowError(fmt.Sprintf("State show failed: %v", msg.Error))
@@ -1029,9 +1047,44 @@ func containsStateAddress(resources []terraform.StateResource, address string) b
 
 func stateShowSessionOutput(msg StateShowCompleteMsg) string {
 	if msg.Error != nil {
-		return msg.Error.Error()
+		output := strings.TrimSpace(msg.Output)
+		if output == "" {
+			return msg.Error.Error()
+		}
+		if output == msg.Error.Error() {
+			return output
+		}
+		return msg.Error.Error() + "\n\n" + output
 	}
 	return msg.Output
+}
+
+func stateShowResultOutput(result *terraform.ExecutionResult) string {
+	if result == nil {
+		return ""
+	}
+	stderr := strings.TrimSpace(result.Stderr)
+	if stderr != "" {
+		return stderr
+	}
+	stdout := strings.TrimSpace(result.Stdout)
+	if stdout != "" {
+		return stdout
+	}
+	return strings.TrimSpace(result.Output)
+}
+
+func formatResultOutput(msg FormatCompleteMsg) string {
+	if msg.ExecResult != nil {
+		output := strings.TrimSpace(msg.ExecResult.Output)
+		if output != "" {
+			return output
+		}
+	}
+	if msg.Error != nil {
+		return msg.Error.Error()
+	}
+	return ""
 }
 
 func (m *Model) appendSessionLog(title, command, output string) {

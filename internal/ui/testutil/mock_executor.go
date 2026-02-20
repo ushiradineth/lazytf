@@ -104,6 +104,7 @@ func NewMockExecutor() *MockExecutor {
 func NewMockResult(stdout string, exitCode int) *terraform.ExecutionResult {
 	result := terraform.NewExecutionResult()
 	result.Stdout = stdout
+	result.Output = stdout
 	result.ExitCode = exitCode
 	// Auto-finish in background so Done() channel closes
 	go func() {
@@ -116,6 +117,7 @@ func NewMockResult(stdout string, exitCode int) *terraform.ExecutionResult {
 func NewMockErrorResult(stderr string, err error) *terraform.ExecutionResult {
 	result := terraform.NewExecutionResult()
 	result.Stderr = stderr
+	result.Output = stderr
 	result.ExitCode = 1
 	result.Error = err
 	go func() {
