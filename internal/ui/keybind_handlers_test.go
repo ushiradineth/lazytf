@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -375,19 +376,18 @@ func TestHandleActionDependencyGraphShowsGraph(t *testing.T) {
 	m.width = 100
 	m.height = 30
 	m.updateLayout()
-	m.resourcesActiveTab = 0
-	m.plan = &terraform.Plan{
-		Resources: []terraform.ResourceChange{{
-			Address: "null_resource.example",
-			Action:  terraform.ActionCreate,
-			Change:  &terraform.Change{After: map[string]any{}},
-		}},
-	}
+	m.resourcesActiveTab = 1
+	mock := setupMockExecutor(t)
+	mock.StatePullResult = testutil.NewMockResult(`{"resources":[{"mode":"managed","type":"null_resource","name":"example","instances":[{"dependencies":[]}]}]}`, 0)
+	m.executor = mock
 
 	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
 	cmd := m.handleActionDependencyGraph(ctx)
 	if cmd != nil {
 		t.Fatal("expected nil cmd when showing dependency graph")
+	}
+	if mock.StatePullCalls != 1 {
+		t.Fatalf("expected one state pull call, got %d", mock.StatePullCalls)
 	}
 	if m.mainArea == nil || m.mainArea.GetMode() != ModeDependencyGraph {
 		t.Fatal("expected dependency graph mode")

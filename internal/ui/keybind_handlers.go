@@ -1,6 +1,11 @@
 package ui
 
 import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -689,7 +694,7 @@ func (m *Model) handleActionCopyAddress(ctx *keybinds.Context) tea.Cmd {
 }
 
 func (m *Model) handleActionDependencyGraph(ctx *keybinds.Context) tea.Cmd {
-	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 0 {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources {
 		return nil
 	}
 	if m.mainArea == nil {
@@ -699,13 +704,63 @@ func (m *Model) handleActionDependencyGraph(ctx *keybinds.Context) tea.Cmd {
 		m.mainArea.SetMode(ModeDiff)
 		return nil
 	}
-	if m.plan == nil || len(m.plan.Resources) == 0 {
-		return m.toastInfo("No plan loaded for dependency graph")
+	if m.executor == nil {
+		return m.toastError("Terraform executor not configured")
 	}
-	m.mainArea.SetDependencyGraphContent(BuildDependencyGraphView(m.plan.Resources))
+
+	graph, err := m.loadStateDependencyGraph()
+	if err != nil {
+		return m.toastError(err.Error())
+	}
+	if strings.TrimSpace(graph) == "" {
+		return m.toastInfo("No resources in state for dependency graph")
+	}
+	m.mainArea.SetDependencyGraphContent(graph)
 	if m.panelManager != nil {
 		m.panelManager.SetFocus(PanelMain)
 	}
 	m.updateLayout()
 	return nil
+}
+
+func (m *Model) loadStateDependencyGraph() (string, error) {
+	env, err := m.prepareTerraformEnv()
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare terraform env: %w", err)
+	}
+
+	stateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	result, err := m.executor.StatePull(stateCtx, terraform.StatePullOptions{Env: env})
+	if err != nil {
+		return "", fmt.Errorf("failed to load state for dependency graph: %w", err)
+	}
+	if result == nil {
+		return "", nil
+	}
+	if result.Error != nil {
+		detail := strings.TrimSpace(result.Stderr)
+		if detail == "" {
+			detail = strings.TrimSpace(result.Output)
+		}
+		if detail == "" {
+			detail = result.Error.Error()
+		}
+		return "", fmt.Errorf("failed to load state for dependency graph: %s", detail)
+	}
+
+	stateJSON := strings.TrimSpace(result.Stdout)
+	if stateJSON == "" {
+		stateJSON = strings.TrimSpace(result.Output)
+	}
+	if stateJSON == "" {
+		return "", nil
+	}
+
+	graph, parseErr := BuildDependencyGraphViewFromStateJSON(stateJSON)
+	if parseErr != nil {
+		return "", fmt.Errorf("failed to parse state for dependency graph: %w", parseErr)
+	}
+	return graph, nil
 }

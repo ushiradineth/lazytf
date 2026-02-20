@@ -41,3 +41,53 @@ func TestBuildDependencyGraphView(t *testing.T) {
 		t.Fatalf("expected no dependencies marker, got %q", view)
 	}
 }
+
+func TestBuildDependencyGraphViewFromStateJSON(t *testing.T) {
+	stateJSON := `{
+	  "resources": [
+	    {
+	      "mode": "managed",
+	      "type": "null_resource",
+	      "name": "example",
+	      "instances": [
+	        {
+	          "dependencies": ["null_resource.dependency"]
+	        }
+	      ]
+	    },
+	    {
+	      "mode": "managed",
+	      "module": "module.app",
+	      "type": "aws_instance",
+	      "name": "web",
+	      "instances": [
+	        {
+	          "index_key": 0,
+	          "dependencies": []
+	        }
+	      ]
+	    }
+	  ]
+	}`
+
+	view, err := BuildDependencyGraphViewFromStateJSON(stateJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(view, "null_resource.example") {
+		t.Fatalf("expected null_resource.example entry, got %q", view)
+	}
+	if !strings.Contains(view, "-> null_resource.dependency") {
+		t.Fatalf("expected dependency entry, got %q", view)
+	}
+	if !strings.Contains(view, "module.app.aws_instance.web[0]") {
+		t.Fatalf("expected module instance entry, got %q", view)
+	}
+}
+
+func TestBuildDependencyGraphViewFromStateJSONInvalid(t *testing.T) {
+	_, err := BuildDependencyGraphViewFromStateJSON("not-json")
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+}
