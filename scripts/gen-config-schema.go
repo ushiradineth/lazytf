@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -76,9 +75,9 @@ func main() {
 		panic(err)
 	}
 	data = append(data, '\n')
-	_, scriptFile, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("resolve script path")
+	repo, err := repoRoot()
+	if err != nil {
+		panic(err)
 	}
 
 	target := filepath.Join(repo, "internal", "config", "config.schema.json")
