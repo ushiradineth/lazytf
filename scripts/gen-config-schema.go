@@ -76,10 +76,9 @@ func main() {
 		panic(err)
 	}
 	data = append(data, '\n')
-
-	repo, err := repoRoot()
-	if err != nil {
-		panic(err)
+	_, scriptFile, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("resolve script path")
 	}
 
 	target := filepath.Join(repo, "internal", "config", "config.schema.json")
