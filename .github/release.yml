@@ -1,0 +1,28 @@
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - feature
+        - enhancement
+        - feat
+    - title: Fixes
+      labels:
+        - bug
+        - bugfix
+        - fix
+    - title: Refactors and Maintenance
+      labels:
+        - refactor
+        - chore
+        - docs
+        - test
+  exclude:
+    labels:
+      - skip-changelog
+  change-template: "- $TITLE by @$AUTHOR in #$NUMBER"
+  template: |
+    ## What's Changed
+
+    $CHANGES
+
+    **Full Changelog**: https://github.com/ushiradineth/lazytf/compare/$PREVIOUS_TAG...$TAG

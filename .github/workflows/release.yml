@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: "Version bump type"
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          VERSION_BUMP: ${{ inputs.version_bump }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          if ! [[ "$latest_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported tag format: $latest_tag"
+            exit 1
+          fi
+
+          version_no_v=${latest_tag#v}
+          IFS='.' read -r major minor patch <<EOF
+          $version_no_v
+EOF
+
+          case "$VERSION_BUMP" in
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+            *)
+              echo "Unsupported bump type: $VERSION_BUMP"
+              exit 1
+              ;;
+          esac
+
+          next_tag="v${major}.${minor}.${patch}"
+          git tag "$next_tag"
+          git push origin "$next_tag"
+          echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
+
+      - name: Manual trigger handoff
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Tag ${{ steps.tag.outputs.tag }} pushed."
+          echo "Release will be created by the tag-triggered workflow run."
+
+      - name: Checkout release tag
+        if: steps.tag.outputs.should_release == 'true'
+        run: git checkout "${{ steps.tag.outputs.tag }}"
+
+      - name: Setup Go
+        if: steps.tag.outputs.should_release == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache: true
+
+      - name: Verify modules
+        if: steps.tag.outputs.should_release == 'true'
+        run: go mod verify
+
+      - name: Vet
+        if: steps.tag.outputs.should_release == 'true'
+        run: go vet ./...
+
+      - name: Test
+        if: steps.tag.outputs.should_release == 'true'
+        run: go test ./...
+
+      - name: Setup golangci-lint
+        if: steps.tag.outputs.should_release == 'true'
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+      - name: Lint
+        if: steps.tag.outputs.should_release == 'true'
+        run: |
+          BASE_REV=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --new-from-rev="$BASE_REV" ./...
+
+      - name: Build
+        if: steps.tag.outputs.should_release == 'true'
+        run: go build ./...
+
+      - name: Setup GoReleaser
+        if: steps.tag.outputs.should_release == 'true'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.12.7
+          install-only: true
+
+      - name: Validate GoReleaser config
+        if: steps.tag.outputs.should_release == 'true'
+        run: goreleaser check
+
+      - name: Release
+        if: steps.tag.outputs.should_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          docker run --rm \
+            -e GITHUB_TOKEN \
+            -e HOMEBREW_TAP_GITHUB_TOKEN \
+            -e GORELEASER_CURRENT_TAG \
+            -v "$PWD:/work" \
+            -w /work \
+            ghcr.io/goreleaser/goreleaser-cross:latest \
+            release --clean
+
+      - name: Show release URL
+        if: steps.tag.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.tag.outputs.tag }}" --json url --jq .url

@@ -77,16 +77,34 @@ func main() {
 	}
 	data = append(data, '\n')
 
-	_, scriptFile, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("resolve script path")
+	repo, err := repoRoot()
+	if err != nil {
+		panic(err)
 	}
-	repoRoot := filepath.Dir(filepath.Dir(scriptFile))
-	target := filepath.Join(repoRoot, "internal", "config", "config.schema.json")
+
+	target := filepath.Join(repo, "internal", "config", "config.schema.json")
 	if err := os.WriteFile(target, data, 0o600); err != nil {
 		panic(err)
 	}
 	fmt.Printf("wrote %s\n", target)
+}
+
+func repoRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			return wd, nil
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			return "", fmt.Errorf("go.mod not found from %s", wd)
+		}
+		wd = parent
+	}
 }
 
 func schemaForType(t reflect.Type) map[string]any {

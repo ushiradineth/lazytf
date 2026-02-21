@@ -215,6 +215,16 @@ check-all: fmt vet lint test-coverage security
 ci: tidy dco vet lint test-coverage build security
     @echo "✓ All CI checks passed locally!"
 
+# Validate GoReleaser configuration
+release-check:
+    @command -v goreleaser >/dev/null 2>&1 || { echo "❌ goreleaser not installed"; exit 1; }
+    goreleaser check
+
+# Build local snapshot release artifacts (no publish)
+release-snapshot:
+    @command -v goreleaser >/dev/null 2>&1 || { echo "❌ goreleaser not installed"; exit 1; }
+    goreleaser release --snapshot --clean
+
 # Comprehensive code quality report (like Credo for Elixir)
 quality:
     @echo "╔══════════════════════════════════════════════════════════════════╗"

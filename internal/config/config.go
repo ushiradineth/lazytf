@@ -7,6 +7,7 @@
 // temp-file-and-rename pattern to prevent corruption on crash or power loss.
 //
 //go:generate go run ../../scripts/gen-config-schema.go
+//go:generate go run ../../scripts/gen-nix-config-options/main.go
 package config
 
 import (
