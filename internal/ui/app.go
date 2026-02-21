@@ -58,6 +58,7 @@ type Model struct {
 	planRunning      bool
 	applyRunning     bool
 	refreshRunning   bool
+	operationRunning bool
 	outputChan       <-chan string
 	cancelFunc       context.CancelFunc
 	execView         executionView
@@ -88,6 +89,8 @@ type Model struct {
 	pendingConfirmCmd  tea.Cmd
 	resourcesActiveTab int // 0 = Resources, 1 = State
 	lastPlanOutput     string
+	planEnvironment    string
+	planWorkDir        string
 	config             *config.Config
 	configView         *views.ConfigView
 	envWorkDir         string
@@ -545,10 +548,12 @@ func (m *Model) handleEnvironmentDetected(msg EnvironmentDetectedMsg) (tea.Model
 	m.loadFilterPreferences()
 	m.applyCurrentEnvironment()
 
+	reloadCmd := m.reloadHistoryCmd()
 	if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
-		return m.promptEnvironmentSelection()
+		_, promptCmd := m.promptEnvironmentSelection()
+		return m, tea.Batch(promptCmd, reloadCmd)
 	}
-	return m, nil
+	return m, reloadCmd
 }
 
 func applyEnvironmentPreference(
@@ -623,7 +628,8 @@ func (m *Model) handleEnvironmentChanged(msg components.EnvironmentChangedMsg) (
 	}
 
 	cmd := m.toastSuccess("Environment changed to " + m.envDisplayName())
-	return m, cmd
+	reloadCmd := m.reloadHistoryCmd()
+	return m, tea.Batch(cmd, reloadCmd)
 }
 
 // buildEnvironmentCommand builds a command string for logging environment switches.
