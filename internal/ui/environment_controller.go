@@ -255,7 +255,7 @@ func (m *Model) envDisplayName() string {
 }
 
 func (m *Model) applyEnvironmentSelection(option environment.Environment) error {
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		return errors.New("cannot change environment while a command is running")
 	}
 	switch option.Strategy {
@@ -284,9 +284,7 @@ func (m *Model) applyEnvironmentSelection(option environment.Environment) error 
 	m.saveEnvironmentPreference(option)
 
 	m.setPlan(nil)
-	m.planFilePath = ""
-	m.planRunFlags = nil
-	m.applyRunFlags = nil
+	m.clearSavedPlanState()
 	if m.planView != nil {
 		m.planView.SetSummary(m.planSummary())
 	}
