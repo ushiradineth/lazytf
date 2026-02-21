@@ -14,7 +14,7 @@ func (m *Model) buildKeybindContext() *keybinds.Context {
 	// Mode state
 	ctx.ExecutionMode = m.executionMode
 	ctx.HistoryEnabled = m.historyEnabled
-	ctx.OperationRunning = m.planRunning || m.applyRunning || m.refreshRunning
+	ctx.OperationRunning = m.isOperationRunning()
 	ctx.PlanRunning = m.planRunning
 	ctx.ApplyRunning = m.applyRunning
 	ctx.RefreshRunning = m.refreshRunning
@@ -164,6 +164,9 @@ func (m *Model) registerKeybindHandlers() {
 // Handler implementations
 
 func (m *Model) handleActionQuit(_ *keybinds.Context) tea.Cmd {
+	if m.isOperationRunning() {
+		m.cancelExecution()
+	}
 	m.quitting = true
 	return tea.Quit
 }
@@ -226,7 +229,7 @@ func (m *Model) handleActionFocusResources(_ *keybinds.Context) tea.Cmd {
 
 // isOperationRunning returns true if any terraform operation is in progress.
 func (m *Model) isOperationRunning() bool {
-	return m.planRunning || m.applyRunning || m.refreshRunning
+	return m.planRunning || m.applyRunning || m.refreshRunning || m.operationRunning
 }
 
 func (m *Model) handleActionFocusHistory(_ *keybinds.Context) tea.Cmd {

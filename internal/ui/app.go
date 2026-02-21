@@ -58,6 +58,7 @@ type Model struct {
 	planRunning      bool
 	applyRunning     bool
 	refreshRunning   bool
+	operationRunning bool
 	outputChan       <-chan string
 	cancelFunc       context.CancelFunc
 	execView         executionView
@@ -88,6 +89,8 @@ type Model struct {
 	pendingConfirmCmd  tea.Cmd
 	resourcesActiveTab int // 0 = Resources, 1 = State
 	lastPlanOutput     string
+	planEnvironment    string
+	planWorkDir        string
 	config             *config.Config
 	configView         *views.ConfigView
 	envWorkDir         string
@@ -545,7 +548,6 @@ func (m *Model) handleEnvironmentDetected(msg EnvironmentDetectedMsg) (tea.Model
 	m.loadFilterPreferences()
 	m.applyCurrentEnvironment()
 	historyReloadCmd := m.reloadHistoryCmd()
-
 	if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
 		model, focusCmd := m.promptEnvironmentSelection()
 		return model, tea.Batch(focusCmd, historyReloadCmd)

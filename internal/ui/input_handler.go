@@ -55,6 +55,9 @@ func (m *Model) handleLegacyOutputKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 func (m *Model) handleCommandLogKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "q":
+		if m.isOperationRunning() {
+			m.cancelExecution()
+		}
 		m.quitting = true
 		return true, tea.Quit
 	case keybinds.KeyEsc:
@@ -68,6 +71,9 @@ func (m *Model) handleCommandLogKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 func (m *Model) handleStateListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "q":
+		if m.isOperationRunning() {
+			m.cancelExecution()
+		}
 		m.quitting = true
 		return true, tea.Quit
 	case keybinds.KeyEsc:
@@ -98,6 +104,9 @@ func (m *Model) handleStateListKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 func (m *Model) handleStateShowKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "q":
+		if m.isOperationRunning() {
+			m.cancelExecution()
+		}
 		m.quitting = true
 		return true, tea.Quit
 	case keybinds.KeyEsc:
