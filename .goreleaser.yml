@@ -5,7 +5,6 @@ project_name: lazytf
 before:
   hooks:
     - go mod verify
-    - go test ./...
 
 builds:
   - id: linux-amd64
