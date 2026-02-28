@@ -98,7 +98,7 @@ go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
 
 ## Prerequisites
 
-- Go 1.25.4 or later
+- Go 1.25.5 or later
 - [just](https://github.com/casey/just)
 
 ### With Nix
