@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -51,9 +50,14 @@ func (m *Model) updateSettingsModalContent() {
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
 	} else {
 		cfg := m.config
-		items = make([]components.HelpItem, 0, 24)
+		items = make([]components.HelpItem, 0, 20)
+
+		// General section
+		items = append(items, components.HelpItem{Key: "General", IsHeader: true})
+		items = append(items, components.HelpItem{Key: "default env", Description: fallbackValue(cfg.General.DefaultEnvironment)})
 
 		// Theme section
+		items = append(items, components.HelpItem{Key: "", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "Theme", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "name", Description: cfg.Theme.Name})
 
@@ -66,23 +70,12 @@ func (m *Model) updateSettingsModalContent() {
 		items = append(items, components.HelpItem{Key: "parallelism", Description: strconv.Itoa(cfg.Terraform.Parallelism)})
 		items = append(items, components.HelpItem{Key: "default flags", Description: strings.Join(cfg.Terraform.DefaultFlags, " ")})
 
-		// UI section
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "UI", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "mouse enabled", Description: strconv.FormatBool(cfg.UI.MouseEnabled)})
-		items = append(items, components.HelpItem{Key: "compact mode", Description: strconv.FormatBool(cfg.UI.CompactMode)})
-		items = append(items, components.HelpItem{Key: "animations", Description: strconv.FormatBool(cfg.UI.AnimationsEnabled)})
-		items = append(items, components.HelpItem{Key: "split default", Description: strconv.FormatBool(cfg.UI.SplitViewDefault)})
-		items = append(items, components.HelpItem{Key: "split ratio", Description: fmt.Sprintf("%.2f", cfg.UI.SplitRatio)})
-
 		// History section
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "History", IsHeader: true})
 		items = append(items, components.HelpItem{Key: "enabled", Description: strconv.FormatBool(cfg.History.Enabled)})
 		items = append(items, components.HelpItem{Key: "level", Description: cfg.History.Level})
 		items = append(items, components.HelpItem{Key: "path", Description: fallbackValue(cfg.History.Path)})
-		items = append(items, components.HelpItem{Key: "retention days", Description: strconv.Itoa(cfg.History.RetentionDays)})
-		items = append(items, components.HelpItem{Key: "max entries", Description: strconv.Itoa(cfg.History.MaxEntries)})
 
 		// Footer
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
