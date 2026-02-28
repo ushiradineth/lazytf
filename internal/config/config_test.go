@@ -737,33 +737,6 @@ func TestResolvePath(t *testing.T) {
 }
 
 func TestValidateMoreCases(t *testing.T) {
-	t.Run("valid split ratio", func(t *testing.T) {
-		cfg := &Config{
-			UI: UIConfig{SplitRatio: 0.5},
-		}
-		if err := cfg.Validate(); err != nil {
-			t.Errorf("expected valid config, got error: %v", err)
-		}
-	})
-
-	t.Run("invalid split ratio negative", func(t *testing.T) {
-		cfg := &Config{
-			UI: UIConfig{SplitRatio: -0.1},
-		}
-		if err := cfg.Validate(); err == nil {
-			t.Error("expected error for negative split ratio")
-		}
-	})
-
-	t.Run("invalid split ratio too high", func(t *testing.T) {
-		cfg := &Config{
-			UI: UIConfig{SplitRatio: 1.5},
-		}
-		if err := cfg.Validate(); err == nil {
-			t.Error("expected error for split ratio above 1")
-		}
-	})
-
 	t.Run("negative terraform timeout", func(t *testing.T) {
 		cfg := &Config{
 			Terraform: TerraformConfig{Timeout: -1},
@@ -822,27 +795,6 @@ func TestDefaultConfigHasDefaults(t *testing.T) {
 	}
 	if cfg.Theme.Name == "" {
 		t.Error("expected theme name to have default")
-	}
-	if cfg.UI.SplitRatio == 0 {
-		t.Error("expected split ratio to have default")
-	}
-}
-
-func TestSaveWithInvalidSplitRatioFails(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "config.yaml")
-
-	manager, err := NewManager(path)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-
-	// Save with invalid split ratio (should fail validation)
-	invalidCfg := Config{
-		UI: UIConfig{SplitRatio: 1.5},
-	}
-	if err := manager.Save(invalidCfg); err == nil {
-		t.Error("expected error for invalid split ratio")
 	}
 }
 

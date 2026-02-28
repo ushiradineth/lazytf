@@ -146,7 +146,7 @@ jobs:
             -e GORELEASER_CURRENT_TAG \
             -v "$PWD:/work" \
             -w /work \
-            ghcr.io/goreleaser/goreleaser-cross:v2.12.7 \
+            ghcr.io/goreleaser/goreleaser-cross:latest \
             release --clean
 
       - name: Show release URL
