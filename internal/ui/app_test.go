@@ -6170,6 +6170,31 @@ func TestHandleEnvironmentPanelKeyFocused(t *testing.T) {
 	_, _ = m.handleEnvironmentPanelKey(msg)
 }
 
+func TestHandleEnvironmentPanelKeyBlockedWhileOperationRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.environmentPanel = components.NewEnvironmentPanel(m.styles)
+	m.operationRunning = true
+
+	if m.panelManager == nil {
+		t.Skip("panel manager not initialized")
+	}
+
+	m.panelManager.RegisterPanel(PanelWorkspace, m.environmentPanel)
+	m.panelManager.SetFocus(PanelWorkspace)
+
+	handled, cmd := m.handleEnvironmentPanelKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if handled {
+		t.Fatal("expected environment panel key to be ignored while operation is running")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil command when environment panel input is blocked")
+	}
+}
+
 func TestResolveDetectedEnvironmentWithWorkspaces(t *testing.T) {
 	origNewWorkspaceManager := newWorkspaceManager
 	defer func() {
