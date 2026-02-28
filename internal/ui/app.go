@@ -544,11 +544,13 @@ func (m *Model) handleEnvironmentDetected(msg EnvironmentDetectedMsg) (tea.Model
 	m.updateEnvironmentPanel(msg.Result.Warnings)
 	m.loadFilterPreferences()
 	m.applyCurrentEnvironment()
+	historyReloadCmd := m.reloadHistoryCmd()
 
 	if m.executionMode && m.envCurrent == "" && m.shouldPromptEnvironment() {
-		return m.promptEnvironmentSelection()
+		model, focusCmd := m.promptEnvironmentSelection()
+		return model, tea.Batch(focusCmd, historyReloadCmd)
 	}
-	return m, nil
+	return m, historyReloadCmd
 }
 
 func applyEnvironmentPreference(
@@ -623,7 +625,7 @@ func (m *Model) handleEnvironmentChanged(msg components.EnvironmentChangedMsg) (
 	}
 
 	cmd := m.toastSuccess("Environment changed to " + m.envDisplayName())
-	return m, cmd
+	return m, tea.Batch(cmd, m.reloadHistoryCmd())
 }
 
 // buildEnvironmentCommand builds a command string for logging environment switches.
