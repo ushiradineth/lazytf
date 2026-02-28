@@ -263,27 +263,46 @@ func (s *Store) ListRecent(limit int) ([]Entry, error) {
 
 // ListRecentForEnvironment returns apply history entries for a specific environment.
 func (s *Store) ListRecentForEnvironment(environment string, limit int) ([]Entry, error) {
+	return s.ListRecentForContext(environment, "", limit)
+}
+
+// ListRecentForContext returns apply history entries filtered by environment and workdir.
+func (s *Store) ListRecentForContext(environment, workDir string, limit int) ([]Entry, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
 	}
 	if limit <= 0 {
 		limit = 10
 	}
-	if strings.TrimSpace(environment) == "" {
+	environment = strings.TrimSpace(environment)
+	workDir = strings.TrimSpace(workDir)
+	if environment == "" && workDir == "" {
 		return s.ListRecent(limit)
 	}
 
-	ctx := context.Background()
-	rows, err := s.db.QueryContext(
-		ctx,
-		`SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
-		 FROM apply_history
-		 WHERE environment = ?
-		 ORDER BY finished_at DESC
-		 LIMIT ?`,
-		environment,
-		limit,
+	var (
+		clauses []string
+		args    []any
 	)
+	if environment != "" {
+		clauses = append(clauses, "environment = ?")
+		args = append(args, environment)
+	}
+	if workDir != "" {
+		clauses = append(clauses, "workdir = ?")
+		args = append(args, workDir)
+	}
+
+	query := `SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
+		 FROM apply_history`
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	query += " ORDER BY finished_at DESC LIMIT ?"
+	args = append(args, limit)
+
+	ctx := context.Background()
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

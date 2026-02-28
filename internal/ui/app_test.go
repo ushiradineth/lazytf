@@ -516,6 +516,51 @@ func TestRecordHistoryAfterApply(t *testing.T) {
 	}
 }
 
+func TestLoadHistoryEntriesScopesByWorkdirAndEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := history.Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	record := func(env, workDir, summary string) {
+		t.Helper()
+		recErr := store.RecordApply(history.Entry{
+			StartedAt:   time.Now().Add(-time.Minute),
+			FinishedAt:  time.Now(),
+			Duration:    time.Second,
+			Status:      history.StatusSuccess,
+			Summary:     summary,
+			Environment: env,
+			WorkDir:     workDir,
+		})
+		if recErr != nil {
+			t.Fatalf("record apply: %v", recErr)
+		}
+	}
+
+	record("dev", "/tmp/ws-a", "entry-a")
+	record("dev", "/tmp/ws-b", "entry-b")
+	record("staging", "/tmp/ws-a", "entry-c")
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.historyStore = store
+	m.envCurrent = "dev"
+	m.executor = &testutil.MockExecutor{MockWorkDir: "/tmp/ws-a"}
+
+	entries, err := m.loadHistoryEntries()
+	if err != nil {
+		t.Fatalf("load history entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 scoped entry, got %d", len(entries))
+	}
+	if entries[0].Environment != "dev" || entries[0].WorkDir != "/tmp/ws-a" {
+		t.Fatalf("unexpected entry: %+v", entries[0])
+	}
+}
+
 func TestEnvStatusLabel(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.envCurrent = ""

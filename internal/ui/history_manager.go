@@ -85,10 +85,8 @@ func (m *Model) loadHistoryEntries() ([]history.Entry, error) {
 	}
 	// Large limit - the panel is scrollable so no practical need to restrict
 	const maxEntries = 1000
-	if m.envCurrent == "" {
-		return m.historyStore.ListRecent(maxEntries)
-	}
-	return m.historyStore.ListRecentForEnvironment(m.envCurrent, maxEntries)
+	workDir := strings.TrimSpace(m.currentWorkDir())
+	return m.historyStore.ListRecentForContext(m.envCurrent, workDir, maxEntries)
 }
 
 func (m *Model) loadHistoryDetailCmd(id int64) tea.Cmd {

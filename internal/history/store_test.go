@@ -948,6 +948,39 @@ func TestListRecentForEnvironmentMultipleEntries(t *testing.T) {
 	}
 }
 
+func TestListRecentForContextFiltersByEnvironmentAndWorkdir(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = store.Close()
+	})
+
+	entries := []Entry{
+		{StartedAt: time.Now().Add(-3 * time.Minute), FinishedAt: time.Now().Add(-2 * time.Minute), Duration: time.Minute, Status: StatusSuccess, Summary: "dev a", Environment: "dev", WorkDir: "/tmp/a"},
+		{StartedAt: time.Now().Add(-2 * time.Minute), FinishedAt: time.Now().Add(-1 * time.Minute), Duration: time.Minute, Status: StatusSuccess, Summary: "dev b", Environment: "dev", WorkDir: "/tmp/b"},
+		{StartedAt: time.Now().Add(-1 * time.Minute), FinishedAt: time.Now(), Duration: time.Minute, Status: StatusSuccess, Summary: "staging a", Environment: "staging", WorkDir: "/tmp/a"},
+	}
+	for _, entry := range entries {
+		if recErr := store.RecordApply(entry); recErr != nil {
+			t.Fatalf("record apply: %v", recErr)
+		}
+	}
+
+	filtered, err := store.ListRecentForContext("dev", "/tmp/a", 10)
+	if err != nil {
+		t.Fatalf("list recent for context: %v", err)
+	}
+	if len(filtered) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(filtered))
+	}
+	if filtered[0].Environment != "dev" || filtered[0].WorkDir != "/tmp/a" {
+		t.Fatalf("unexpected entry: %+v", filtered[0])
+	}
+}
+
 func TestQueryOperationsWithActionFilter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := Open(path)
