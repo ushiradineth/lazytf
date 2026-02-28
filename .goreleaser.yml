@@ -33,6 +33,21 @@ builds:
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
+  - id: linux-arm
+    main: ./cmd/lazytf
+    binary: lazytf
+    env:
+      - CGO_ENABLED=1
+      - CC=arm-linux-gnueabihf-gcc
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "6"
+    ldflags:
+      - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
+
   - id: darwin-amd64
     main: ./cmd/lazytf
     binary: lazytf
@@ -60,11 +75,64 @@ builds:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
 archives:
-  - id: default
+  - id: linux-amd64
     ids:
       - linux-amd64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: linux-arm64
+    ids:
       - linux-arm64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: linux-arm
+    ids:
+      - linux-arm
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: darwin-amd64
+    ids:
       - darwin-amd64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: darwin-arm64
+    ids:
       - darwin-arm64
     name_template: >-
       {{- .ProjectName }}_
@@ -90,15 +158,23 @@ release:
   footer: |
     ## Installation
 
-    - Homebrew: `brew tap ushiradineth/homebrew && brew install lazytf`
+    - Homebrew: `brew tap ushiradineth/homebrew && brew install --cask lazytf`
     - Nix: `nix run github:ushiradineth/lazytf`
 
 snapshot:
   version_template: "{{ .Version }}-next"
 
-brews:
+homebrew_casks:
   - name: lazytf
-    directory: Formula
+    directory: Casks
+    ids:
+      - linux-amd64
+      - linux-arm64
+      - linux-arm
+      - darwin-amd64
+      - darwin-arm64
+    binaries:
+      - lazytf
     homepage: https://github.com/ushiradineth/lazytf
     description: Terminal UI for reviewing Terraform plans
     repository:
@@ -108,5 +184,6 @@ brews:
     commit_author:
       name: lazytf-bot
       email: 41898282+github-actions[bot]@users.noreply.github.com
-    install: |
-      bin.install "lazytf"
+    caveats: |
+      If macOS blocks execution, run:
+      xattr -dr com.apple.quarantine "$(which lazytf)"
