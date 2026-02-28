@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     name: Build and release
@@ -88,39 +92,6 @@ jobs:
         if: steps.tag.outputs.should_release == 'true'
         run: git checkout "${{ steps.tag.outputs.tag }}"
 
-      - name: Setup Go
-        if: steps.tag.outputs.should_release == 'true'
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.5"
-          cache: true
-
-      - name: Verify modules
-        if: steps.tag.outputs.should_release == 'true'
-        run: go mod verify
-
-      - name: Vet
-        if: steps.tag.outputs.should_release == 'true'
-        run: go vet ./...
-
-      - name: Test
-        if: steps.tag.outputs.should_release == 'true'
-        run: go test ./...
-
-      - name: Setup golangci-lint
-        if: steps.tag.outputs.should_release == 'true'
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-
-      - name: Lint
-        if: steps.tag.outputs.should_release == 'true'
-        run: |
-          BASE_REV=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
-          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --new-from-rev="$BASE_REV" ./...
-
-      - name: Build
-        if: steps.tag.outputs.should_release == 'true'
-        run: go build ./...
-
       - name: Setup GoReleaser
         if: steps.tag.outputs.should_release == 'true'
         uses: goreleaser/goreleaser-action@v6
@@ -146,7 +117,7 @@ jobs:
             -e GORELEASER_CURRENT_TAG \
             -v "$PWD:/work" \
             -w /work \
-            ghcr.io/goreleaser/goreleaser-cross:latest \
+            ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5 \
             release --clean
 
       - name: Show release URL

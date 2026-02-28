@@ -33,6 +33,21 @@ builds:
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
+  - id: linux-arm
+    main: ./cmd/lazytf
+    binary: lazytf
+    env:
+      - CGO_ENABLED=1
+      - CC=arm-linux-gnueabihf-gcc
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "6"
+    ldflags:
+      - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
+
   - id: darwin-amd64
     main: ./cmd/lazytf
     binary: lazytf
@@ -60,11 +75,64 @@ builds:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
 archives:
-  - id: default
+  - id: linux-amd64
     ids:
       - linux-amd64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: linux-arm64
+    ids:
       - linux-arm64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: linux-arm
+    ids:
+      - linux-arm
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: darwin-amd64
+    ids:
       - darwin-amd64
+    name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+
+  - id: darwin-arm64
+    ids:
       - darwin-arm64
     name_template: >-
       {{- .ProjectName }}_
@@ -81,12 +149,27 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  use: github-native
   sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore\(deps\):'
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?:'
+    - title: Fixes
+      regexp: '^fix(\(.+\))?:'
+    - title: Refactors
+      regexp: '^refactor(\(.+\))?:'
+    - title: Maintenance
+      regexp: '^chore(\(.+\))?:'
+    - title: Other Changes
+      regexp: '.*'
 
 release:
   draft: false
-  name_template: "{{.ProjectName}} {{.Version}}"
+  name_template: "{{ .Tag }}"
   footer: |
     ## Installation
 
@@ -100,6 +183,9 @@ homebrew_casks:
   - name: lazytf
     directory: Casks
     ids:
+      - linux-amd64
+      - linux-arm64
+      - linux-arm
       - darwin-amd64
       - darwin-arm64
     binaries:
