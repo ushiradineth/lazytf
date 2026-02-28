@@ -152,7 +152,7 @@ deadcode:
 security:
     @echo "Running security checks..."
     @command -v govulncheck >/dev/null 2>&1 || { echo "❌ govulncheck not installed. Refer flake.nix for installation"; exit 1; }
-    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.6}" govulncheck ./...
+    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.5}" govulncheck ./...
 
 # Run gosec security linter
 gosec:
@@ -198,7 +198,7 @@ ci-verify:
 ci-quality:
     @echo "Running CI quality checks..."
     go test -v -race -coverprofile={{coverage_file}} -covermode=atomic ./...
-    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.6}" govulncheck ./... || true
+    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.5}" govulncheck ./... || true
 
 # CI integration job equivalent
 ci-integration:

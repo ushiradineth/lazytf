@@ -14,6 +14,7 @@ on:
         options:
           - patch
           - minor
+          - major
 
 permissions:
   contents: read
@@ -26,8 +27,11 @@ jobs:
   release:
     name: Build and release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
+    env:
+      GORELEASER_CROSS_IMAGE: ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,6 +67,11 @@ jobs:
           IFS='.' read -r major minor patch <<< "$version_no_v"
 
           case "$VERSION_BUMP" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
             minor)
               minor=$((minor + 1))
               patch=0
@@ -117,7 +126,7 @@ jobs:
             -e GORELEASER_CURRENT_TAG \
             -v "$PWD:/work" \
             -w /work \
-            ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5 \
+            "$GORELEASER_CROSS_IMAGE" \
             release --clean
 
       - name: Show release URL
