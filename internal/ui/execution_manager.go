@@ -47,10 +47,8 @@ func (m *Model) beginPlan() tea.Cmd {
 	m.planFilePath = planFilePath
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.planRunning = true
-	m.operationRunning = true
 	m.planStartedAt = time.Now()
 
 	// Keep in main view, switch MainArea to logs mode during plan
@@ -116,10 +114,8 @@ func (m *Model) beginApply() tea.Cmd {
 	m.applyRunFlags = applyFlags
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.applyRunning = true
-	m.operationRunning = true
 	m.applyStartedAt = time.Now()
 
 	// Keep in main view, switch MainArea to logs mode during apply
@@ -189,10 +185,8 @@ func (m *Model) beginRefresh() tea.Cmd {
 	}
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.refreshRunning = true
-	m.operationRunning = true
 	m.refreshStartedAt = time.Now()
 
 	// Keep in main view, switch MainArea to logs mode during refresh
@@ -352,10 +346,7 @@ func (m *Model) beginValidate() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationValidate)
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
 	validateCmd := func() tea.Msg {
 		result, err := m.executor.Validate(ctx, terraform.ValidateOptions{
@@ -493,10 +484,7 @@ func (m *Model) beginFormat() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationFormat)
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
 	formatCmd := func() tea.Msg {
 		result, err := m.executor.Format(ctx, terraform.FormatOptions{
@@ -604,10 +592,7 @@ func (m *Model) beginInit(upgrade bool) tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationInit)
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(3 * time.Minute)
 
 	initCmd := func() tea.Msg {
 		result, err := m.executor.Init(ctx, terraform.InitOptions{Upgrade: upgrade, Env: initEnv})
@@ -688,10 +673,7 @@ func (m *Model) beginStateList() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationStateList)
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
 	stateListCmd := func() tea.Msg {
 		result, err := m.executor.StateList(ctx, terraform.StateListOptions{
@@ -790,10 +772,7 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 		return nil
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
 	return func() tea.Msg {
 		result, err := m.executor.StateShow(ctx, address, terraform.StateShowOptions{
@@ -852,10 +831,7 @@ func (m *Model) beginStateRm(address string) tea.Cmd {
 		return nil
 	}
 
-	m.cancelExecution()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	m.cancelFunc = cancel
-	m.operationRunning = true
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
 	return func() tea.Msg {
 		backupPath, backupErr := m.backupStateToFile(ctx, stateEnv)
@@ -1184,6 +1160,22 @@ func (m *Model) cancelExecution() {
 		m.cancelFunc()
 		m.cancelFunc = nil
 	}
+}
+
+func (m *Model) beginTrackedOperation(timeout time.Duration) context.Context {
+	m.cancelExecution()
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	m.cancelFunc = cancel
+	m.operationRunning = true
+	return ctx
 }
 
 func (m *Model) finishTrackedOperation() {
