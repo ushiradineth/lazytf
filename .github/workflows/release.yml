@@ -113,7 +113,9 @@ jobs:
 
       - name: Lint
         if: steps.tag.outputs.should_release == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m ./...
+        run: |
+          BASE_REV=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --new-from-rev="$BASE_REV" ./...
 
       - name: Build
         if: steps.tag.outputs.should_release == 'true'
