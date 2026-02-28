@@ -1195,6 +1195,14 @@ func (m *Model) finishTrackedOperation() {
 }
 
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.clearSavedPlanState()
+		m.setPlan(nil)
+		m.lastPlanOutput = ""
+		if m.planView != nil {
+			m.planView.SetSummary(m.planSummary())
+		}
+	}
 	return m.handleOperationStart(
 		msg.Error,
 		&m.planRunning,
