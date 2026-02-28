@@ -99,11 +99,6 @@ snapshot:
 brews:
   - name: lazytf
     directory: Formula
-    ids:
-      - linux-amd64
-      - linux-arm64
-      - darwin-amd64
-      - darwin-arm64
     homepage: https://github.com/ushiradineth/lazytf
     description: Terminal UI for reviewing Terraform plans
     repository:
