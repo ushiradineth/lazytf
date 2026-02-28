@@ -21,7 +21,14 @@
           version = self.shortRev or self.dirtyShortRev or "dev";
 
           src = ./.;
-          vendorHash = null;
+          vendorHash = "sha256-twmrMrtvUVzDiB8FHgDiAf9gbsCR+/mCZfmMucXWTcs=";
+          proxyVendor = true;
+          go = pkgs.go_1_25;
+          doCheck = false;
+
+          env = {
+            GOTOOLCHAIN = "local";
+          };
 
           ldflags = [
             "-s"
