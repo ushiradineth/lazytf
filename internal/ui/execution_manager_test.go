@@ -3795,6 +3795,46 @@ func TestUpdateWithPlanStartMsg(t *testing.T) {
 	}
 }
 
+func TestHandlePlanStartErrorClearsSavedPlanMetadata(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.planFilePath = "test.tfplan"
+	m.planRunFlags = []string{"-out=test.tfplan"}
+	m.applyRunFlags = []string{"test.tfplan"}
+	m.planEnvironment = "ws-1"
+	m.planWorkDir = "/tmp/ws-1"
+	m.lastPlanOutput = "old output"
+	m.setPlan(&terraform.Plan{FormatVersion: "1.0"})
+
+	_, _ = m.handlePlanStart(PlanStartMsg{Error: errors.New("failed to start")})
+
+	if m.planFilePath != "" {
+		t.Fatalf("expected plan file path cleared, got %q", m.planFilePath)
+	}
+	if m.planRunFlags != nil {
+		t.Fatalf("expected plan flags cleared, got %v", m.planRunFlags)
+	}
+	if m.applyRunFlags != nil {
+		t.Fatalf("expected apply flags cleared, got %v", m.applyRunFlags)
+	}
+	if m.planEnvironment != "" {
+		t.Fatalf("expected plan environment cleared, got %q", m.planEnvironment)
+	}
+	if m.planWorkDir != "" {
+		t.Fatalf("expected plan workdir cleared, got %q", m.planWorkDir)
+	}
+	if m.lastPlanOutput != "" {
+		t.Fatalf("expected last plan output cleared, got %q", m.lastPlanOutput)
+	}
+	if m.plan != nil {
+		t.Fatal("expected plan to be cleared")
+	}
+}
+
 func TestUpdateWithApplyStartMsg(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
