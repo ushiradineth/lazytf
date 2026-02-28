@@ -394,16 +394,6 @@ func (p *Profiler) writeStats() error {
 	return nil
 }
 
-// GetStats returns a copy of collected runtime stats.
-func (p *Profiler) GetStats() []RuntimeStats {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	result := make([]RuntimeStats, len(p.stats))
-	copy(result, p.stats)
-	return result
-}
-
 // CurrentStats returns the current runtime statistics.
 func CurrentStats() RuntimeStats {
 	var m runtime.MemStats
