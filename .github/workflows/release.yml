@@ -76,13 +76,13 @@ jobs:
           git tag "$next_tag"
           git push origin "$next_tag"
           echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
-          echo "should_release=false" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
 
       - name: Manual trigger handoff
         if: github.event_name == 'workflow_dispatch'
         run: |
           echo "Tag ${{ steps.tag.outputs.tag }} pushed."
-          echo "Release will be created by the tag-triggered workflow run."
+          echo "Continuing release in this workflow run."
 
       - name: Checkout release tag
         if: steps.tag.outputs.should_release == 'true'
