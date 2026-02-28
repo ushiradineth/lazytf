@@ -804,6 +804,9 @@ func (m *Model) handleEnvironmentPanelKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.panelManager == nil || m.environmentPanel == nil || !m.environmentPanel.SelectorActive() {
 		return false, nil
 	}
+	if m.isOperationRunning() {
+		return false, nil
+	}
 	if handled, panelCmd := m.environmentPanel.HandleKey(msg); handled {
 		return true, panelCmd
 	}
