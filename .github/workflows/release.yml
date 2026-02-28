@@ -14,6 +14,7 @@ on:
         options:
           - patch
           - minor
+          - major
 
 permissions:
   contents: read
@@ -63,6 +64,11 @@ jobs:
           IFS='.' read -r major minor patch <<< "$version_no_v"
 
           case "$VERSION_BUMP" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
             minor)
               minor=$((minor + 1))
               patch=0
