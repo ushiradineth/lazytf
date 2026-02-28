@@ -149,12 +149,27 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  use: github-native
   sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore\(deps\):'
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?:'
+    - title: Fixes
+      regexp: '^fix(\(.+\))?:'
+    - title: Refactors
+      regexp: '^refactor(\(.+\))?:'
+    - title: Maintenance
+      regexp: '^chore(\(.+\))?:'
+    - title: Other Changes
+      regexp: '.*'
 
 release:
   draft: false
-  name_template: "{{.ProjectName}} {{.Version}}"
+  name_template: "{{ .Tag }}"
   footer: |
     ## Installation
 
