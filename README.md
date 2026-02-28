@@ -12,7 +12,7 @@ Download platform archives and checksums from GitHub Releases.
 
 ```bash
 brew tap ushiradineth/homebrew
-brew install --cask lazytf
+brew install lazytf
 ```
 
 ### Nix

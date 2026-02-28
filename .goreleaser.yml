@@ -90,22 +90,20 @@ release:
   footer: |
     ## Installation
 
-    - Homebrew: `brew tap ushiradineth/homebrew && brew install --cask lazytf`
+    - Homebrew: `brew tap ushiradineth/homebrew && brew install lazytf`
     - Nix: `nix run github:ushiradineth/lazytf`
 
 snapshot:
   version_template: "{{ .Version }}-next"
 
-homebrew_casks:
+brews:
   - name: lazytf
-    directory: Casks
+    directory: Formula
     ids:
       - linux-amd64
       - linux-arm64
       - darwin-amd64
       - darwin-arm64
-    binaries:
-      - lazytf
     homepage: https://github.com/ushiradineth/lazytf
     description: Terminal UI for reviewing Terraform plans
     repository:
@@ -115,6 +113,5 @@ homebrew_casks:
     commit_author:
       name: lazytf-bot
       email: 41898282+github-actions[bot]@users.noreply.github.com
-    caveats: |
-      If macOS blocks execution, run:
-      xattr -dr com.apple.quarantine "$(which lazytf)"
+    install: |
+      bin.install "lazytf"
