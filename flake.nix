@@ -16,9 +16,12 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        constsSource = builtins.readFile ./internal/consts/consts.go;
+        versionMatch = builtins.match ".*var Version = \"([^\"]+)\".*" constsSource;
+        appVersion = if versionMatch == null then "dev" else builtins.head versionMatch;
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
-          version = self.shortRev or self.dirtyShortRev or "dev";
+          version = appVersion;
 
           src = ./.;
           vendorHash = "sha256-twmrMrtvUVzDiB8FHgDiAf9gbsCR+/mCZfmMucXWTcs=";
@@ -33,7 +36,7 @@
           ldflags = [
             "-s"
             "-w"
-            "-X github.com/ushiradineth/lazytf/internal/consts.Version=${self.shortRev or self.dirtyShortRev or "dev"}"
+            "-X github.com/ushiradineth/lazytf/internal/consts.Version=${appVersion}"
           ];
 
           meta = with pkgs.lib; {

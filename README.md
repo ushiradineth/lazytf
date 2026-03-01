@@ -11,7 +11,7 @@ Download platform archives and checksums from GitHub Releases.
 ### Homebrew
 
 ```bash
-brew tap ushiradineth/homebrew
+brew tap ushiradineth/homebrew https://github.com/ushiradineth/homebrew
 brew install --cask lazytf
 ```
 

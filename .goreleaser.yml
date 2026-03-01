@@ -52,8 +52,7 @@ builds:
     main: ./cmd/lazytf
     binary: lazytf
     env:
-      - CGO_ENABLED=1
-      - CC=o64-clang
+      - CGO_ENABLED=0
     goos:
       - darwin
     goarch:
@@ -67,6 +66,7 @@ builds:
     env:
       - CGO_ENABLED=1
       - CC=oa64-clang
+      - CGO_LDFLAGS=-Wl,-no_data_const
     goos:
       - darwin
     goarch:
@@ -173,7 +173,7 @@ release:
   footer: |
     ## Installation
 
-    - Homebrew: `brew tap ushiradineth/homebrew && brew install --cask lazytf`
+    - Homebrew: `brew tap ushiradineth/homebrew https://github.com/ushiradineth/homebrew && brew install --cask lazytf`
     - Nix: `nix run github:ushiradineth/lazytf`
 
 snapshot:
@@ -201,4 +201,4 @@ homebrew_casks:
       email: 41898282+github-actions[bot]@users.noreply.github.com
     caveats: |
       If macOS blocks execution, run:
-      xattr -dr com.apple.quarantine "$(which lazytf)"
+      xattr -dr com.apple.quarantine $(which lazytf)

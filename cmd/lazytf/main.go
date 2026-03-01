@@ -301,10 +301,21 @@ func openHistory(cfg *config.Config) (*history.Store, *history.Logger, error) {
 		historyStore, err = history.OpenDefault(opts...)
 	}
 	if err != nil {
+		if shouldDisableHistoryForError(err) {
+			fmt.Fprintf(os.Stderr, "Warning: history disabled: %v\n", err)
+			return nil, nil, nil
+		}
 		return nil, nil, fmt.Errorf("history store: %w", err)
 	}
 	historyLogger = history.NewLogger(historyStore, history.Level(cfg.History.Level))
 	return historyStore, historyLogger, nil
+}
+
+func shouldDisableHistoryForError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "go-sqlite3 requires cgo")
 }
 
 func applyPreset(cfg *config.Config, flags []string) ([]string, error) {

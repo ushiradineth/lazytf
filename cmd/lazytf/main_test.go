@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -627,6 +628,43 @@ func TestOpenHistoryInvalidPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "history store") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestShouldDisableHistoryForError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "sqlite cgo stub error",
+			err:  errors.New("Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub"),
+			want: true,
+		},
+		{
+			name: "wrapped sqlite cgo stub error",
+			err:  fmt.Errorf("history store: %w", errors.New("go-sqlite3 requires cgo")),
+			want: true,
+		},
+		{
+			name: "other error",
+			err:  errors.New("permission denied"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldDisableHistoryForError(tt.err); got != tt.want {
+				t.Fatalf("expected %t, got %t", tt.want, got)
+			}
+		})
 	}
 }
 
