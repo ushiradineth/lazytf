@@ -27,7 +27,7 @@ const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.github
 
 // Config defines the user configuration file schema.
 type Config struct {
-	Version          int                       `yaml:"version"`
+	Version          int                       `yaml:"version" schema:"-"`
 	General          GeneralConfig             `yaml:"general,omitempty"`
 	Theme            ThemeConfig               `yaml:"theme,omitempty"`
 	Terraform        TerraformConfig           `yaml:"terraform,omitempty"`
@@ -92,8 +92,8 @@ func ResolvePath() (string, error) {
 		return "", err
 	}
 	candidates := []string{
-		primary,
 		xdg,
+		primary,
 		"/etc/lazytf/config.yaml",
 	}
 

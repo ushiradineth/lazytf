@@ -490,6 +490,53 @@ func TestProjectOverrideFor(t *testing.T) {
 		}
 	})
 
+	t.Run("parent path override applies", func(t *testing.T) {
+		base := t.TempDir()
+		child := filepath.Join(base, "apps", "service")
+		if err := os.MkdirAll(child, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				base: {Theme: "parent"},
+			},
+		}
+
+		override := cfg.ProjectOverrideFor(child)
+		if override == nil {
+			t.Fatal("expected parent override for nested path")
+		}
+		if override.Theme != "parent" {
+			t.Fatalf("expected parent theme, got %q", override.Theme)
+		}
+	})
+
+	t.Run("most specific parent wins", func(t *testing.T) {
+		base := t.TempDir()
+		level1 := filepath.Join(base, "apps")
+		level2 := filepath.Join(level1, "service")
+		if err := os.MkdirAll(level2, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := Config{
+			ProjectOverrides: map[string]*ProjectConfig{
+				base:   {Theme: "base"},
+				level1: {Theme: "apps"},
+				level2: {Theme: "service"},
+			},
+		}
+
+		override := cfg.ProjectOverrideFor(filepath.Join(level2, "worker"))
+		if override == nil {
+			t.Fatal("expected override for nested path")
+		}
+		if override.Theme != "service" {
+			t.Fatalf("expected most specific theme, got %q", override.Theme)
+		}
+	})
+
 	t.Run("nil override value", func(t *testing.T) {
 		cfg := Config{
 			ProjectOverrides: map[string]*ProjectConfig{
@@ -732,6 +779,38 @@ func TestResolvePath(t *testing.T) {
 		}
 		if result == "" {
 			t.Error("expected to find existing config")
+		}
+	})
+
+	t.Run("prefers XDG path when both exist", func(t *testing.T) {
+		xdg := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", xdg)
+		t.Setenv("LAZYTF_CONFIG", "")
+
+		defaultDir := filepath.Join(home, ".config", "lazytf")
+		if err := os.MkdirAll(defaultDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		defaultPath := filepath.Join(defaultDir, "config.yaml")
+		if err := os.WriteFile(defaultPath, []byte("version: 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		xdgDir := filepath.Join(xdg, "lazytf")
+		if err := os.MkdirAll(xdgDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		xdgPath := filepath.Join(xdgDir, "config.yaml")
+		if err := os.WriteFile(xdgPath, []byte("version: 1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := ResolvePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != xdgPath {
+			t.Fatalf("expected XDG path %q, got %q", xdgPath, result)
 		}
 	})
 }

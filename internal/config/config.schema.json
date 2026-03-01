@@ -102,9 +102,6 @@
         }
       },
       "type": "object"
-    },
-    "version": {
-      "type": "integer"
     }
   },
   "title": "lazytf config",

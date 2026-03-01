@@ -139,6 +139,9 @@ func schemaForType(t reflect.Type) map[string]any {
 			if field.PkgPath != "" {
 				continue
 			}
+			if field.Tag.Get("schema") == "-" {
+				continue
+			}
 			tag := field.Tag.Get("yaml")
 			if tag == "-" {
 				continue

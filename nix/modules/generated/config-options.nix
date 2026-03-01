@@ -143,9 +143,4 @@
     default = null;
     description = "Auto-generated from internal/config/config.schema.json";
   };
-  "version" = lib.mkOption {
-    type = lib.types.nullOr (lib.types.int);
-    default = null;
-    description = "Auto-generated from internal/config/config.schema.json";
-  };
 }

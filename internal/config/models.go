@@ -1,6 +1,9 @@
 package config
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // ProjectConfig overrides config for a specific project path.
 type ProjectConfig struct {
@@ -18,6 +21,10 @@ func (c Config) ProjectOverrideFor(path string) *ProjectConfig {
 	if err != nil {
 		return nil
 	}
+	absPath = filepath.Clean(absPath)
+
+	var bestMatch *ProjectConfig
+	bestLen := -1
 	for key, override := range c.ProjectOverrides {
 		if override == nil || key == "" {
 			continue
@@ -30,9 +37,18 @@ func (c Config) ProjectOverrideFor(path string) *ProjectConfig {
 		if err != nil {
 			continue
 		}
-		if filepath.Clean(absCandidate) == filepath.Clean(absPath) {
-			return override
+		absCandidate = filepath.Clean(absCandidate)
+		rel, err := filepath.Rel(absCandidate, absPath)
+		if err != nil {
+			continue
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		if l := len(absCandidate); l > bestLen {
+			bestLen = l
+			bestMatch = override
 		}
 	}
-	return nil
+	return bestMatch
 }
