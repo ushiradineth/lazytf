@@ -21,6 +21,7 @@ type DiagnosticsPanel struct {
 	styles      *styles.Styles
 	width       int
 	height      int
+	lineCount   int
 	// Session log history - stores all command outputs for the session
 	sessionLogs []SessionLogEntry
 	// tip is the random tip shown when the panel is empty (selected once at creation)
@@ -118,6 +119,18 @@ func (d *DiagnosticsPanel) Update(msg tea.Msg) (*DiagnosticsPanel, tea.Cmd) {
 	return d, cmd
 }
 
+// GetScrollInfo returns scrollbar metadata for the current viewport content.
+func (d *DiagnosticsPanel) GetScrollInfo() (scrollPos, thumbSize float64, showScrollbar bool) {
+	if d == nil {
+		return 0, 1.0, false
+	}
+	if d.lineCount <= d.viewport.Height || d.viewport.Height <= 0 {
+		return 0, 1.0, false
+	}
+	scrollPos, thumbSize = CalculateScrollParams(d.viewport.YOffset, d.viewport.Height, d.lineCount)
+	return scrollPos, thumbSize, true
+}
+
 func (d *DiagnosticsPanel) updateViewport() {
 	if d == nil || d.styles == nil {
 		return
@@ -131,7 +144,13 @@ func (d *DiagnosticsPanel) updateViewport() {
 		sections = buildFallbackSection(d.styles, d.logText, d.tip, d.width)
 	}
 
-	d.viewport.SetContent(strings.TrimRight(strings.Join(sections, "\n"), "\n"))
+	content := strings.TrimRight(strings.Join(sections, "\n"), "\n")
+	d.viewport.SetContent(content)
+	if content == "" {
+		d.lineCount = 0
+		return
+	}
+	d.lineCount = strings.Count(content, "\n") + 1
 }
 
 func buildSessionSections(styles *styles.Styles, logs []SessionLogEntry, width int) []string {

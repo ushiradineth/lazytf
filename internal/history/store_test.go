@@ -948,6 +948,37 @@ func TestListRecentForEnvironmentMultipleEntries(t *testing.T) {
 	}
 }
 
+func TestListRecentForScope(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	entriesToRecord := []Entry{
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "dev", WorkDir: "/repo/a"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "dev", WorkDir: "/repo/b"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "prod", WorkDir: "/repo/a"},
+	}
+	for _, entry := range entriesToRecord {
+		if err := store.RecordApply(entry); err != nil {
+			t.Fatalf("record apply: %v", err)
+		}
+	}
+
+	entries, err := store.ListRecentForScope("dev", "/repo/a", 10)
+	if err != nil {
+		t.Fatalf("list recent for scope: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 scoped entry, got %d", len(entries))
+	}
+	if entries[0].Environment != "dev" || entries[0].WorkDir != "/repo/a" {
+		t.Fatalf("unexpected scoped entry: env=%q workdir=%q", entries[0].Environment, entries[0].WorkDir)
+	}
+}
+
 func TestQueryOperationsWithActionFilter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := Open(path)
@@ -986,5 +1017,35 @@ func TestQueryOperationsWithActionFilter(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("expected 1 apply entry, got %d", len(entries))
+	}
+}
+
+func TestQueryOperationsWithWorkDirFilter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	entries := []OperationEntry{
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Duration: time.Second, Action: "plan", Status: StatusSuccess, WorkDir: "/repo/a"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Duration: time.Second, Action: "plan", Status: StatusSuccess, WorkDir: "/repo/b"},
+	}
+	for _, entry := range entries {
+		if err := store.RecordOperation(entry); err != nil {
+			t.Fatalf("record operation: %v", err)
+		}
+	}
+
+	filtered, err := store.QueryOperations(OperationFilter{Action: "plan", WorkDir: "/repo/a", Limit: 10})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(filtered) != 1 {
+		t.Fatalf("expected 1 operation for workdir filter, got %d", len(filtered))
+	}
+	if filtered[0].WorkDir != "/repo/a" {
+		t.Fatalf("unexpected workdir: %q", filtered[0].WorkDir)
 	}
 }

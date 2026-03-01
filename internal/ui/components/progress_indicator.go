@@ -68,6 +68,7 @@ func NewProgressIndicator(s *styles.Styles) *ProgressIndicator {
 func (p *ProgressIndicator) Start(op ProgressOperation) tea.Cmd {
 	p.state = ProgressRunning
 	p.operation = op
+	p.detail = ""
 	return p.spinner.Tick
 }
 

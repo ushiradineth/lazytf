@@ -1680,6 +1680,7 @@ func TestViewExecutionModes(t *testing.T) {
 func TestUpdatePlanOutputAppendsLine(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.executionMode = true
+	m.planRunning = true
 	m.applyView = views.NewApplyView(m.styles)
 	m.applyView.SetSize(80, 10)
 
@@ -2081,6 +2082,7 @@ func TestHandleRefreshOutput(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
 	m.applyView = views.NewApplyView(m.styles)
+	m.refreshRunning = true
 
 	// Handle a refresh output message
 	msg := RefreshOutputMsg{Line: "Refreshing state..."}
@@ -2098,6 +2100,7 @@ func TestHandleRefreshOutputNilApplyView(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
 	m.applyView = nil
+	m.refreshRunning = true
 
 	msg := RefreshOutputMsg{Line: "Refreshing state..."}
 	result, cmd := m.handleRefreshOutput(msg)
@@ -5182,13 +5185,37 @@ func TestUpdateStateLockStatus(t *testing.T) {
 	m.progressIndicator.Start(components.OperationPlan)
 
 	m.updateStateLockStatus("Acquiring state lock. This may take a few moments...")
-	if !strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
-		t.Fatal("expected lock wait detail in progress view")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected progress view without lock detail")
 	}
 
 	m.updateStateLockStatus("Releasing state lock. This may take a few moments...")
 	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
-		t.Fatal("expected lock wait detail to be cleared")
+		t.Fatal("expected progress view without lock detail")
+	}
+
+	m.updateStateLockStatus("Acquiring state lock. This may take a few moments...")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected progress view without lock detail")
+	}
+	m.updateStateLockStatus("Acquired the state lock")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected progress view without lock detail")
+	}
+}
+
+func TestUpdateStateLockStatusLockAcquisitionError(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.progressIndicator.Start(components.OperationPlan)
+
+	m.updateStateLockStatus("Acquiring state lock. This may take a few moments...")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected progress view without lock detail")
+	}
+
+	m.updateStateLockStatus("Error acquiring the state lock")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected lock wait detail to be cleared on lock acquisition error")
 	}
 }
 
@@ -5202,8 +5229,8 @@ func TestHandleApplyOutputUpdatesLockStatus(t *testing.T) {
 	m.progressIndicator.Start(components.OperationApply)
 
 	m.handleApplyOutput(ApplyOutputMsg{Line: "Acquiring state lock. This may take a few moments..."})
-	if !strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
-		t.Fatal("expected lock detail from apply output")
+	if strings.Contains(m.progressIndicator.View(), "waiting for state lock") {
+		t.Fatal("expected progress view without lock detail")
 	}
 }
 

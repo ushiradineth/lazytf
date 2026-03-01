@@ -135,6 +135,9 @@ func run(_ *cobra.Command, args []string) error {
 	if noHistory {
 		cfg.History.Enabled = false
 	}
+	if envName == "" {
+		envName = strings.TrimSpace(cfg.General.DefaultEnvironment)
+	}
 	if workDir == "." && strings.TrimSpace(cfg.Terraform.WorkingDir) != "" {
 		workDir = cfg.Terraform.WorkingDir
 	}
@@ -215,6 +218,9 @@ func prepareExecutionFlags(cfg *config.Config, overrideFlags []string) ([]string
 	flags, err := applyPreset(cfg, flags)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Terraform.Parallelism > 0 && !hasFlag(flags, "-parallelism") {
+		flags = append(flags, fmt.Sprintf("-parallelism=%d", cfg.Terraform.Parallelism))
 	}
 	return stripFlag(flags, "-json"), nil
 }
@@ -467,6 +473,15 @@ func splitFlags(flags string) []string {
 	}
 	flush()
 	return args
+}
+
+func hasFlag(flags []string, name string) bool {
+	for _, flag := range flags {
+		if flag == name || strings.HasPrefix(flag, name+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 //nolint:unparam // target kept as parameter for flexibility

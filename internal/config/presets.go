@@ -4,7 +4,6 @@ package config
 type EnvironmentPreset struct {
 	Name        string   `yaml:"name"`
 	Environment string   `yaml:"environment,omitempty"`
-	Strategy    string   `yaml:"strategy,omitempty"`
 	WorkDir     string   `yaml:"workdir,omitempty"`
 	Theme       string   `yaml:"theme,omitempty"`
 	Flags       []string `yaml:"flags,omitempty"`

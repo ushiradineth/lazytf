@@ -153,6 +153,13 @@ func (c *CommandLogPanel) View() string {
 	// Split content into lines
 	contentLines := strings.Split(content, "\n")
 
+	scrollPos := 0.0
+	thumbSize := 1.0
+	showScrollbar := len(contentLines) > contentHeight
+	if c.diagnosticsPanel != nil {
+		scrollPos, thumbSize, showScrollbar = c.diagnosticsPanel.GetScrollInfo()
+	}
+
 	// Configure the frame
 	c.frame.SetConfig(PanelFrameConfig{
 		PanelID:       "[4]",
@@ -160,9 +167,9 @@ func (c *CommandLogPanel) View() string {
 		ActiveTab:     0,
 		Focused:       c.focused,
 		FooterText:    "",
-		ShowScrollbar: len(contentLines) > contentHeight,
-		ScrollPos:     0, // DiagnosticsPanel handles its own scrolling
-		ThumbSize:     c.calculateThumbSize(contentHeight, len(contentLines)),
+		ShowScrollbar: showScrollbar,
+		ScrollPos:     scrollPos,
+		ThumbSize:     thumbSize,
 	})
 
 	// Pad content lines to fill panel
