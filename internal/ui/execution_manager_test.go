@@ -496,6 +496,7 @@ func TestBeginStateShowWithMockDifferentAddresses(t *testing.T) {
 		}
 
 		_ = cmd()
+		m.handleStateShowComplete(StateShowCompleteMsg{Address: addr, Output: "ok"})
 
 		if mock.LastStateShowAddr != addr {
 			t.Errorf("expected address %s, got %s", addr, mock.LastStateShowAddr)
@@ -2850,6 +2851,70 @@ func TestBeginApplyFailsWhenSavedPlanMissing(t *testing.T) {
 	}
 }
 
+func TestBeginApplyFailsWhenSavedPlanEnvironmentMismatch(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	planPath := filepath.Join(t.TempDir(), "plan.tfplan")
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+	m.planFilePath = planPath
+	m.planEnvironment = "ws-1"
+	m.envCurrent = "ws-2"
+
+	cmd := m.beginApply()
+	if cmd != nil {
+		_ = cmd()
+	}
+
+	if mock.ApplyCalls != 0 {
+		t.Fatalf("expected apply not to run when saved plan environment mismatches")
+	}
+	if m.err == nil || !strings.Contains(m.err.Error(), "saved plan belongs to environment") {
+		t.Fatalf("expected environment mismatch error, got %v", m.err)
+	}
+}
+
+func TestBeginApplyFailsWhenSavedPlanWorkdirMismatch(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.MockWorkDir = t.TempDir()
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	planPath := filepath.Join(t.TempDir(), "plan.tfplan")
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+	m.planFilePath = planPath
+	m.planEnvironment = "dev"
+	m.envCurrent = "dev"
+	m.planWorkDir = filepath.Join(t.TempDir(), "other")
+
+	cmd := m.beginApply()
+	if cmd != nil {
+		_ = cmd()
+	}
+
+	if mock.ApplyCalls != 0 {
+		t.Fatalf("expected apply not to run when saved plan workdir mismatches")
+	}
+	if m.err == nil || !strings.Contains(m.err.Error(), "saved plan belongs to workdir") {
+		t.Fatalf("expected workdir mismatch error, got %v", m.err)
+	}
+}
+
 // ============================================================================
 // beginRefresh command execution tests
 // ============================================================================
@@ -3730,6 +3795,46 @@ func TestUpdateWithPlanStartMsg(t *testing.T) {
 	}
 }
 
+func TestHandlePlanStartErrorClearsSavedPlanMetadata(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	m.planFilePath = "test.tfplan"
+	m.planRunFlags = []string{"-out=test.tfplan"}
+	m.applyRunFlags = []string{"test.tfplan"}
+	m.planEnvironment = "ws-1"
+	m.planWorkDir = "/tmp/ws-1"
+	m.lastPlanOutput = "old output"
+	m.setPlan(&terraform.Plan{FormatVersion: "1.0"})
+
+	_, _ = m.handlePlanStart(PlanStartMsg{Error: errors.New("failed to start")})
+
+	if m.planFilePath != "" {
+		t.Fatalf("expected plan file path cleared, got %q", m.planFilePath)
+	}
+	if m.planRunFlags != nil {
+		t.Fatalf("expected plan flags cleared, got %v", m.planRunFlags)
+	}
+	if m.applyRunFlags != nil {
+		t.Fatalf("expected apply flags cleared, got %v", m.applyRunFlags)
+	}
+	if m.planEnvironment != "" {
+		t.Fatalf("expected plan environment cleared, got %q", m.planEnvironment)
+	}
+	if m.planWorkDir != "" {
+		t.Fatalf("expected plan workdir cleared, got %q", m.planWorkDir)
+	}
+	if m.lastPlanOutput != "" {
+		t.Fatalf("expected last plan output cleared, got %q", m.lastPlanOutput)
+	}
+	if m.plan != nil {
+		t.Fatal("expected plan to be cleared")
+	}
+}
+
 func TestUpdateWithApplyStartMsg(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
@@ -3799,6 +3904,28 @@ func TestHandleEnvironmentChangedOperationRunning(t *testing.T) {
 		t.Fatal("expected non-nil model")
 	}
 	// Should have triggered an error toast since operation is running
+}
+
+func TestHandleEnvironmentChangedWhenNonStreamingOperationRunning(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.operationRunning = true
+
+	msg := components.EnvironmentChangedMsg{
+		Environment: environment.Environment{
+			Strategy: environment.StrategyFolder,
+			Path:     t.TempDir(),
+			Name:     "test-env",
+		},
+	}
+
+	_, cmd := m.handleEnvironmentChanged(msg)
+	if cmd == nil {
+		t.Fatal("expected error toast command when operation is running")
+	}
 }
 
 func TestHandleEnvironmentChangedNilExecutorFolder(t *testing.T) {

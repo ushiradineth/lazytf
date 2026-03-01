@@ -30,7 +30,7 @@ func (m *Model) beginPlan() tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -47,8 +47,7 @@ func (m *Model) beginPlan() tea.Cmd {
 	m.planFilePath = planFilePath
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.planRunning = true
 	m.planStartedAt = time.Now()
 
@@ -95,7 +94,7 @@ func (m *Model) beginApply() tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -115,8 +114,7 @@ func (m *Model) beginApply() tea.Cmd {
 	m.applyRunFlags = applyFlags
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.applyRunning = true
 	m.applyStartedAt = time.Now()
 
@@ -173,7 +171,7 @@ func (m *Model) beginRefresh() tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -187,8 +185,7 @@ func (m *Model) beginRefresh() tea.Cmd {
 	}
 	// Cancel any previous execution before starting new one
 	m.cancelExecution()
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelFunc = cancel
+	ctx := m.beginTrackedOperation(0)
 	m.refreshRunning = true
 	m.refreshStartedAt = time.Now()
 
@@ -243,7 +240,7 @@ func (m *Model) handleRefreshStart(msg RefreshStartMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cmd) {
 	m.refreshRunning = false
-	m.cancelFunc = nil
+	m.finishTrackedOperation()
 	m.outputChan = nil
 
 	// Switch MainArea back to diff mode when refresh completes
@@ -328,7 +325,7 @@ func (m *Model) beginValidate() tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -349,9 +346,9 @@ func (m *Model) beginValidate() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationValidate)
 	}
 
+	ctx := m.beginTrackedOperation(2 * time.Minute)
+
 	validateCmd := func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
 		result, err := m.executor.Validate(ctx, terraform.ValidateOptions{
 			Env: validateEnv,
 		})
@@ -383,6 +380,8 @@ func (m *Model) beginValidate() tea.Cmd {
 
 //nolint:gocognit,gocyclo // Validation result handling has inherent complexity
 func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	// Log to session history
 	output := msg.RawOutput
 	if msg.Error != nil {
@@ -458,13 +457,13 @@ func (m *Model) handleValidateComplete(msg ValidateCompleteMsg) (tea.Model, tea.
 	return m, cmd
 }
 
-//nolint:gocognit,gocyclo // Command setup with error handling has inherent complexity.
+//nolint:gocognit // Command setup with error handling has inherent complexity.
 func (m *Model) beginFormat() tea.Cmd {
 	if m.executor == nil {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -485,9 +484,9 @@ func (m *Model) beginFormat() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationFormat)
 	}
 
+	ctx := m.beginTrackedOperation(2 * time.Minute)
+
 	formatCmd := func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
 		result, err := m.executor.Format(ctx, terraform.FormatOptions{
 			Recursive: true,
 			Env:       formatEnv,
@@ -520,6 +519,8 @@ func (m *Model) beginFormat() tea.Cmd {
 }
 
 func (m *Model) handleFormatComplete(msg FormatCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	// Log to session history
 	var formatOutput string
 	switch {
@@ -566,7 +567,7 @@ func (m *Model) beginInit(upgrade bool) tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -591,9 +592,9 @@ func (m *Model) beginInit(upgrade bool) tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationInit)
 	}
 
+	ctx := m.beginTrackedOperation(3 * time.Minute)
+
 	initCmd := func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
 		result, err := m.executor.Init(ctx, terraform.InitOptions{Upgrade: upgrade, Env: initEnv})
 		if err != nil {
 			return InitCompleteMsg{Error: err, Upgrade: upgrade}
@@ -611,6 +612,8 @@ func (m *Model) beginInit(upgrade bool) tea.Cmd {
 }
 
 func (m *Model) handleInitComplete(msg InitCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	output := strings.TrimSpace(msg.Output)
 	if output == "" && msg.Error != nil {
 		output = msg.Error.Error()
@@ -649,7 +652,7 @@ func (m *Model) beginStateList() tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
-	if m.planRunning || m.applyRunning || m.refreshRunning {
+	if m.isOperationRunning() {
 		if m.toast != nil {
 			return m.toast.ShowInfo("Operation already in progress")
 		}
@@ -670,9 +673,9 @@ func (m *Model) beginStateList() tea.Cmd {
 		progressCmd = m.progressIndicator.Start(components.OperationStateList)
 	}
 
+	ctx := m.beginTrackedOperation(2 * time.Minute)
+
 	stateListCmd := func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
 		result, err := m.executor.StateList(ctx, terraform.StateListOptions{
 			Env: stateEnv,
 		})
@@ -693,6 +696,8 @@ func (m *Model) beginStateList() tea.Cmd {
 }
 
 func (m *Model) handleStateListComplete(msg StateListCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	// Hide loading toast
 	if m.toast != nil {
 		m.toast.Hide()
@@ -755,15 +760,21 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
+	if m.isOperationRunning() {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
+		return nil
+	}
 	stateEnv, err := m.prepareTerraformEnv()
 	if err != nil {
 		m.err = err
 		return nil
 	}
 
+	ctx := m.beginTrackedOperation(2 * time.Minute)
+
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
 		result, err := m.executor.StateShow(ctx, address, terraform.StateShowOptions{
 			Env: stateEnv,
 		})
@@ -781,6 +792,8 @@ func (m *Model) beginStateShow(address string) tea.Cmd {
 }
 
 func (m *Model) handleStateShowComplete(msg StateShowCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	m.appendSessionLog("State shown", "terraform state show "+msg.Address, stateShowSessionOutput(msg))
 
 	if msg.Error != nil {
@@ -806,16 +819,21 @@ func (m *Model) beginStateRm(address string) tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
+	if m.isOperationRunning() {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
+		return nil
+	}
 	stateEnv, err := m.prepareTerraformEnv()
 	if err != nil {
 		m.err = err
 		return nil
 	}
 
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
+	ctx := m.beginTrackedOperation(2 * time.Minute)
 
+	return func() tea.Msg {
 		backupPath, backupErr := m.backupStateToFile(ctx, stateEnv)
 		if backupErr != nil {
 			return StateRmCompleteMsg{Address: address, Error: fmt.Errorf("backup state: %w", backupErr)}
@@ -833,6 +851,8 @@ func (m *Model) beginStateRm(address string) tea.Cmd {
 }
 
 func (m *Model) handleStateRmComplete(msg StateRmCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	m.stateMoveSource = ""
 	m.stateMoveInput = ""
 	m.pendingConfirmCmd = nil
@@ -860,16 +880,24 @@ func (m *Model) beginStateMv(source, destination string) tea.Cmd {
 		m.err = errors.New("terraform executor not configured")
 		return nil
 	}
+	if m.isOperationRunning() {
+		if m.toast != nil {
+			return m.toast.ShowInfo("Operation already in progress")
+		}
+		return nil
+	}
 	stateEnv, err := m.prepareTerraformEnv()
 	if err != nil {
 		m.err = err
 		return nil
 	}
 
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
+	m.cancelExecution()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	m.cancelFunc = cancel
+	m.operationRunning = true
 
+	return func() tea.Msg {
 		backupPath, backupErr := m.backupStateToFile(ctx, stateEnv)
 		if backupErr != nil {
 			return StateMvCompleteMsg{Source: source, Destination: destination, Error: fmt.Errorf("backup state: %w", backupErr)}
@@ -887,6 +915,8 @@ func (m *Model) beginStateMv(source, destination string) tea.Cmd {
 }
 
 func (m *Model) handleStateMvComplete(msg StateMvCompleteMsg) (tea.Model, tea.Cmd) {
+	m.finishTrackedOperation()
+
 	m.stateMoveSource = ""
 	m.stateMoveInput = ""
 	m.pendingConfirmCmd = nil
@@ -1095,10 +1125,7 @@ func (m *Model) appendSessionLog(title, command, output string) {
 }
 
 func (m *Model) prepareTerraformEnv() ([]string, error) {
-	workDir := m.envWorkDir
-	if m.executor != nil {
-		workDir = m.executor.WorkDir()
-	}
+	workDir := m.currentWorkDir()
 	if strings.TrimSpace(workDir) == "" {
 		workDir = "."
 	}
@@ -1109,6 +1136,25 @@ func (m *Model) prepareTerraformEnv() ([]string, error) {
 	return []string{"TMPDIR=" + tmpDir}, nil
 }
 
+func (m *Model) currentWorkDir() string {
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	if strings.TrimSpace(workDir) == "" {
+		return "."
+	}
+	return workDir
+}
+
+func (m *Model) clearSavedPlanState() {
+	m.planFilePath = ""
+	m.planRunFlags = nil
+	m.applyRunFlags = nil
+	m.planEnvironment = ""
+	m.planWorkDir = ""
+}
+
 func (m *Model) cancelExecution() {
 	if m.cancelFunc != nil {
 		m.cancelFunc()
@@ -1116,7 +1162,39 @@ func (m *Model) cancelExecution() {
 	}
 }
 
+func (m *Model) beginTrackedOperation(timeout time.Duration) context.Context {
+	m.cancelExecution()
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	m.cancelFunc = cancel
+	m.operationRunning = true
+	return ctx
+}
+
+func (m *Model) finishTrackedOperation() {
+	if m.cancelFunc != nil {
+		m.cancelFunc()
+		m.cancelFunc = nil
+	}
+	m.operationRunning = false
+}
+
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
+	if msg.Error != nil {
+		m.clearSavedPlanState()
+		m.setPlan(nil)
+		m.lastPlanOutput = ""
+		if m.planView != nil {
+			m.planView.SetSummary(m.planSummary())
+		}
+	}
 	return m.handleOperationStart(
 		msg.Error,
 		&m.planRunning,
@@ -1130,7 +1208,7 @@ func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planRunning = false
-	m.cancelFunc = nil
+	m.finishTrackedOperation()
 	m.outputChan = nil
 
 	// Log to session history
@@ -1147,8 +1225,7 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("Plan failed: %v", msg.Error))
 		}
-		m.planFilePath = ""
-		m.planRunFlags = nil
+		m.clearSavedPlanState()
 		// Clear operation state on plan failure to avoid stale resource states
 		if m.operationState != nil {
 			m.operationState.InitializeFromPlan(nil)
@@ -1174,6 +1251,8 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 			m.planView.SetSummary(m.planSummary())
 		}
 	}
+	m.planEnvironment = m.envCurrent
+	m.planWorkDir = m.currentWorkDir()
 	m.setDiagnostics(nil)
 	if msg.Output != "" {
 		m.lastPlanOutput = msg.Output
@@ -1212,7 +1291,7 @@ func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.applyRunning = false
-	m.cancelFunc = nil
+	m.finishTrackedOperation()
 	m.outputChan = nil
 
 	// Keep status column visible after apply - user can see final state
@@ -1261,9 +1340,7 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	m.setLogText(parsed)
 	// Stay in main view with panel layout
 	m.setPlan(&terraform.Plan{Resources: nil})
-	m.planFilePath = ""
-	m.planRunFlags = nil
-	m.applyRunFlags = nil
+	m.clearSavedPlanState()
 	m.updateExecutionViewForStreaming()
 
 	// Build commands - recordHistoryCmd will record and reload entries
@@ -1285,6 +1362,7 @@ func (m *Model) handleOperationStart(
 ) (tea.Model, tea.Cmd) {
 	if err != nil {
 		*running = false
+		m.finishTrackedOperation()
 		if m.applyView != nil {
 			m.applyView.SetStatus(views.ApplyFailed)
 			m.applyView.AppendLine(fmt.Sprintf("%s: %v", failureLine, err))
@@ -1326,9 +1404,7 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	// Clear plan-related state on apply failure
-	m.planFilePath = ""
-	m.planRunFlags = nil
-	m.applyRunFlags = nil
+	m.clearSavedPlanState()
 
 	// Set full output to applyView so [0] Operation Logs shows everything
 	if m.applyView != nil {
@@ -1655,6 +1731,24 @@ func (m *Model) applyFlagsForRun() ([]string, error) {
 	flags := append([]string{}, m.applyFlags...)
 	if strings.TrimSpace(m.planFilePath) == "" {
 		return flags, nil
+	}
+	if m.planEnvironment != "" && m.planEnvironment != m.envCurrent {
+		return nil, fmt.Errorf(
+			"saved plan belongs to environment %q, current environment is %q. Run terraform plan again",
+			m.planEnvironment,
+			m.envCurrent,
+		)
+	}
+	if m.planWorkDir != "" {
+		currentWorkDir := filepath.Clean(m.currentWorkDir())
+		savedPlanWorkDir := filepath.Clean(m.planWorkDir)
+		if savedPlanWorkDir != currentWorkDir {
+			return nil, fmt.Errorf(
+				"saved plan belongs to workdir %q, current workdir is %q. Run terraform plan again",
+				savedPlanWorkDir,
+				currentWorkDir,
+			)
+		}
 	}
 	if _, err := os.Stat(m.planFilePath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
