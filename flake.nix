@@ -16,9 +16,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        constsSource = builtins.readFile ./internal/consts/consts.go;
-        versionMatch = builtins.match ".*var Version = \"([^\"]+)\".*" constsSource;
-        appVersion = if versionMatch == null then "dev" else builtins.head versionMatch;
+        appVersion = self.shortRev or self.dirtyShortRev or "dev";
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
           version = appVersion;

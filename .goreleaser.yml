@@ -64,9 +64,7 @@ builds:
     main: ./cmd/lazytf
     binary: lazytf
     env:
-      - CGO_ENABLED=1
-      - CC=oa64-clang
-      - CGO_LDFLAGS=-Wl,-no_data_const
+      - CGO_ENABLED=0
     goos:
       - darwin
     goarch:
