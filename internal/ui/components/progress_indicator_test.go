@@ -237,6 +237,19 @@ func TestProgressIndicatorSetDetail(t *testing.T) {
 	}
 }
 
+func TestProgressIndicatorStartClearsDetail(t *testing.T) {
+	s := styles.DefaultStyles()
+	p := NewProgressIndicator(s)
+
+	p.Start(OperationPlan)
+	p.SetDetail("waiting for state lock")
+	p.Start(OperationApply)
+
+	if p.detail != "" {
+		t.Fatalf("expected start to clear detail, got %q", p.detail)
+	}
+}
+
 func TestProgressIndicatorGetIconAndText(t *testing.T) {
 	s := styles.DefaultStyles()
 	p := NewProgressIndicator(s)

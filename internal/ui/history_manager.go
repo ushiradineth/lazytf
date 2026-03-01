@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -63,6 +64,7 @@ func (m *Model) recordOperationCmd(action string, flags []string, autoApprove bo
 		Command:     m.buildCommand(action, flags, autoApprove),
 		Summary:     m.flattenSummary(m.planSummary()),
 		User:        currentUserName(),
+		WorkDir:     m.currentHistoryWorkDir(),
 		Environment: m.envCurrent,
 		Output:      selectOperationOutput(output, result),
 	}
@@ -85,8 +87,23 @@ func (m *Model) loadHistoryEntries() ([]history.Entry, error) {
 	}
 	// Large limit - the panel is scrollable so no practical need to restrict
 	const maxEntries = 1000
-	workDir := strings.TrimSpace(m.currentWorkDir())
-	return m.historyStore.ListRecentForContext(m.envCurrent, workDir, maxEntries)
+	return m.historyStore.ListRecentForScope(m.envCurrent, m.currentHistoryWorkDir(), maxEntries)
+}
+
+func (m *Model) currentHistoryWorkDir() string {
+	workDir := m.envWorkDir
+	if m.executor != nil {
+		workDir = m.executor.WorkDir()
+	}
+	workDir = strings.TrimSpace(workDir)
+	if workDir == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(workDir)
+	if err != nil {
+		return workDir
+	}
+	return abs
 }
 
 func (m *Model) loadHistoryDetailCmd(id int64) tea.Cmd {

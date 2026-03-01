@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -84,6 +82,9 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) tea.Model {
 }
 
 func (m *Model) handlePlanOutput(msg PlanOutputMsg) (tea.Model, tea.Cmd) {
+	if !m.planRunning {
+		return m, nil
+	}
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
@@ -111,6 +112,9 @@ func (m *Model) handleApplyOutput(msg ApplyOutputMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleRefreshOutput(msg RefreshOutputMsg) (tea.Model, tea.Cmd) {
+	if !m.refreshRunning {
+		return m, nil
+	}
 	if m.applyView != nil {
 		m.applyView.AppendLine(msg.Line)
 	}
@@ -123,16 +127,8 @@ func (m *Model) updateStateLockStatus(line string) {
 	if m.progressIndicator == nil {
 		return
 	}
-
-	normalized := strings.ToLower(strings.TrimSpace(line))
-	if strings.Contains(normalized, "acquiring state lock") {
-		m.progressIndicator.SetDetail("waiting for state lock")
-		return
-	}
-
-	if strings.Contains(normalized, "releasing state lock") || strings.Contains(normalized, "acquired state lock") {
-		m.progressIndicator.SetDetail("")
-	}
+	_ = line
+	m.progressIndicator.SetDetail("")
 }
 
 func (m *Model) canSwitchResourcesTab() bool {

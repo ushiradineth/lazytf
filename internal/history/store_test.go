@@ -948,36 +948,34 @@ func TestListRecentForEnvironmentMultipleEntries(t *testing.T) {
 	}
 }
 
-func TestListRecentForContextFiltersByEnvironmentAndWorkdir(t *testing.T) {
+func TestListRecentForScope(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := Open(path)
 	if err != nil {
 		t.Fatalf("open history store: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = store.Close()
-	})
+	defer store.Close()
 
-	entries := []Entry{
-		{StartedAt: time.Now().Add(-3 * time.Minute), FinishedAt: time.Now().Add(-2 * time.Minute), Duration: time.Minute, Status: StatusSuccess, Summary: "dev a", Environment: "dev", WorkDir: "/tmp/a"},
-		{StartedAt: time.Now().Add(-2 * time.Minute), FinishedAt: time.Now().Add(-1 * time.Minute), Duration: time.Minute, Status: StatusSuccess, Summary: "dev b", Environment: "dev", WorkDir: "/tmp/b"},
-		{StartedAt: time.Now().Add(-1 * time.Minute), FinishedAt: time.Now(), Duration: time.Minute, Status: StatusSuccess, Summary: "staging a", Environment: "staging", WorkDir: "/tmp/a"},
+	entriesToRecord := []Entry{
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "dev", WorkDir: "/repo/a"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "dev", WorkDir: "/repo/b"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Status: StatusSuccess, Environment: "prod", WorkDir: "/repo/a"},
 	}
-	for _, entry := range entries {
-		if recErr := store.RecordApply(entry); recErr != nil {
-			t.Fatalf("record apply: %v", recErr)
+	for _, entry := range entriesToRecord {
+		if err := store.RecordApply(entry); err != nil {
+			t.Fatalf("record apply: %v", err)
 		}
 	}
 
-	filtered, err := store.ListRecentForContext("dev", "/tmp/a", 10)
+	entries, err := store.ListRecentForScope("dev", "/repo/a", 10)
 	if err != nil {
-		t.Fatalf("list recent for context: %v", err)
+		t.Fatalf("list recent for scope: %v", err)
 	}
-	if len(filtered) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(filtered))
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 scoped entry, got %d", len(entries))
 	}
-	if filtered[0].Environment != "dev" || filtered[0].WorkDir != "/tmp/a" {
-		t.Fatalf("unexpected entry: %+v", filtered[0])
+	if entries[0].Environment != "dev" || entries[0].WorkDir != "/repo/a" {
+		t.Fatalf("unexpected scoped entry: env=%q workdir=%q", entries[0].Environment, entries[0].WorkDir)
 	}
 }
 
@@ -1019,5 +1017,35 @@ func TestQueryOperationsWithActionFilter(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("expected 1 apply entry, got %d", len(entries))
+	}
+}
+
+func TestQueryOperationsWithWorkDirFilter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open history store: %v", err)
+	}
+	defer store.Close()
+
+	entries := []OperationEntry{
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Duration: time.Second, Action: "plan", Status: StatusSuccess, WorkDir: "/repo/a"},
+		{StartedAt: time.Now(), FinishedAt: time.Now(), Duration: time.Second, Action: "plan", Status: StatusSuccess, WorkDir: "/repo/b"},
+	}
+	for _, entry := range entries {
+		if err := store.RecordOperation(entry); err != nil {
+			t.Fatalf("record operation: %v", err)
+		}
+	}
+
+	filtered, err := store.QueryOperations(OperationFilter{Action: "plan", WorkDir: "/repo/a", Limit: 10})
+	if err != nil {
+		t.Fatalf("query operations: %v", err)
+	}
+	if len(filtered) != 1 {
+		t.Fatalf("expected 1 operation for workdir filter, got %d", len(filtered))
+	}
+	if filtered[0].WorkDir != "/repo/a" {
+		t.Fatalf("unexpected workdir: %q", filtered[0].WorkDir)
 	}
 }

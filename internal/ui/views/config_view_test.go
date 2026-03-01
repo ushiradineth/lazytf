@@ -73,7 +73,8 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 	view.SetSize(80, 40)
 
 	cfg := &config.Config{
-		Theme: config.ThemeConfig{Name: "mocha"},
+		General: config.GeneralConfig{DefaultEnvironment: "dev"},
+		Theme:   config.ThemeConfig{Name: "mocha"},
 		Terraform: config.TerraformConfig{
 			Binary:       "/usr/local/bin/terraform",
 			WorkingDir:   "/projects/infra",
@@ -81,19 +82,10 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 			Parallelism:  10,
 			DefaultFlags: []string{"-no-color", "-input=false"},
 		},
-		UI: config.UIConfig{
-			MouseEnabled:      true,
-			CompactMode:       false,
-			AnimationsEnabled: true,
-			SplitViewDefault:  true,
-			SplitRatio:        0.4,
-		},
 		History: config.HistoryConfig{
-			Enabled:       true,
-			Level:         "detailed",
-			Path:          "/home/user/.lazytf/history.db",
-			RetentionDays: 30,
-			MaxEntries:    1000,
+			Enabled: true,
+			Level:   "detailed",
+			Path:    "/home/user/.lazytf/history.db",
 		},
 	}
 	view.SetConfig(cfg)
@@ -107,8 +99,8 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 	if !strings.Contains(out, "Terraform") {
 		t.Error("expected Terraform header")
 	}
-	if !strings.Contains(out, "UI") {
-		t.Error("expected UI header")
+	if !strings.Contains(out, "General") {
+		t.Error("expected General header")
 	}
 	if !strings.Contains(out, "History") {
 		t.Error("expected History header")
@@ -136,20 +128,6 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 		t.Error("expected default flags")
 	}
 
-	// Check UI settings
-	if !strings.Contains(out, "mouse enabled: true") {
-		t.Error("expected mouse enabled")
-	}
-	if !strings.Contains(out, "compact mode: false") {
-		t.Error("expected compact mode")
-	}
-	if !strings.Contains(out, "animations: true") {
-		t.Error("expected animations")
-	}
-	if !strings.Contains(out, "split ratio: 0.40") {
-		t.Error("expected split ratio")
-	}
-
 	// Check history settings
 	if !strings.Contains(out, "enabled: true") {
 		t.Error("expected history enabled")
@@ -157,11 +135,8 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 	if !strings.Contains(out, "detailed") {
 		t.Error("expected history level")
 	}
-	if !strings.Contains(out, "retention days: 30") {
-		t.Error("expected retention days")
-	}
-	if !strings.Contains(out, "max entries: 1000") {
-		t.Error("expected max entries")
+	if !strings.Contains(out, "default env: dev") {
+		t.Error("expected default environment")
 	}
 }
 

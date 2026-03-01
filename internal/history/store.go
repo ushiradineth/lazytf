@@ -50,6 +50,7 @@ type OperationEntry struct {
 	Status      Status
 	Summary     string
 	User        string
+	WorkDir     string
 	Environment string
 	Output      string
 }
@@ -59,6 +60,7 @@ type OperationFilter struct {
 	After       time.Time
 	Before      time.Time
 	Action      string
+	WorkDir     string
 	Environment string
 	User        string
 	Limit       int
@@ -186,8 +188,8 @@ func (s *Store) RecordOperation(entry OperationEntry) error {
 	ctx := context.Background()
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO operations (started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, environment, output_text, output_gzip)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO operations (started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, workdir, environment, output_text, output_gzip)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		entry.StartedAt.UTC().Format(time.RFC3339Nano),
 		entry.FinishedAt.UTC().Format(time.RFC3339Nano),
 		entry.Duration.Milliseconds(),
@@ -197,6 +199,7 @@ func (s *Store) RecordOperation(entry OperationEntry) error {
 		string(entry.Status),
 		entry.Summary,
 		entry.User,
+		entry.WorkDir,
 		entry.Environment,
 		outputText,
 		outputGzip,
@@ -263,11 +266,11 @@ func (s *Store) ListRecent(limit int) ([]Entry, error) {
 
 // ListRecentForEnvironment returns apply history entries for a specific environment.
 func (s *Store) ListRecentForEnvironment(environment string, limit int) ([]Entry, error) {
-	return s.ListRecentForContext(environment, "", limit)
+	return s.ListRecentForScope(environment, "", limit)
 }
 
-// ListRecentForContext returns apply history entries filtered by environment and workdir.
-func (s *Store) ListRecentForContext(environment, workDir string, limit int) ([]Entry, error) {
+// ListRecentForScope returns apply history entries for a specific environment and workdir scope.
+func (s *Store) ListRecentForScope(environment, workDir string, limit int) ([]Entry, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
 	}
@@ -348,7 +351,7 @@ func (s *Store) QueryOperations(filter OperationFilter) ([]OperationEntry, error
 }
 
 func buildOperationQuery(filter OperationFilter) (string, []any) {
-	query := `SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, environment, output_text, output_gzip
+	query := `SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, workdir, environment, output_text, output_gzip
 		FROM operations`
 	var args []any
 	var clauses []string
@@ -364,6 +367,7 @@ func buildOperationQuery(filter OperationFilter) (string, []any) {
 	appendClause(!filter.After.IsZero(), "started_at >= ?", filter.After.UTC().Format(time.RFC3339Nano))
 	appendClause(!filter.Before.IsZero(), "started_at <= ?", filter.Before.UTC().Format(time.RFC3339Nano))
 	appendClause(strings.TrimSpace(filter.Action) != "", "action = ?", filter.Action)
+	appendClause(strings.TrimSpace(filter.WorkDir) != "", "workdir = ?", filter.WorkDir)
 	appendClause(strings.TrimSpace(filter.Environment) != "", "environment = ?", filter.Environment)
 	appendClause(strings.TrimSpace(filter.User) != "", "user_name = ?", filter.User)
 
@@ -407,6 +411,7 @@ func scanOperationEntry(rows *sql.Rows) (OperationEntry, error) {
 		&status,
 		&entry.Summary,
 		&entry.User,
+		&entry.WorkDir,
 		&entry.Environment,
 		&outputText,
 		&outputGzip,
@@ -481,11 +486,20 @@ func (s *Store) GetOperationsForApply(entry Entry) ([]OperationEntry, error) {
 	filter := OperationFilter{
 		After:       windowStart,
 		Before:      windowEnd,
+		WorkDir:     entry.WorkDir,
 		Environment: entry.Environment,
 		Limit:       10,
 	}
 
-	return s.QueryOperations(filter)
+	operations, err := s.QueryOperations(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(operations) == 0 && strings.TrimSpace(filter.WorkDir) != "" {
+		filter.WorkDir = ""
+		return s.QueryOperations(filter)
+	}
+	return operations, nil
 }
 
 // GetOperationByID returns an operation entry by ID.
@@ -497,7 +511,7 @@ func (s *Store) GetOperationByID(id int64) (OperationEntry, error) {
 	ctx := context.Background()
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, environment, output_text, output_gzip
+		`SELECT id, started_at, finished_at, duration_ms, action, command, exit_code, status, summary, user_name, workdir, environment, output_text, output_gzip
 		 FROM operations
 		 WHERE id = ?`,
 		id,
@@ -519,6 +533,7 @@ func (s *Store) GetOperationByID(id int64) (OperationEntry, error) {
 		&status,
 		&entry.Summary,
 		&entry.User,
+		&entry.WorkDir,
 		&entry.Environment,
 		&outputText,
 		&outputGzip,
@@ -588,6 +603,7 @@ func (s *Store) ensureOperationsSchema() error {
 			status TEXT,
 			summary TEXT,
 			user_name TEXT,
+			workdir TEXT,
 			environment TEXT,
 			output_text TEXT,
 			output_gzip BLOB
@@ -597,6 +613,9 @@ func (s *Store) ensureOperationsSchema() error {
 		return fmt.Errorf("init operations schema: %w", err)
 	}
 	if err := s.ensureColumn("operations", "output_gzip", "BLOB"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("operations", "workdir", "TEXT"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("operations", "environment", "TEXT"); err != nil {
