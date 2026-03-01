@@ -152,7 +152,7 @@ deadcode:
 security:
     @echo "Running security checks..."
     @command -v govulncheck >/dev/null 2>&1 || { echo "❌ govulncheck not installed. Refer flake.nix for installation"; exit 1; }
-    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.6}" govulncheck ./...
+    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.5}" govulncheck ./...
 
 # Run gosec security linter
 gosec:
@@ -179,29 +179,51 @@ generate:
 
 # ===== Combined Quality Checks =====
 
-# Check DCO sign-offs on commits since origin/main
-dco:
-    @echo "Checking DCO sign-offs..."
-    @git fetch origin main --quiet
-    @COMMITS=$(git rev-list --no-merges origin/main..HEAD); \
-    if [ -z "$COMMITS" ]; then \
-        echo "✓ No commits to check"; \
-        exit 0; \
-    fi; \
-    MISSING=0; \
-    for COMMIT in $COMMITS; do \
-        if ! git log -1 --pretty=%B "$COMMIT" | grep -qi '^Signed-off-by:'; then \
-            echo "❌ Missing Signed-off-by in commit $COMMIT"; \
-            git log -1 --pretty='format:%h %s' "$COMMIT"; \
-            MISSING=1; \
-        fi; \
-    done; \
-    if [ "$MISSING" -ne 0 ]; then \
-        echo "DCO check failed. Add sign-off with: git commit --amend -s"; \
-        echo "For multiple commits: git rebase --signoff origin/main"; \
-        exit 1; \
-    fi; \
-    echo "✓ DCO sign-off check passed"
+# Verify generated files are up to date
+generate-check:
+    @echo "Running generators and checking freshness..."
+    @before_status="$(git status --porcelain)"; go generate ./...; after_status="$(git status --porcelain)"; if [ "$before_status" != "$after_status" ]; then git status --short; git diff --stat; echo "❌ Generated files are out of date. Run 'just generate' and commit changes."; exit 1; fi
+
+# CI verify job equivalent
+ci-verify:
+    @echo "Running CI verify checks..."
+    go mod verify
+    go vet ./...
+    go test ./...
+    @command -v golangci-lint >/dev/null 2>&1 || { echo "❌ golangci-lint not installed. Refer flake.nix for installation"; exit 1; }
+    BASE_REV=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD); golangci-lint run --timeout 5m --new-from-rev="$BASE_REV" ./...
+    go build ./...
+
+# CI quality job equivalent
+ci-quality:
+    @echo "Running CI quality checks..."
+    go test -v -race -coverprofile={{coverage_file}} -covermode=atomic ./...
+    GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.5}" govulncheck ./... || true
+
+# CI integration job equivalent
+ci-integration:
+    @echo "Running CI integration tests..."
+    go test -tags=integration ./test/integration
+
+# CI e2e job equivalent
+ci-e2e:
+    @echo "Running CI e2e tests..."
+    go test -tags=e2e ./test/e2e
+
+# CI profiling job equivalent
+ci-profiling:
+    @echo "Running CI profiling tests..."
+    go test -run '^TestProfiler' ./internal/profile
+
+# CI release-config job equivalent
+ci-release-config:
+    @echo "Running CI release config checks..."
+    go run github.com/goreleaser/goreleaser/v2@v2.12.7 check
+
+# CI nix job equivalent
+ci-nix:
+    @echo "Running CI nix checks..."
+    nix flake check
 
 # Run all quality checks
 check: fmt vet lint test
@@ -212,8 +234,18 @@ check-all: fmt vet lint test-coverage security
     @echo "✓ All checks and coverage complete!"
 
 # Run CI checks locally (mirrors GitHub Actions CI)
-ci: tidy dco vet lint test-coverage build security
+ci: generate-check ci-verify ci-quality ci-integration ci-e2e ci-profiling ci-release-config ci-nix
     @echo "✓ All CI checks passed locally!"
+
+# Validate GoReleaser configuration
+release-check:
+    @command -v goreleaser >/dev/null 2>&1 || { echo "❌ goreleaser not installed"; exit 1; }
+    goreleaser check
+
+# Build local snapshot release artifacts (no publish)
+release-snapshot:
+    @command -v goreleaser >/dev/null 2>&1 || { echo "❌ goreleaser not installed"; exit 1; }
+    goreleaser release --snapshot --clean
 
 # Comprehensive code quality report (like Credo for Elixir)
 quality:

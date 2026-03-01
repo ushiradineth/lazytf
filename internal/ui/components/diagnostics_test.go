@@ -233,3 +233,31 @@ func TestDiagnosticsPanelSessionCommandWrapKeepsTail(t *testing.T) {
 		t.Fatalf("expected wrapped command tail to remain visible, got %q", view)
 	}
 }
+
+func TestDiagnosticsPanelGetScrollInfo(t *testing.T) {
+	panel := NewDiagnosticsPanel(styles.DefaultStyles())
+	panel.SetSize(30, 4)
+
+	lines := make([]string, 0, 40)
+	for range 40 {
+		lines = append(lines, "line")
+	}
+	panel.SetLogText(strings.Join(lines, "\n"))
+
+	_, _, show := panel.GetScrollInfo()
+	if !show {
+		t.Fatal("expected scrollbar to be shown for long content")
+	}
+
+	_, _ = panel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	scrollPos, thumbSize, show := panel.GetScrollInfo()
+	if !show {
+		t.Fatal("expected scrollbar to remain visible after scroll")
+	}
+	if scrollPos <= 0 {
+		t.Fatalf("expected positive scroll position after moving down, got %f", scrollPos)
+	}
+	if thumbSize <= 0 || thumbSize >= 1 {
+		t.Fatalf("expected thumb size between 0 and 1, got %f", thumbSize)
+	}
+}

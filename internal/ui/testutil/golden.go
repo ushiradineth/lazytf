@@ -56,19 +56,6 @@ func (g *Golden) Assert(t *testing.T, name string, got string) {
 	}
 }
 
-// AssertPlain compares the ANSI-stripped output of a RenderResult against a golden file.
-func (g *Golden) AssertPlain(t *testing.T, name string, result *RenderResult) {
-	t.Helper()
-	g.Assert(t, name, result.Plain)
-}
-
-// AssertRaw compares the raw output (with ANSI) of a RenderResult against a golden file.
-// Note: ANSI codes can be fragile across different terminal environments.
-func (g *Golden) AssertRaw(t *testing.T, name string, result *RenderResult) {
-	t.Helper()
-	g.Assert(t, name, result.Raw)
-}
-
 // Exists returns true if the golden file exists.
 func (g *Golden) Exists(name string) bool {
 	_, err := os.Stat(g.path(name))

@@ -7,6 +7,7 @@
 // temp-file-and-rename pattern to prevent corruption on crash or power loss.
 //
 //go:generate go run ../../scripts/gen-config-schema.go
+//go:generate go run ../../scripts/gen-nix-config-options/main.go
 package config
 
 import (
@@ -30,7 +31,6 @@ type Config struct {
 	General          GeneralConfig             `yaml:"general,omitempty"`
 	Theme            ThemeConfig               `yaml:"theme,omitempty"`
 	Terraform        TerraformConfig           `yaml:"terraform,omitempty"`
-	UI               UIConfig                  `yaml:"ui,omitempty"`
 	History          HistoryConfig             `yaml:"history,omitempty"`
 	Presets          []EnvironmentPreset       `yaml:"presets,omitempty"`
 	ProjectOverrides map[string]*ProjectConfig `yaml:"project_overrides,omitempty"`
@@ -43,8 +43,7 @@ type GeneralConfig struct {
 
 // ThemeConfig holds theme selection settings.
 type ThemeConfig struct {
-	Name   string      `yaml:"name,omitempty"`
-	Custom *ThemeModel `yaml:"custom,omitempty"`
+	Name string `yaml:"name,omitempty"`
 }
 
 // TerraformConfig holds terraform-specific settings.
@@ -56,25 +55,12 @@ type TerraformConfig struct {
 	Parallelism  int           `yaml:"parallelism,omitempty"`
 }
 
-// UIConfig holds UI preferences.
-type UIConfig struct {
-	MouseEnabled      bool    `yaml:"mouse_enabled,omitempty"`
-	ShowLineNumbers   bool    `yaml:"show_line_numbers,omitempty"`
-	CompactMode       bool    `yaml:"compact_mode,omitempty"`
-	AnimationsEnabled bool    `yaml:"animations_enabled,omitempty"`
-	SplitViewDefault  bool    `yaml:"split_view_default,omitempty"`
-	SplitRatio        float64 `yaml:"split_ratio,omitempty"`
-	ShowHelp          bool    `yaml:"show_help,omitempty"`
-}
-
 // HistoryConfig configures history logging.
 type HistoryConfig struct {
 	Enabled              bool   `yaml:"enabled,omitempty"`
 	Level                string `yaml:"level,omitempty"`
 	Path                 string `yaml:"path,omitempty"`
 	CompressionThreshold int    `yaml:"compression_threshold,omitempty"`
-	RetentionDays        int    `yaml:"retention_days,omitempty"`
-	MaxEntries           int    `yaml:"max_entries,omitempty"`
 }
 
 // Manager loads and saves configuration files with locking.
@@ -304,20 +290,11 @@ func (c Config) WithDefaults() Config {
 	if c.Terraform.Parallelism == 0 {
 		c.Terraform.Parallelism = 10
 	}
-	if c.UI.SplitRatio == 0 {
-		c.UI.SplitRatio = 0.45
-	}
 	if c.History.Level == "" {
 		c.History.Level = "standard"
 	}
 	if c.History.CompressionThreshold == 0 {
 		c.History.CompressionThreshold = 64 * 1024 // 64KB default
-	}
-	if c.History.RetentionDays == 0 {
-		c.History.RetentionDays = 90
-	}
-	if c.History.MaxEntries == 0 {
-		c.History.MaxEntries = 10000
 	}
 	return c
 }
@@ -329,9 +306,6 @@ func (c Config) Validate() error {
 	}
 	if c.Version < 0 {
 		return errors.New("config version cannot be negative")
-	}
-	if c.UI.SplitRatio < 0 || c.UI.SplitRatio > 1 {
-		return fmt.Errorf("split ratio out of range: %.2f", c.UI.SplitRatio)
 	}
 	if c.Terraform.Timeout < 0 {
 		return errors.New("terraform timeout cannot be negative")

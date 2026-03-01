@@ -61,6 +61,10 @@ func (v *ConfigView) View() string {
 	lines = append(lines, v.styles.Dimmed.Render("Theme:")+" "+cfg.Theme.Name)
 
 	lines = append(lines, "")
+	lines = append(lines, v.styles.Highlight.Render("General"))
+	lines = append(lines, "default env: "+fallback(cfg.General.DefaultEnvironment, "default"))
+
+	lines = append(lines, "")
 	lines = append(lines, v.styles.Highlight.Render("Terraform"))
 	lines = append(lines, "binary: "+fallback(cfg.Terraform.Binary, "default"))
 	lines = append(lines, "working dir: "+fallback(cfg.Terraform.WorkingDir, "default"))
@@ -69,20 +73,10 @@ func (v *ConfigView) View() string {
 	lines = append(lines, "default flags: "+strings.Join(cfg.Terraform.DefaultFlags, " "))
 
 	lines = append(lines, "")
-	lines = append(lines, v.styles.Highlight.Render("UI"))
-	lines = append(lines, fmt.Sprintf("mouse enabled: %t", cfg.UI.MouseEnabled))
-	lines = append(lines, fmt.Sprintf("compact mode: %t", cfg.UI.CompactMode))
-	lines = append(lines, fmt.Sprintf("animations: %t", cfg.UI.AnimationsEnabled))
-	lines = append(lines, fmt.Sprintf("split default: %t", cfg.UI.SplitViewDefault))
-	lines = append(lines, fmt.Sprintf("split ratio: %.2f", cfg.UI.SplitRatio))
-
-	lines = append(lines, "")
 	lines = append(lines, v.styles.Highlight.Render("History"))
 	lines = append(lines, fmt.Sprintf("enabled: %t", cfg.History.Enabled))
 	lines = append(lines, "level: "+cfg.History.Level)
 	lines = append(lines, "path: "+fallback(cfg.History.Path, "default"))
-	lines = append(lines, fmt.Sprintf("retention days: %d", cfg.History.RetentionDays))
-	lines = append(lines, fmt.Sprintf("max entries: %d", cfg.History.MaxEntries))
 
 	lines = append(lines, "")
 	lines = append(lines, "esc: back")
