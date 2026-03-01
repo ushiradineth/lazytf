@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/ushiradineth/lazytf/internal/diff"
@@ -241,25 +242,14 @@ func generateManyResources(n int) []terraform.ResourceChange {
 	return resources
 }
 
+// IntToString converts an int to a string (exported for use in tests).
+func IntToString(n int) string {
+	return strconv.Itoa(n)
+}
+
 // intToString converts an int to a string.
 func intToString(n int) string {
 	return IntToString(n)
-}
-
-// IntToString converts an int to a string (exported for use in tests).
-func IntToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + IntToString(-n)
-	}
-	digits := []byte{}
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return string(digits)
 }
 
 // HistoryEntry creates a sample history entry.
@@ -385,16 +375,6 @@ func LongResourceAddress() terraform.ResourceChange {
 		ResourceName: "server_with_a_very_descriptive_name",
 		Action:       terraform.ActionCreate,
 		Change:       changeForAction(terraform.ActionCreate),
-	}
-}
-
-// AllActionTypes returns one resource of each action type.
-func AllActionTypes() []terraform.ResourceChange {
-	return []terraform.ResourceChange{
-		ResourceWithAction(terraform.ActionCreate),
-		ResourceWithAction(terraform.ActionUpdate),
-		ResourceWithAction(terraform.ActionDelete),
-		ResourceWithAction(terraform.ActionReplace),
 	}
 }
 

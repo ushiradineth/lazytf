@@ -20,14 +20,8 @@
         "level": {
           "type": "string"
         },
-        "max_entries": {
-          "type": "integer"
-        },
         "path": {
           "type": "string"
-        },
-        "retention_days": {
-          "type": "integer"
         }
       },
       "type": "object"
@@ -45,9 +39,6 @@
             "type": "array"
           },
           "name": {
-            "type": "string"
-          },
-          "strategy": {
             "type": "string"
           },
           "theme": {
@@ -106,75 +97,8 @@
     },
     "theme": {
       "properties": {
-        "custom": {
-          "properties": {
-            "background_color": {
-              "type": "string"
-            },
-            "border_color": {
-              "type": "string"
-            },
-            "create_color": {
-              "type": "string"
-            },
-            "delete_color": {
-              "type": "string"
-            },
-            "dimmed_color": {
-              "type": "string"
-            },
-            "foreground_color": {
-              "type": "string"
-            },
-            "highlight_color": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "no_change_color": {
-              "type": "string"
-            },
-            "replace_color": {
-              "type": "string"
-            },
-            "selected_color": {
-              "type": "string"
-            },
-            "update_color": {
-              "type": "string"
-            }
-          },
-          "type": "object"
-        },
         "name": {
           "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "ui": {
-      "properties": {
-        "animations_enabled": {
-          "type": "boolean"
-        },
-        "compact_mode": {
-          "type": "boolean"
-        },
-        "mouse_enabled": {
-          "type": "boolean"
-        },
-        "show_help": {
-          "type": "boolean"
-        },
-        "show_line_numbers": {
-          "type": "boolean"
-        },
-        "split_ratio": {
-          "type": "number"
-        },
-        "split_view_default": {
-          "type": "boolean"
         }
       },
       "type": "object"

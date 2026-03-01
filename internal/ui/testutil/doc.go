@@ -34,7 +34,7 @@
 //
 //	golden := testutil.ComponentGolden("my_component")
 //	result := testutil.RenderComponent(t, myComponent, 80, 24)
-//	golden.AssertPlain(t, "basic_render", result)
+//	golden.Assert(t, "basic_render", result.Plain)
 //
 // Update golden files with: UPDATE_GOLDEN=1 go test ./...
 //

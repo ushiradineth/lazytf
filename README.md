@@ -2,9 +2,103 @@
 
 lazygit but for Terraform :D
 
+## Installation
+
+### Binary releases
+
+Download platform archives and checksums from GitHub Releases.
+
+### Homebrew
+
+```bash
+brew tap ushiradineth/homebrew
+brew install --cask lazytf
+```
+
+### Nix
+
+Run without installing:
+
+```bash
+nix run github:ushiradineth/lazytf
+```
+
+Build from source:
+
+```bash
+nix build github:ushiradineth/lazytf
+```
+
+NixOS module usage:
+
+```nix
+{
+  inputs.lazytf.url = "github:ushiradineth/lazytf";
+
+  outputs = { self, nixpkgs, lazytf, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        lazytf.nixosModules.default
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ lazytf.overlays.default ];
+          programs.lazytf.enable = true;
+          programs.lazytf.settings.theme.name = "default";
+        })
+      ];
+    };
+  };
+}
+```
+
+Home Manager module usage:
+
+```nix
+{
+  inputs.lazytf.url = "github:ushiradineth/lazytf";
+
+  outputs = { home-manager, lazytf, ... }: {
+    homeConfigurations.user = home-manager.lib.homeManagerConfiguration {
+      modules = [
+        lazytf.homeManagerModules.default
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ lazytf.overlays.default ];
+          programs.lazytf.enable = true;
+          programs.lazytf.settings.theme.name = "default";
+        })
+      ];
+    };
+  };
+}
+```
+
+The Nix module `programs.lazytf.settings` options are generated from `internal/config/config.schema.json`.
+Regenerate schema and Nix options after config model changes:
+
+```bash
+go generate ./internal/config
+```
+
+### Go
+
+```bash
+go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
+```
+
+## Releases
+
+- Tagged releases (`vX.Y.Z`) run `.github/workflows/release.yml` and publish artifacts to GitHub Releases.
+- Manual release flow is available via GitHub Actions `workflow_dispatch` with `patch` or `minor` bump.
+- Release notes are generated from merged PRs and commits using GitHub native release notes plus `.github/release.yml` categories.
+- Homebrew cask updates are published to `ushiradineth/homebrew` by GoReleaser.
+
+### Versioning
+
+- Runtime version is set at build time with ldflags from the release tag.
+- Local/dev fallback version remains `0.1.0` in `internal/consts/consts.go` when ldflags are not applied.
+
 ## Prerequisites
 
-- Go 1.25.4 or later
+- Go 1.25.5 or later
 - [just](https://github.com/casey/just)
 
 ### With Nix

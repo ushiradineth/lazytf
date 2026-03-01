@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -111,6 +112,64 @@ func TestE2EPlanModuleFixture(t *testing.T) {
 	if !found {
 		t.Fatalf("expected module resource address, got %d resources", len(plan.Resources))
 	}
+}
+
+func TestE2ECanceledContextCommandMatrix(t *testing.T) {
+	workdir := copyFixture(t, "basic")
+	executor := newTerraformExecutor(t, workdir)
+
+	assertCanceled := func(name string, run func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error)) {
+		t.Helper()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		result, output, err := run(ctx)
+		if output != nil {
+			_ = collectOutput(output)
+		}
+		if result != nil {
+			<-result.Done()
+		}
+
+		if err != nil && errors.Is(err, context.Canceled) {
+			return
+		}
+		if result != nil && errors.Is(result.Error, context.Canceled) {
+			return
+		}
+
+		t.Fatalf("expected canceled result for %s, got err=%v resultErr=%v", name, err, resultError(result))
+	}
+
+	assertCanceled("plan", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, output, err := executor.Plan(ctx, terraform.PlanOptions{})
+		return result, output, err
+	})
+
+	assertCanceled("apply", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, output, err := executor.Apply(ctx, terraform.ApplyOptions{AutoApprove: true})
+		return result, output, err
+	})
+
+	assertCanceled("init", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, err := executor.Init(ctx, terraform.InitOptions{})
+		return result, nil, err
+	})
+
+	assertCanceled("validate", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, err := executor.Validate(ctx, terraform.ValidateOptions{})
+		return result, nil, err
+	})
+
+	assertCanceled("format", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, err := executor.Format(ctx, terraform.FormatOptions{Recursive: true})
+		return result, nil, err
+	})
+
+	assertCanceled("state-list", func(ctx context.Context) (*terraform.ExecutionResult, <-chan string, error) {
+		result, err := executor.StateList(ctx, terraform.StateListOptions{})
+		return result, nil, err
+	})
 }
 
 func terraformPathOrSkip(t *testing.T) string {
@@ -274,4 +333,11 @@ func recordOperation(t *testing.T, logger *history.Logger, action, workdir strin
 	if err := logger.RecordOperation(entry); err != nil {
 		t.Fatalf("record %s operation: %v", action, err)
 	}
+}
+
+func resultError(result *terraform.ExecutionResult) error {
+	if result == nil {
+		return nil
+	}
+	return result.Error
 }

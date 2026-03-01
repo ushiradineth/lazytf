@@ -1,6 +1,8 @@
 package components
 
 import (
+	"strconv"
+
 	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
@@ -341,18 +343,6 @@ func (l *ListPanel) padLine(line string, width int) string {
 	return PadLine(line, width)
 }
 
-// intToString converts an int to string without importing strconv.
 func intToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + intToString(-n)
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return string(digits)
+	return strconv.Itoa(n)
 }
