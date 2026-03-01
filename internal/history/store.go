@@ -281,25 +281,32 @@ func (s *Store) ListRecentForContext(environment, workDir string, limit int) ([]
 	}
 
 	var (
-		clauses []string
-		args    []any
+		query string
+		args  []any
 	)
-	if environment != "" {
-		clauses = append(clauses, "environment = ?")
-		args = append(args, environment)
+	switch {
+	case environment != "" && workDir != "":
+		query = `SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
+			 FROM apply_history
+			 WHERE environment = ? AND workdir = ?
+			 ORDER BY finished_at DESC
+			 LIMIT ?`
+		args = []any{environment, workDir, limit}
+	case environment != "":
+		query = `SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
+			 FROM apply_history
+			 WHERE environment = ?
+			 ORDER BY finished_at DESC
+			 LIMIT ?`
+		args = []any{environment, limit}
+	default:
+		query = `SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
+			 FROM apply_history
+			 WHERE workdir = ?
+			 ORDER BY finished_at DESC
+			 LIMIT ?`
+		args = []any{workDir, limit}
 	}
-	if workDir != "" {
-		clauses = append(clauses, "workdir = ?")
-		args = append(args, workDir)
-	}
-
-	query := `SELECT id, started_at, finished_at, duration_ms, status, summary, error, workdir, environment
-		 FROM apply_history`
-	if len(clauses) > 0 {
-		query += " WHERE " + strings.Join(clauses, " AND ")
-	}
-	query += " ORDER BY finished_at DESC LIMIT ?"
-	args = append(args, limit)
 
 	ctx := context.Background()
 	rows, err := s.db.QueryContext(ctx, query, args...)
