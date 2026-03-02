@@ -40,6 +40,7 @@
           meta = with pkgs.lib; {
             description = "Terminal UI for reviewing Terraform plans";
             homepage = "https://github.com/ushiradineth/lazytf";
+            license = licenses.mit;
             platforms = platforms.unix;
             mainProgram = "lazytf";
           };
