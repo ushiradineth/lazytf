@@ -161,7 +161,8 @@ go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
 ### Versioning
 
 - GitHub release artifacts inject semver via ldflags from the release tag.
-- Nix flake builds inject the flake revision via ldflags, so `nix run github:ushiradineth/lazytf/<ref>` reports a commit-based version.
+- Nix flake builds inject `LAZYTF_VERSION` via ldflags when set, otherwise commit hash (`shortRev`/`dirtyShortRev`).
+- `just run`, `just build`, and `just install` inject version via ldflags from an exact git tag when present, otherwise short commit SHA. Set `LAZYTF_VERSION` to override explicitly.
 - Local/dev fallback version remains `0.1.0` in `internal/consts/consts.go` when ldflags are not applied.
 
 ## Prerequisites

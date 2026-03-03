@@ -16,7 +16,11 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        appVersion = self.shortRev or self.dirtyShortRev or "dev";
+        forcedVersion = builtins.getEnv "LAZYTF_VERSION";
+        appVersion =
+          if forcedVersion != ""
+          then forcedVersion
+          else self.shortRev or self.dirtyShortRev or "dev";
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
           version = appVersion;

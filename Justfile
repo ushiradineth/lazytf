@@ -14,7 +14,7 @@ shell:
 
 # Run the application
 run *args:
-    go run {{main_package}} {{args}}
+    @version="${LAZYTF_VERSION:-}"; if [ -z "$version" ]; then tag="$(git describe --tags --exact-match 2>/dev/null || true)"; if [ -n "$tag" ]; then version="${tag#v}"; else version="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"; fi; fi; go run -ldflags "-X github.com/ushiradineth/lazytf/internal/consts.Version=$version" {{main_package}} {{args}}
 
 # Run with hot reload using gow
 dev *args:
@@ -24,14 +24,14 @@ dev *args:
 
 # Build the application
 build:
-	@echo "Building {{binary_name}}..."
-	go build -o bin/{{binary_name}} {{main_package}}
-	@echo "Build complete: bin/{{binary_name}}"
+    @echo "Building {{binary_name}}..."
+    @version="${LAZYTF_VERSION:-}"; if [ -z "$version" ]; then tag="$(git describe --tags --exact-match 2>/dev/null || true)"; if [ -n "$tag" ]; then version="${tag#v}"; else version="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"; fi; fi; go build -ldflags "-s -w -X github.com/ushiradineth/lazytf/internal/consts.Version=$version" -o bin/{{binary_name}} {{main_package}}
+    @echo "Build complete: bin/{{binary_name}}"
 
 # Install the application to $GOPATH/bin
 install: build
     @echo "Installing {{binary_name}}..."
-    go install {{main_package}}
+    @version="${LAZYTF_VERSION:-}"; if [ -z "$version" ]; then tag="$(git describe --tags --exact-match 2>/dev/null || true)"; if [ -n "$tag" ]; then version="${tag#v}"; else version="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"; fi; fi; go install -ldflags "-s -w -X github.com/ushiradineth/lazytf/internal/consts.Version=$version" {{main_package}}
     @echo "Install complete: {{binary_name}} installed to $(go env GOPATH)/bin"
 
 # ===== Testing =====
