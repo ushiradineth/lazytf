@@ -1423,6 +1423,63 @@ func TestHandleActionToggleLogWhenFocusedAndHidden(t *testing.T) {
 	_ = cmd // Should return focus change command
 }
 
+func TestHandleActionFocusModeNextCyclesAndNormalizesFocus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Fatal("expected panel manager")
+	}
+	_ = m.panelManager.SetFocus(PanelWorkspace)
+
+	ctx := &keybinds.Context{}
+	cmd := m.handleActionFocusModeNext(ctx)
+	_ = cmd
+
+	if got := m.panelManager.GetFocusMode(); got != FocusModeL2 {
+		t.Fatalf("expected focus mode L2 after next, got %v", got)
+	}
+	if focused := m.panelManager.GetFocusedPanel(); focused != PanelWorkspace {
+		t.Fatalf("expected workspace focus preserved in L2, got %v", focused)
+	}
+
+	m.handleActionFocusModeNext(ctx)
+	if got := m.panelManager.GetFocusMode(); got != FocusModeL3 {
+		t.Fatalf("expected focus mode L3 after second next, got %v", got)
+	}
+
+	m.handleActionFocusModeNext(ctx)
+	if got := m.panelManager.GetFocusMode(); got != FocusModeL1 {
+		t.Fatalf("expected focus mode to wrap to L1, got %v", got)
+	}
+}
+
+func TestHandleActionFocusModePrevWrapsAndNormalizesFocus(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Fatal("expected panel manager")
+	}
+	_ = m.panelManager.SetFocus(PanelMain)
+
+	ctx := &keybinds.Context{}
+	m.handleActionFocusModePrev(ctx)
+
+	if got := m.panelManager.GetFocusMode(); got != FocusModeL3 {
+		t.Fatalf("expected focus mode to wrap to L3, got %v", got)
+	}
+	if focused := m.panelManager.GetFocusedPanel(); focused != PanelMain {
+		t.Fatalf("expected right-side focus preserved in L3, got %v", focused)
+	}
+}
+
 // ============================================================================
 // handleActionSelectEnv tests
 // ============================================================================

@@ -1120,6 +1120,29 @@ func TestBinding_Matches_PanelTabResourcesMatchingTab(t *testing.T) {
 	}
 }
 
+func TestFocusModeBindingsResolveOnlyInExecutionMode(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	execCtx := &Context{ExecutionMode: true}
+	next := r.Resolve("+", execCtx)
+	if next == nil || next.Action != ActionFocusModeNext {
+		t.Fatalf("expected '+' to resolve to ActionFocusModeNext in execution mode")
+	}
+	prev := r.Resolve("_", execCtx)
+	if prev == nil || prev.Action != ActionFocusModePrev {
+		t.Fatalf("expected '_' to resolve to ActionFocusModePrev in execution mode")
+	}
+
+	nonExecCtx := &Context{ExecutionMode: false}
+	if binding := r.Resolve("+", nonExecCtx); binding != nil {
+		t.Fatalf("expected '+' to not resolve outside execution mode")
+	}
+	if binding := r.Resolve("_", nonExecCtx); binding != nil {
+		t.Fatalf("expected '_' to not resolve outside execution mode")
+	}
+}
+
 func TestBinding_Matches_GlobalWithCondition(t *testing.T) {
 	// Test global binding with condition that passes
 	conditionCalled := false

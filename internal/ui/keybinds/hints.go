@@ -44,6 +44,9 @@ func (r *Registry) ForStatusBar(ctx *Context, opts HintOptions) string {
 	// Filter out hidden bindings and those without descriptions
 	var visible []Binding
 	for _, b := range bindings {
+		if b.Action == ActionFocusModeNext || b.Action == ActionFocusModePrev {
+			continue
+		}
 		if !b.Hidden && b.Description != "" {
 			visible = append(visible, b)
 		}

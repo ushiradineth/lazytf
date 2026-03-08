@@ -12,18 +12,149 @@ import (
 type PanelManager struct {
 	panels            map[PanelID]Panel
 	focusedPanel      PanelID
+	activeLeftPanel   PanelID
 	commandLogVisible bool
 	commandLogFocused bool
 	executionMode     bool
+	focusMode         FocusMode
 }
+
+// FocusMode controls which high-level panel layout is active.
+type FocusMode int
+
+const (
+	FocusModeL1 FocusMode = iota // Default layout
+	FocusModeL2                  // 50/50: selected left panel + right stack
+	FocusModeL3                  // 100% selected side: left panel OR right stack
+)
 
 // NewPanelManager creates a new panel manager.
 func NewPanelManager() *PanelManager {
 	return &PanelManager{
 		panels:            make(map[PanelID]Panel),
 		focusedPanel:      PanelResources, // Default to resource list
-		commandLogVisible: true,           // Command log visible by default
+		activeLeftPanel:   PanelResources,
+		commandLogVisible: true, // Command log visible by default
 		commandLogFocused: false,
+		focusMode:         FocusModeL1,
+	}
+}
+
+func isLeftPanel(id PanelID) bool {
+	return id == PanelWorkspace || id == PanelResources || id == PanelHistory
+}
+
+func (pm *PanelManager) historyAvailable() bool {
+	panel, ok := pm.panels[PanelHistory]
+	return ok && panel != nil
+}
+
+func (pm *PanelManager) normalizedLeftPanel() PanelID {
+	if !isLeftPanel(pm.activeLeftPanel) {
+		return PanelResources
+	}
+	if pm.activeLeftPanel == PanelHistory && !pm.historyAvailable() {
+		return PanelResources
+	}
+	return pm.activeLeftPanel
+}
+
+func (pm *PanelManager) isRightSideFocused() bool {
+	focused := pm.GetFocusedPanel()
+	return focused == PanelMain || focused == PanelCommandLog
+}
+
+// GetFocusMode returns the current focus mode.
+func (pm *PanelManager) GetFocusMode() FocusMode {
+	return pm.focusMode
+}
+
+// NextFocusMode advances to the next focus mode.
+func (pm *PanelManager) NextFocusMode() FocusMode {
+	pm.focusMode = (pm.focusMode + 1) % 3
+	return pm.focusMode
+}
+
+// PrevFocusMode moves to the previous focus mode.
+func (pm *PanelManager) PrevFocusMode() FocusMode {
+	if pm.focusMode == FocusModeL1 {
+		pm.focusMode = FocusModeL3
+		return pm.focusMode
+	}
+	pm.focusMode--
+	return pm.focusMode
+}
+
+// IsPanelVisible reports whether the given panel is currently visible.
+func (pm *PanelManager) IsPanelVisible(id PanelID) bool {
+	if id == PanelHistory && !pm.historyAvailable() {
+		return false
+	}
+
+	switch id {
+	case PanelResources:
+		if !pm.executionMode {
+			return true
+		}
+		switch pm.focusMode {
+		case FocusModeL1:
+			return true
+		case FocusModeL2:
+			return pm.normalizedLeftPanel() == PanelResources
+		case FocusModeL3:
+			return !pm.isRightSideFocused() && pm.normalizedLeftPanel() == PanelResources
+		}
+		return true
+	case PanelWorkspace:
+		if !pm.executionMode {
+			return false
+		}
+		switch pm.focusMode {
+		case FocusModeL1:
+			return true
+		case FocusModeL2:
+			return pm.normalizedLeftPanel() == PanelWorkspace
+		case FocusModeL3:
+			return !pm.isRightSideFocused() && pm.normalizedLeftPanel() == PanelWorkspace
+		}
+		return false
+	case PanelHistory:
+		if !pm.executionMode {
+			return false
+		}
+		switch pm.focusMode {
+		case FocusModeL1:
+			return true
+		case FocusModeL2:
+			return pm.normalizedLeftPanel() == PanelHistory
+		case FocusModeL3:
+			return !pm.isRightSideFocused() && pm.normalizedLeftPanel() == PanelHistory
+		}
+		return false
+	case PanelMain:
+		if !pm.executionMode {
+			return false
+		}
+		switch pm.focusMode {
+		case FocusModeL1, FocusModeL2:
+			return true
+		case FocusModeL3:
+			return pm.isRightSideFocused()
+		}
+		return false
+	case PanelCommandLog:
+		if !pm.executionMode || !pm.commandLogVisible {
+			return false
+		}
+		switch pm.focusMode {
+		case FocusModeL1, FocusModeL2:
+			return true
+		case FocusModeL3:
+			return pm.isRightSideFocused()
+		}
+		return false
+	default:
+		return false
 	}
 }
 
@@ -40,6 +171,13 @@ func (pm *PanelManager) GetPanel(id PanelID) (Panel, bool) {
 
 // SetFocus changes the focused panel.
 func (pm *PanelManager) SetFocus(id PanelID) tea.Cmd {
+	if id == PanelHistory && !pm.historyAvailable() {
+		return nil
+	}
+	if isLeftPanel(id) {
+		pm.activeLeftPanel = id
+	}
+
 	// Unfocus current panel
 	if currentPanel, ok := pm.panels[pm.focusedPanel]; ok {
 		currentPanel.SetFocused(false)
@@ -77,18 +215,18 @@ func (pm *PanelManager) GetFocusedPanel() PanelID {
 
 // CycleFocus cycles to the next panel.
 func (pm *PanelManager) CycleFocus(reverse bool) tea.Cmd {
-	// Define focus order: Workspace -> Resources -> History -> Main
-	// Only include history if it exists
-	focusOrder := []PanelID{PanelWorkspace, PanelResources}
-	if panel, ok := pm.panels[PanelHistory]; ok && panel != nil {
-		focusOrder = append(focusOrder, PanelHistory)
+	// Define focus order and keep only visible panels.
+	focusOrder := make([]PanelID, 0, 5)
+	for _, panelID := range []PanelID{PanelWorkspace, PanelResources, PanelHistory, PanelMain, PanelCommandLog} {
+		if pm.IsPanelVisible(panelID) {
+			focusOrder = append(focusOrder, panelID)
+		}
 	}
-	focusOrder = append(focusOrder, PanelMain)
+	if len(focusOrder) == 0 {
+		focusOrder = append(focusOrder, PanelResources)
+	}
 
-	current := pm.focusedPanel
-	if pm.commandLogFocused {
-		current = PanelCommandLog
-	}
+	current := pm.GetFocusedPanel()
 
 	// Find current index
 	currentIdx := -1
@@ -97,14 +235,6 @@ func (pm *PanelManager) CycleFocus(reverse bool) tea.Cmd {
 			currentIdx = i
 			break
 		}
-	}
-
-	// If command log is focused, go to resources when cycling forward
-	if pm.commandLogFocused {
-		if reverse {
-			return pm.SetFocus(PanelMain)
-		}
-		return pm.SetFocus(PanelWorkspace)
 	}
 
 	nextIdx := nextFocusIndex(reverse, currentIdx, len(focusOrder))
@@ -167,25 +297,40 @@ func (pm *PanelManager) IsExecutionMode() bool {
 
 // CalculateLayout computes layout specifications for all panels.
 func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
+	rightStackActive := pm.focusMode != FocusModeL3 || pm.isRightSideFocused()
+	commandLogVisible := pm.executionMode && pm.commandLogVisible && rightStackActive
+
 	layout := LayoutSpec{
 		FilterBarHeight:   FilterBarHeight,
 		StatusBarHeight:   StatusBarHeight,
-		CommandLogVisible: pm.executionMode && pm.commandLogVisible,
+		CommandLogVisible: commandLogVisible,
 	}
 
 	// Calculate available height (subtract filter bar and status bar)
 	availableHeight := height - FilterBarHeight - StatusBarHeight
 
-	// Calculate left column width (35% of total, min 40, max 60)
-	leftWidth := int(float64(width) * LeftColumnRatio)
-	if leftWidth < MinLeftColumnWidth {
-		leftWidth = MinLeftColumnWidth
-	}
-	if leftWidth > MaxLeftColumnWidth {
-		leftWidth = MaxLeftColumnWidth
-	}
-	if leftWidth > width-MinMainAreaWidth {
-		leftWidth = width - MinMainAreaWidth
+	// Calculate left column width by mode.
+	leftWidth := width
+	switch pm.focusMode {
+	case FocusModeL1:
+		leftWidth = int(float64(width) * LeftColumnRatio)
+		if leftWidth < MinLeftColumnWidth {
+			leftWidth = MinLeftColumnWidth
+		}
+		if leftWidth > MaxLeftColumnWidth {
+			leftWidth = MaxLeftColumnWidth
+		}
+		if leftWidth > width-MinMainAreaWidth {
+			leftWidth = width - MinMainAreaWidth
+		}
+	case FocusModeL2:
+		leftWidth = width / 2
+	case FocusModeL3:
+		if rightStackActive {
+			leftWidth = 0
+		} else {
+			leftWidth = width
+		}
 	}
 
 	layout.LeftColumnWidth = leftWidth
@@ -215,11 +360,14 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 		Height: historyHeight,
 	}
 
-	// Right column: Main area + Command log
-	// Calculate command log height if visible (only in execution mode)
+	// Right column: Main area + Command log.
+	// Height behavior stays identical, width changes by mode.
 	commandLogHeight := 0
-	mainAreaHeight := availableHeight
-	if pm.executionMode && pm.commandLogVisible { //nolint:nestif // Layout calculation requires nested checks
+	mainAreaHeight := 0
+	if rightStackActive {
+		mainAreaHeight = availableHeight
+	}
+	if commandLogVisible { //nolint:nestif // Layout calculation requires nested checks
 		if pm.commandLogFocused {
 			// Full screen mode: command log takes 100%, main area hidden
 			commandLogHeight = availableHeight
@@ -245,7 +393,7 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	}
 
 	// Command log in right column under main area (only in execution mode)
-	if pm.executionMode && pm.commandLogVisible {
+	if commandLogVisible {
 		layout.CommandLog = PanelSpec{
 			X:      leftWidth,
 			Y:      FilterBarHeight + mainAreaHeight,
@@ -265,6 +413,17 @@ func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 	// When not in execution mode, only show resources panel (no workspace or history)
 	if !pm.executionMode {
 		return 0, panelsHeight, 0
+	}
+
+	if pm.focusMode == FocusModeL2 || pm.focusMode == FocusModeL3 {
+		switch pm.normalizedLeftPanel() {
+		case PanelWorkspace:
+			return panelsHeight, 0, 0
+		case PanelHistory:
+			return 0, 0, panelsHeight
+		default:
+			return 0, panelsHeight, 0
+		}
 	}
 
 	// When history panel is not registered, divide space between workspace and resources only

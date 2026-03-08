@@ -206,6 +206,41 @@ func TestRegistry_ForStatusBar_ShortenedDescriptions(t *testing.T) {
 	}
 }
 
+func TestRegistry_ForStatusBar_ExcludesFocusModeHints(t *testing.T) {
+	r := NewRegistry()
+
+	r.Register(Binding{
+		Keys:        []string{"+"},
+		Action:      ActionFocusModeNext,
+		Scope:       ScopeGlobal,
+		Description: "next focus mode",
+		Category:    "Panel Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"_"},
+		Action:      ActionFocusModePrev,
+		Scope:       ScopeGlobal,
+		Description: "previous focus mode",
+		Category:    "Panel Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"q"},
+		Action:      ActionQuit,
+		Scope:       ScopeGlobal,
+		Description: "quit",
+		Category:    "General",
+	})
+
+	result := r.ForStatusBar(NewContext(), DefaultHintOptions())
+
+	if strings.Contains(result, "focus mode") {
+		t.Fatalf("expected focus mode hints to be excluded, got %q", result)
+	}
+	if !strings.Contains(result, "q: quit") {
+		t.Fatalf("expected normal global hint to remain, got %q", result)
+	}
+}
+
 func TestRegistry_ForHelpModal_Empty(t *testing.T) {
 	r := NewRegistry()
 

@@ -22,6 +22,8 @@ const (
 	ActionCycleFocus      Action = "cycle_focus"
 	ActionCycleFocusBack  Action = "cycle_focus_back"
 	ActionToggleLog       Action = "toggle_command_log"
+	ActionFocusModeNext   Action = "focus_mode_next"
+	ActionFocusModePrev   Action = "focus_mode_prev"
 	ActionEscapeBack      Action = "escape_back"
 	ActionToggleHistory   Action = "toggle_history"
 )

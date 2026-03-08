@@ -183,11 +183,13 @@ func (m *Model) renderLeftColumn(layout LayoutSpec, contentHeight int) string {
 	}
 
 	// Resources panel
-	leftPanels = append(leftPanels, enforceDimensions(
-		m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height),
-		layout.LeftColumnWidth,
-		layout.Resources.Height,
-	))
+	if layout.Resources.Height > 0 {
+		leftPanels = append(leftPanels, enforceDimensions(
+			m.renderResourcesPanelWithTabs(layout.Resources.Width, layout.Resources.Height),
+			layout.LeftColumnWidth,
+			layout.Resources.Height,
+		))
+	}
 
 	// History panel (only in execution mode with allocated height)
 	if m.executionMode && layout.History.Height > 0 {

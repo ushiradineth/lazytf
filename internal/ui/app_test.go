@@ -225,6 +225,69 @@ func TestUpdateLayoutUsesMinimumHeight(t *testing.T) {
 	}
 }
 
+func TestFocusModeLayoutLevels(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	if m.panelManager == nil {
+		t.Fatal("expected panel manager")
+	}
+	m.historyPanel = components.NewHistoryPanel(m.styles)
+	m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
+
+	l1 := m.panelManager.CalculateLayout(m.width, m.height)
+	if l1.Workspace.Height <= 0 {
+		t.Fatalf("expected workspace panel visible in L1")
+	}
+	if l1.RightColumnWidth <= 0 {
+		t.Fatalf("expected right column visible in L1")
+	}
+
+	m.panelManager.NextFocusMode()
+	_ = m.panelManager.SetFocus(PanelHistory)
+	l2 := m.panelManager.CalculateLayout(m.width, m.height)
+	if l2.LeftColumnWidth != m.width/2 || l2.RightColumnWidth != m.width/2 {
+		t.Fatalf("expected 50/50 split in L2")
+	}
+	if l2.History.Height <= 0 || l2.Resources.Height != 0 || l2.Workspace.Height != 0 {
+		t.Fatalf("expected selected left panel [3] visible in L2")
+	}
+	if l2.Main.Height <= 0 {
+		t.Fatalf("expected main area visible in L2")
+	}
+	if !l2.CommandLogVisible || l2.CommandLog.Height <= 0 {
+		t.Fatalf("expected command log visible in L2 when not hidden")
+	}
+
+	m.panelManager.NextFocusMode()
+	_ = m.panelManager.SetFocus(PanelMain)
+	l3 := m.panelManager.CalculateLayout(m.width, m.height)
+	if l3.LeftColumnWidth != 0 || l3.RightColumnWidth != m.width {
+		t.Fatalf("expected full-width right stack in L3 when right side is active")
+	}
+	if l3.Main.Height <= 0 {
+		t.Fatalf("expected main area visible in right-stack L3")
+	}
+	if !l3.CommandLogVisible || l3.CommandLog.Height <= 0 {
+		t.Fatalf("expected command log visible in right-stack L3")
+	}
+
+	_ = m.panelManager.SetFocus(PanelWorkspace)
+	l3Left := m.panelManager.CalculateLayout(m.width, m.height)
+	if l3Left.LeftColumnWidth != m.width || l3Left.RightColumnWidth != 0 {
+		t.Fatalf("expected full-width left panel in L3 when left side is active")
+	}
+	if l3Left.Workspace.Height <= 0 || l3Left.Resources.Height != 0 || l3Left.History.Height != 0 {
+		t.Fatalf("expected workspace-only left view in L3")
+	}
+	if l3Left.Main.Height != 0 || l3Left.CommandLogVisible {
+		t.Fatalf("expected right stack hidden in left-side L3")
+	}
+}
+
 func TestMinInt(t *testing.T) {
 	if utils.MinInt(5, 2) != 2 {
 		t.Fatalf("expected MinInt to return smaller value")
@@ -2568,6 +2631,43 @@ func TestPanelManagerHandleNavigation(t *testing.T) {
 	handled, _ := pm.HandleNavigation(msg)
 	// Should handle or not depending on panel state
 	_ = handled
+}
+
+func TestPanelManagerL2KeepsStickyLeftSelection(t *testing.T) {
+	pm := NewPanelManager()
+	pm.SetExecutionMode(true)
+	pm.RegisterPanel(PanelResources, components.NewResourceList(styles.DefaultStyles()))
+	pm.RegisterPanel(PanelMain, NewMainArea(styles.DefaultStyles(), nil, nil, nil))
+	pm.RegisterPanel(PanelHistory, components.NewHistoryPanel(styles.DefaultStyles()))
+
+	pm.NextFocusMode() // L2
+	_ = pm.SetFocus(PanelHistory)
+	_ = pm.SetFocus(PanelMain)
+
+	layout := pm.CalculateLayout(120, 40)
+	if layout.History.Height <= 0 || layout.Resources.Height != 0 || layout.Workspace.Height != 0 {
+		t.Fatalf("expected sticky left selection to keep history visible in L2")
+	}
+}
+
+func TestPanelManagerCycleFocusIncludesCommandLogWhenVisible(t *testing.T) {
+	pm := NewPanelManager()
+	pm.SetExecutionMode(true)
+	pm.RegisterPanel(PanelWorkspace, components.NewEnvironmentPanel(styles.DefaultStyles()))
+	pm.RegisterPanel(PanelResources, components.NewResourceList(styles.DefaultStyles()))
+	pm.RegisterPanel(PanelMain, NewMainArea(styles.DefaultStyles(), nil, nil, nil))
+	pm.RegisterPanel(PanelCommandLog, components.NewCommandLogPanel(styles.DefaultStyles()))
+
+	_ = pm.SetFocus(PanelMain)
+	_ = pm.CycleFocus(false)
+	if got := pm.GetFocusedPanel(); got != PanelCommandLog {
+		t.Fatalf("expected cycle from main to command log, got %v", got)
+	}
+
+	_ = pm.CycleFocus(true)
+	if got := pm.GetFocusedPanel(); got != PanelMain {
+		t.Fatalf("expected reverse cycle from command log to main, got %v", got)
+	}
 }
 
 func TestResourcesControllerGetActiveTab(t *testing.T) {

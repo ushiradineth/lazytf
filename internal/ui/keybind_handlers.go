@@ -115,6 +115,8 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionCycleFocus, m.handleActionCycleFocus)
 	r.RegisterHandler(keybinds.ActionCycleFocusBack, m.handleActionCycleFocusBack)
 	r.RegisterHandler(keybinds.ActionToggleLog, m.handleActionToggleLog)
+	r.RegisterHandler(keybinds.ActionFocusModeNext, m.handleActionFocusModeNext)
+	r.RegisterHandler(keybinds.ActionFocusModePrev, m.handleActionFocusModePrev)
 	r.RegisterHandler(keybinds.ActionEscapeBack, m.handleActionEscapeBack)
 	r.RegisterHandler(keybinds.ActionToggleHistory, m.handleActionToggleHistory)
 
@@ -321,6 +323,36 @@ func (m *Model) handleActionToggleLog(_ *keybinds.Context) tea.Cmd {
 		return m.panelManager.SetFocus(PanelResources)
 	}
 	return nil
+}
+
+func (m *Model) handleActionFocusModeNext(_ *keybinds.Context) tea.Cmd {
+	if m.panelManager == nil {
+		return nil
+	}
+	m.panelManager.NextFocusMode()
+	m.updateLayout()
+	return m.normalizeFocusForCurrentMode()
+}
+
+func (m *Model) handleActionFocusModePrev(_ *keybinds.Context) tea.Cmd {
+	if m.panelManager == nil {
+		return nil
+	}
+	m.panelManager.PrevFocusMode()
+	m.updateLayout()
+	return m.normalizeFocusForCurrentMode()
+}
+
+func (m *Model) normalizeFocusForCurrentMode() tea.Cmd {
+	if m.panelManager == nil {
+		return nil
+	}
+	focusedPanel := m.panelManager.GetFocusedPanel()
+	if m.panelManager.IsPanelVisible(focusedPanel) {
+		return nil
+	}
+	m.historyFocused = false
+	return m.panelManager.SetFocus(PanelResources)
 }
 
 func (m *Model) handleActionEscapeBack(_ *keybinds.Context) tea.Cmd {

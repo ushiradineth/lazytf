@@ -130,6 +130,24 @@ func registerPanelNavigationBindings(r *Registry) {
 		Condition:   ConditionExecutionMode,
 	})
 
+	// Focus mode cycling
+	r.Register(Binding{
+		Keys:        []string{"+"},
+		Action:      ActionFocusModeNext,
+		Scope:       ScopeGlobal,
+		Description: "next focus mode",
+		Category:    "Panel Navigation",
+		Condition:   ConditionExecutionMode,
+	})
+	r.Register(Binding{
+		Keys:        []string{"_"},
+		Action:      ActionFocusModePrev,
+		Scope:       ScopeGlobal,
+		Description: "previous focus mode",
+		Category:    "Panel Navigation",
+		Condition:   ConditionExecutionMode,
+	})
+
 	// Escape
 	r.Register(Binding{
 		Keys:        []string{KeyEsc},
