@@ -78,11 +78,6 @@ jobs:
             exit 1
           fi
 
-          if [ "$current_version" != "$latest_version" ]; then
-            echo "internal/consts/consts.go version $current_version must match latest tag $LATEST_TAG before release"
-            exit 1
-          fi
-
           IFS='.' read -r major minor patch <<< "$latest_version"
 
           case "$VERSION_BUMP" in
@@ -107,13 +102,25 @@ jobs:
           next_version="${major}.${minor}.${patch}"
           next_tag="v${next_version}"
 
+          if [ "$current_version" != "$latest_version" ] && [ "$current_version" != "$next_version" ]; then
+            echo "internal/consts/consts.go version $current_version must match latest tag $LATEST_TAG or next version $next_version before release"
+            exit 1
+          fi
+
+          should_bump=true
+          if [ "$current_version" = "$next_version" ]; then
+            should_bump=false
+          fi
+
           echo "version=$next_version" >> "$GITHUB_OUTPUT"
           echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
+          echo "should_bump=$should_bump" >> "$GITHUB_OUTPUT"
 
       - name: Commit and tag locally
         env:
           TAG: ${{ steps.prep.outputs.tag }}
           VERSION: ${{ steps.prep.outputs.version }}
+          SHOULD_BUMP: ${{ steps.prep.outputs.should_bump }}
         run: |
           set -euo pipefail
 
@@ -127,19 +134,31 @@ jobs:
             exit 1
           fi
 
-          sed -i 's/^var Version = ".*"$/var Version = "'"$VERSION"'"/' internal/consts/consts.go
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add internal/consts/consts.go
-          git commit -m "chore(release): bump version to ${VERSION}"
+          if [ "$SHOULD_BUMP" = "true" ]; then
+            sed -i 's/^var Version = ".*"$/var Version = "'"$VERSION"'"/' internal/consts/consts.go
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/consts/consts.go
+            git commit -m "chore(release): bump version to ${VERSION}"
+          else
+            echo "Version already at ${VERSION} on branch head, skipping bump commit"
+          fi
+
           git tag "${TAG}"
 
       - name: Push commit and tag
         env:
           TAG: ${{ steps.prep.outputs.tag }}
+          SHOULD_BUMP: ${{ steps.prep.outputs.should_bump }}
         run: |
           set -euo pipefail
-          git push origin HEAD
+
+          if [ "$SHOULD_BUMP" = "true" ]; then
+            git push origin HEAD
+          else
+            echo "Skipping branch push because bump commit is already present on head"
+          fi
+
           git push origin "${TAG}"
 
       - name: Cleanup on failure
