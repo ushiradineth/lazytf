@@ -15,6 +15,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - internal/consts/consts.go
 
 permissions:
   contents: read
