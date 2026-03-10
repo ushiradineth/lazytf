@@ -12,6 +12,11 @@ on:
           - patch
           - minor
           - major
+      publish_tag:
+        description: "Optional existing tag to publish (e.g. v1.2.3)"
+        required: false
+        default: ""
+        type: string
   push:
     branches:
       - main
@@ -28,7 +33,7 @@ concurrency:
 jobs:
   release-pr:
     name: Open release PR
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_tag == ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -162,14 +167,14 @@ jobs:
 
   release:
     name: Build and release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_tag != '')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
     env:
       GORELEASER_CROSS_IMAGE: ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5
-      GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+      GORELEASER_CURRENT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_tag || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
