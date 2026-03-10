@@ -1853,6 +1853,39 @@ func TestWaitPlanCompleteCmdParseError(t *testing.T) {
 	}
 }
 
+func TestWaitPlanCompleteCmdIncludesShowWarning(t *testing.T) {
+	result := terraform.NewExecutionResult()
+	result.Stdout = `Terraform will perform the following actions:
+
+  # aws_instance.example will be created
+  + resource "aws_instance" "example" {
+      + ami = "ami-123"
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.`
+	result.Finish()
+
+	m := NewModel(&terraform.Plan{})
+	m.executor = testutil.NewMockExecutor()
+	m.planFilePath = "/tmp/plan.tfplan"
+	m.executor.(*testutil.MockExecutor).ShowErr = errors.New("plan file was created by Terraform 1.12.2")
+
+	msg := m.waitPlanCompleteCmd(result)()
+	planMsg, ok := msg.(PlanCompleteMsg)
+	if !ok {
+		t.Fatalf("expected PlanCompleteMsg")
+	}
+	if planMsg.Error != nil {
+		t.Fatalf("expected parse to fall back to stdout, got %v", planMsg.Error)
+	}
+	if !strings.Contains(planMsg.Output, "Warning: terraform show failed") {
+		t.Fatalf("expected terraform show warning in output, got %q", planMsg.Output)
+	}
+	if !strings.Contains(planMsg.Output, "1.12.2") {
+		t.Fatalf("expected terraform show error details in output, got %q", planMsg.Output)
+	}
+}
+
 func TestSyncHistorySelectionClamps(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.historyPanel = components.NewHistoryPanel(m.styles)

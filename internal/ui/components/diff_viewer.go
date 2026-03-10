@@ -100,7 +100,7 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 			if action == "" {
 				action = string(resource.Action)
 			}
-			msg := fmt.Sprintf("Planned %s (details unavailable in streaming mode)", action)
+			msg := fmt.Sprintf("Planned %s (details unavailable)", action)
 			content = d.styles.Dimmed.Render(msg)
 		} else {
 			content = d.styles.Dimmed.Render("No changes for selected resource")

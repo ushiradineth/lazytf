@@ -823,8 +823,8 @@ func TestViewNonNoOpActionWithNoDiffs(t *testing.T) {
 		Change:  nil, // No change data
 	}
 	out := viewer.View(resource)
-	if !strings.Contains(out, "streaming mode") {
-		t.Errorf("expected streaming mode message, got %q", out)
+	if !strings.Contains(out, "details unavailable") {
+		t.Errorf("expected details unavailable message, got %q", out)
 	}
 }
 

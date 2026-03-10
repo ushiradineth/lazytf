@@ -1595,6 +1595,7 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 
 		parseInput := output
 		if m.executor != nil && m.planFilePath != "" {
+			showWarning := ""
 			planEnv, err := m.prepareTerraformEnv()
 			if err != nil {
 				planEnv = nil
@@ -1604,6 +1605,23 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 			cancel()
 			if showErr == nil && showResult != nil && strings.TrimSpace(showResult.Output) != "" {
 				parseInput = showResult.Output
+			} else {
+				switch {
+				case showErr != nil:
+					showWarning = fmt.Sprintf("Warning: terraform show failed for %s: %v", m.planFilePath, showErr)
+				case showResult == nil:
+					showWarning = fmt.Sprintf("Warning: terraform show returned no result for %s", m.planFilePath)
+				case strings.TrimSpace(showResult.Output) == "":
+					showWarning = fmt.Sprintf("Warning: terraform show returned empty output for %s", m.planFilePath)
+				}
+			}
+
+			if strings.TrimSpace(showWarning) != "" {
+				if strings.TrimSpace(output) == "" {
+					output = showWarning
+				} else {
+					output += "\n\n" + showWarning
+				}
 			}
 		}
 
