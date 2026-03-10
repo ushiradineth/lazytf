@@ -12,6 +12,11 @@ on:
           - patch
           - minor
           - major
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -21,14 +26,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
-    name: Build and release
+  release-pr:
+    name: Open release PR
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: write
-    env:
-      GORELEASER_CROSS_IMAGE: ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,44 +46,28 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ "$REF_NAME" != "$DEFAULT_BRANCH" ]; then
-            echo "Release must run from $DEFAULT_BRANCH, got $REF_NAME"
+            echo "Release PR must run from $DEFAULT_BRANCH, got $REF_NAME"
             exit 1
           fi
 
-      - name: Validate tag availability
-        id: validate_tag
-        run: |
-          latestTag=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -z "$latestTag" ]; then
-            latestTag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)
-          fi
-          if [ -z "$latestTag" ]; then
-            latestTag=v0.0.0
-          fi
-          if [[ ! "$latestTag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Latest tag must be semver (vX.Y.Z), got: $latestTag"
-            exit 1
-          fi
-          echo "Resolved latest tag: $latestTag"
-          echo "latest_tag=$latestTag" >> "$GITHUB_OUTPUT"
-
-      - name: Bump version
-        id: prep
+      - name: Bump version in source
+        id: bump
         env:
           VERSION_BUMP: ${{ inputs.version_bump }}
-          LATEST_TAG: ${{ steps.validate_tag.outputs.latest_tag }}
         run: |
           set -euo pipefail
-
-          latest_version="${LATEST_TAG#v}"
 
           current_version=$(sed -n 's/^var Version = "\([^"]*\)"$/\1/p' internal/consts/consts.go)
           if [ -z "$current_version" ]; then
             echo "Failed to read current version from internal/consts/consts.go"
             exit 1
           fi
+          if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Current version must be semver (X.Y.Z), got: $current_version"
+            exit 1
+          fi
 
-          IFS='.' read -r major minor patch <<< "$latest_version"
+          IFS='.' read -r major minor patch <<< "$current_version"
 
           case "$VERSION_BUMP" in
             major)
@@ -100,75 +89,92 @@ jobs:
           esac
 
           next_version="${major}.${minor}.${patch}"
-          next_tag="v${next_version}"
+          sed -i 's/^var Version = ".*"$/var Version = "'"$next_version"'"/' internal/consts/consts.go
 
-          if [ "$current_version" != "$latest_version" ] && [ "$current_version" != "$next_version" ]; then
-            echo "internal/consts/consts.go version $current_version must match latest tag $LATEST_TAG or next version $next_version before release"
-            exit 1
-          fi
+          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
 
-          should_bump=true
-          if [ "$current_version" = "$next_version" ]; then
-            should_bump=false
-          fi
+      - name: Create release PR
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/v${{ steps.bump.outputs.next_version }}
+          delete-branch: true
+          commit-message: "chore(release): bump version to ${{ steps.bump.outputs.next_version }}"
+          title: "chore(release): bump version to ${{ steps.bump.outputs.next_version }}"
+          body: |
+            ## Release prep
 
-          echo "version=$next_version" >> "$GITHUB_OUTPUT"
-          echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
-          echo "should_bump=$should_bump" >> "$GITHUB_OUTPUT"
+            - bumps `internal/consts/consts.go` from `${{ steps.bump.outputs.current_version }}` to `${{ steps.bump.outputs.next_version }}`
+            - after this PR merges to `main`, CI will create tag `v${{ steps.bump.outputs.next_version }}` and publish the release
+          labels: release
+          base: ${{ github.ref_name }}
+          signoff: true
 
-      - name: Commit and tag locally
+      - name: Show release PR URL
+        if: steps.cpr.outputs.pull-request-url != ''
+        run: echo "${{ steps.cpr.outputs.pull-request-url }}"
+
+  tag-release:
+    name: Tag merged release commit
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag for release bump
         env:
-          TAG: ${{ steps.prep.outputs.tag }}
-          VERSION: ${{ steps.prep.outputs.version }}
-          SHOULD_BUMP: ${{ steps.prep.outputs.should_bump }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
-          if [ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]; then
-            echo "Tag ${TAG} already exists on origin"
+          version=$(sed -n 's/^var Version = "\([^"]*\)"$/\1/p' internal/consts/consts.go)
+          if [ -z "$version" ]; then
+            echo "Failed to read version from internal/consts/consts.go"
+            exit 1
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be semver (X.Y.Z), got: $version"
             exit 1
           fi
 
-          if git rev-parse "${TAG}" >/dev/null 2>&1; then
-            echo "Tag ${TAG} already exists locally"
-            exit 1
+          tag="v${version}"
+
+          if [ -n "$(git ls-remote --tags origin "refs/tags/${tag}")" ]; then
+            echo "Tag ${tag} already exists on origin, skipping"
+            exit 0
           fi
 
-          if [ "$SHOULD_BUMP" = "true" ]; then
-            sed -i 's/^var Version = ".*"$/var Version = "'"$VERSION"'"/' internal/consts/consts.go
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add internal/consts/consts.go
-            git commit -m "chore(release): bump version to ${VERSION}"
-          else
-            echo "Version already at ${VERSION} on branch head, skipping bump commit"
+          if ! git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep -q '^internal/consts/consts.go$'; then
+            echo "No version file update in this commit, skipping tag creation"
+            exit 0
           fi
 
-          git tag "${TAG}"
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
 
-      - name: Push commit and tag
-        env:
-          TAG: ${{ steps.prep.outputs.tag }}
-          SHOULD_BUMP: ${{ steps.prep.outputs.should_bump }}
-        run: |
-          set -euo pipefail
-
-          if [ "$SHOULD_BUMP" = "true" ]; then
-            git push origin HEAD
-          else
-            echo "Skipping branch push because bump commit is already present on head"
-          fi
-
-          git push origin "${TAG}"
-
-      - name: Cleanup on failure
-        if: failure()
-        run: |
-          git reset --hard HEAD~1 || true
-          git tag -d ${{ steps.prep.outputs.tag }} 2>/dev/null || true
-
-      - name: Checkout release tag
-        run: git checkout "${{ steps.prep.outputs.tag }}"
+  release:
+    name: Build and release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GORELEASER_CROSS_IMAGE: ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5
+      GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -184,7 +190,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ steps.prep.outputs.tag }}
         run: |
           docker run --rm \
             -e GITHUB_TOKEN \
@@ -198,5 +203,4 @@ jobs:
       - name: Show release URL
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view "${{ steps.prep.outputs.tag }}" --json url --jq .url
+        run: gh release view "$GORELEASER_CURRENT_TAG" --json url --jq .url
