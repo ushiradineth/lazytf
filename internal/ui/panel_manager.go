@@ -86,6 +86,8 @@ func (pm *PanelManager) PrevFocusMode() FocusMode {
 }
 
 // IsPanelVisible reports whether the given panel is currently visible.
+//
+//nolint:gocognit,gocyclo,funlen // Visibility depends on focus mode, side focus, and execution mode.
 func (pm *PanelManager) IsPanelVisible(id PanelID) bool {
 	if id == PanelHistory && !pm.historyAvailable() {
 		return false
@@ -296,6 +298,8 @@ func (pm *PanelManager) IsExecutionMode() bool {
 }
 
 // CalculateLayout computes layout specifications for all panels.
+//
+//nolint:gocognit,gocyclo,funlen // Layout math branches by focus mode and panel visibility states.
 func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	rightStackActive := pm.focusMode != FocusModeL3 || pm.isRightSideFocused()
 	commandLogVisible := pm.executionMode && pm.commandLogVisible && rightStackActive
@@ -405,6 +409,7 @@ func (pm *PanelManager) CalculateLayout(width, height int) LayoutSpec {
 	return layout
 }
 
+//nolint:gocognit,gocyclo,funlen // Height allocation intentionally handles multiple mode/availability cases.
 func (pm *PanelManager) leftColumnHeights(panelsHeight int) (int, int, int) {
 	if panelsHeight <= 0 {
 		return 0, 0, 0

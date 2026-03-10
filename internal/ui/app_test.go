@@ -1868,7 +1868,11 @@ Plan: 1 to add, 0 to change, 0 to destroy.`
 	m := NewModel(&terraform.Plan{})
 	m.executor = testutil.NewMockExecutor()
 	m.planFilePath = "/tmp/plan.tfplan"
-	m.executor.(*testutil.MockExecutor).ShowErr = errors.New("plan file was created by Terraform 1.12.2")
+	mockExecutor, ok := m.executor.(*testutil.MockExecutor)
+	if !ok {
+		t.Fatalf("expected MockExecutor")
+	}
+	mockExecutor.ShowErr = errors.New("plan file was created by Terraform 1.12.2")
 
 	msg := m.waitPlanCompleteCmd(result)()
 	planMsg, ok := msg.(PlanCompleteMsg)

@@ -16,7 +16,7 @@ on:
     branches:
       - main
     paths:
-      - internal/consts/consts.go
+      - VERSION
 
 permissions:
   contents: read
@@ -57,9 +57,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_version=$(sed -n 's/^var Version = "\([^"]*\)"$/\1/p' internal/consts/consts.go)
+          current_version=$(tr -d '[:space:]' < VERSION)
           if [ -z "$current_version" ]; then
-            echo "Failed to read current version from internal/consts/consts.go"
+            echo "Failed to read current version from VERSION"
             exit 1
           fi
           if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -89,7 +89,7 @@ jobs:
           esac
 
           next_version="${major}.${minor}.${patch}"
-          sed -i 's/^var Version = ".*"$/var Version = "'"$next_version"'"/' internal/consts/consts.go
+          printf '%s\n' "$next_version" > VERSION
 
           echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
           echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
@@ -106,7 +106,7 @@ jobs:
           body: |
             ## Release prep
 
-            - bumps `internal/consts/consts.go` from `${{ steps.bump.outputs.current_version }}` to `${{ steps.bump.outputs.next_version }}`
+            - bumps `VERSION` from `${{ steps.bump.outputs.current_version }}` to `${{ steps.bump.outputs.next_version }}`
             - after this PR merges to `main`, CI will create tag `v${{ steps.bump.outputs.next_version }}` and publish the release
           labels: release
           base: ${{ github.ref_name }}
@@ -138,9 +138,9 @@ jobs:
 
           echo "release_tag=" >> "$GITHUB_OUTPUT"
 
-          version=$(sed -n 's/^var Version = "\([^"]*\)"$/\1/p' internal/consts/consts.go)
+          version=$(tr -d '[:space:]' < VERSION)
           if [ -z "$version" ]; then
-            echo "Failed to read version from internal/consts/consts.go"
+            echo "Failed to read version from VERSION"
             exit 1
           fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -155,8 +155,8 @@ jobs:
             exit 0
           fi
 
-          if ! git diff-tree -m --no-commit-id --name-only -r "$GITHUB_SHA" | grep -q '^internal/consts/consts.go$'; then
-            echo "No version file update in this commit, skipping tag creation"
+          if ! git diff-tree -m --no-commit-id --name-only -r "$GITHUB_SHA" | grep -q '^VERSION$'; then
+            echo "No VERSION update in this commit, skipping tag creation"
             exit 0
           fi
 

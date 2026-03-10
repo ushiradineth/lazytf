@@ -1593,37 +1593,8 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 			output = result.Stdout
 		}
 
-		parseInput := output
-		if m.executor != nil && m.planFilePath != "" {
-			showWarning := ""
-			planEnv, err := m.prepareTerraformEnv()
-			if err != nil {
-				planEnv = nil
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			showResult, showErr := m.executor.Show(ctx, m.planFilePath, terraform.ShowOptions{Env: planEnv})
-			cancel()
-			if showErr == nil && showResult != nil && strings.TrimSpace(showResult.Output) != "" {
-				parseInput = showResult.Output
-			} else {
-				switch {
-				case showErr != nil:
-					showWarning = fmt.Sprintf("Warning: terraform show failed for %s: %v", m.planFilePath, showErr)
-				case showResult == nil:
-					showWarning = fmt.Sprintf("Warning: terraform show returned no result for %s", m.planFilePath)
-				case strings.TrimSpace(showResult.Output) == "":
-					showWarning = fmt.Sprintf("Warning: terraform show returned empty output for %s", m.planFilePath)
-				}
-			}
-
-			if strings.TrimSpace(showWarning) != "" {
-				if strings.TrimSpace(output) == "" {
-					output = showWarning
-				} else {
-					output += "\n\n" + showWarning
-				}
-			}
-		}
+		parseInput, showWarning := m.resolvePlanParseInput(output)
+		output = appendWarningOutput(output, showWarning)
 
 		textParser := tfparser.NewTextParser()
 		plan, err := textParser.Parse(strings.NewReader(parseInput))
@@ -1632,6 +1603,48 @@ func (m *Model) waitPlanCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
 		}
 		return PlanCompleteMsg{Plan: plan, Result: result, Output: output}
 	}
+}
+
+func (m *Model) resolvePlanParseInput(defaultOutput string) (string, string) {
+	parseInput := defaultOutput
+	if m.executor == nil || m.planFilePath == "" {
+		return parseInput, ""
+	}
+
+	planEnv, err := m.prepareTerraformEnv()
+	if err != nil {
+		planEnv = nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	showResult, showErr := m.executor.Show(ctx, m.planFilePath, terraform.ShowOptions{Env: planEnv})
+	cancel()
+
+	if showErr == nil && showResult != nil && strings.TrimSpace(showResult.Output) != "" {
+		return showResult.Output, ""
+	}
+
+	if showErr != nil {
+		return parseInput, fmt.Sprintf("Warning: terraform show failed for %s: %v", m.planFilePath, showErr)
+	}
+	if showResult == nil {
+		return parseInput, "Warning: terraform show returned no result for " + m.planFilePath
+	}
+	if strings.TrimSpace(showResult.Output) == "" {
+		return parseInput, "Warning: terraform show returned empty output for " + m.planFilePath
+	}
+
+	return parseInput, ""
+}
+
+func appendWarningOutput(output, warning string) string {
+	if strings.TrimSpace(warning) == "" {
+		return output
+	}
+	if strings.TrimSpace(output) == "" {
+		return warning
+	}
+	return output + "\n\n" + warning
 }
 
 func (m *Model) waitApplyCompleteCmd(result *terraform.ExecutionResult) tea.Cmd {
