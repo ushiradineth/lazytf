@@ -136,10 +136,13 @@ jobs:
           fetch-depth: 0
 
       - name: Create and push tag for release bump
+        id: create_tag
         env:
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+
+          echo "release_tag=" >> "$GITHUB_OUTPUT"
 
           version=$(sed -n 's/^var Version = "\([^"]*\)"$/\1/p' internal/consts/consts.go)
           if [ -z "$version" ]; then
@@ -165,6 +168,43 @@ jobs:
 
           git tag "$tag" "$GITHUB_SHA"
           git push origin "$tag"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Setup GoReleaser
+        if: steps.create_tag.outputs.release_tag != ''
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.12.7
+          install-only: true
+
+      - name: Validate GoReleaser config
+        if: steps.create_tag.outputs.release_tag != ''
+        run: goreleaser check
+
+      - name: Release from newly pushed tag
+        if: steps.create_tag.outputs.release_tag != ''
+        env:
+          GORELEASER_CROSS_IMAGE: ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5
+          GORELEASER_CURRENT_TAG: ${{ steps.create_tag.outputs.release_tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          docker run --rm \
+            -e GITHUB_TOKEN \
+            -e HOMEBREW_TAP_GITHUB_TOKEN \
+            -e GORELEASER_CURRENT_TAG \
+            -v "$PWD:/work" \
+            -w /work \
+            "$GORELEASER_CROSS_IMAGE" \
+            release --clean
+
+      - name: Show release URL
+        if: steps.create_tag.outputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.create_tag.outputs.release_tag }}
+        run: gh release view "$GORELEASER_CURRENT_TAG" --json url --jq .url
 
   release:
     name: Build and release
