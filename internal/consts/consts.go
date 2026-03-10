@@ -1,7 +1,7 @@
 package consts
 
-// Version is the application version. Can be overridden at build time via ldflags.
-var Version = "0.1.10"
+// Version is the fallback application version. Release builds set this via ldflags.
+var Version = "dev"
 
 const (
 	DefaultName = "default"

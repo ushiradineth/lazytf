@@ -160,8 +160,9 @@ go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
 
 ### Versioning
 
+- Release source of truth is root `VERSION` (`X.Y.Z`), bumped by the release PR workflow.
 - GitHub release artifacts inject semver via ldflags from the release tag.
-- Nix flake builds inject version via ldflags from `internal/consts/consts.go`.
+- Nix flake builds inject version via ldflags from `VERSION`.
 - `just run`, `just build`, and `just install` inject version via ldflags from an exact git tag when present, otherwise short commit SHA.
 - Local/dev fallback version comes from `internal/consts/consts.go` when ldflags are not applied.
 

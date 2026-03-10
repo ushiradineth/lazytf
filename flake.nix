@@ -16,12 +16,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        constsLines = pkgs.lib.splitString "\n" (builtins.readFile ./internal/consts/consts.go);
-        versionMatches = builtins.filter (m: m != null) (map (line: builtins.match ''var Version = "([^"]+)"'' line) constsLines);
-        appVersion =
-          if versionMatches == [ ]
-          then throw "Could not parse version from internal/consts/consts.go"
-          else builtins.elemAt (builtins.elemAt versionMatches 0) 0;
+        appVersion = pkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
           version = appVersion;

@@ -28,6 +28,8 @@ func DefaultHintOptions() HintOptions {
 }
 
 // ForStatusBar generates a status bar hint string for the given context.
+//
+//nolint:gocognit // Prioritized filtering/sorting rules are clearer in one pass.
 func (r *Registry) ForStatusBar(ctx *Context, opts HintOptions) string {
 	if opts.Separator == "" {
 		opts.Separator = " | "

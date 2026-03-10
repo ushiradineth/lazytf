@@ -60,6 +60,7 @@ func registerGlobalBindings(r *Registry) {
 	})
 }
 
+//nolint:funlen // Binding registration is a flat declaration table for readability.
 func registerPanelNavigationBindings(r *Registry) {
 	// Number keys for panel focus - hidden since panel titles show [1], [2], etc.
 	r.Register(Binding{
