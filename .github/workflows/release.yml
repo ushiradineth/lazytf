@@ -152,7 +152,7 @@ jobs:
             exit 0
           fi
 
-          if ! git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep -q '^internal/consts/consts.go$'; then
+          if ! git diff-tree -m --no-commit-id --name-only -r "$GITHUB_SHA" | grep -q '^internal/consts/consts.go$'; then
             echo "No version file update in this commit, skipping tag creation"
             exit 0
           fi
