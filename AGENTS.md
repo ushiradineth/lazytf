@@ -82,6 +82,8 @@ return plan, nil
 confidence: medium
 
 - Work on a feature branch.
+- Before applying an approved plan, start from a feature branch or a separate git worktree/workspace.
+- If the user did not specify branch or workspace preference for planned implementation, ask once before making code changes.
 - Keep diffs scoped to the requested change.
 - Before every PR push, run `just ci` locally and fix failures before pushing.
 - Before PR, run `just check-all` (project contribution guidance).
