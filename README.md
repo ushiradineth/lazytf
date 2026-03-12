@@ -8,6 +8,12 @@ lazygit but for Terraform :D
 
 Download platform archives and checksums from GitHub Releases.
 
+### Go
+
+```bash
+go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
+```
+
 ### Homebrew
 
 ```bash
@@ -28,6 +34,36 @@ Build from source:
 ```bash
 nix build github:ushiradineth/lazytf
 ```
+
+## Configuration
+
+### YAML config
+
+Config is stored in YAML and supports a schema hint for editors.
+
+Path resolution order:
+
+1. `LAZYTF_CONFIG`
+2. `$XDG_CONFIG_HOME/lazytf/config.yaml`
+3. `~/.config/lazytf/config.yaml`
+4. `/etc/lazytf/config.yaml`
+
+Example:
+
+```yaml
+version: 1
+theme:
+  name: default
+terraform:
+  default_flags:
+    - -compact-warnings
+  timeout: 10m
+history:
+  enabled: true
+  level: standard
+```
+
+### Nix
 
 NixOS module usage:
 
@@ -71,114 +107,15 @@ Home Manager module usage:
 }
 ```
 
-The Nix module `programs.lazytf.settings` options are generated from `internal/config/config.schema.json`.
-Regenerate schema and Nix options after config model changes:
+## Development Prerequisites
 
-```bash
-just generate-check
-```
-
-## Configuration
-
-### YAML config (native)
-
-Config is stored in YAML and supports a schema hint for editors.
-
-Path resolution order:
-
-1. `LAZYTF_CONFIG`
-2. `$XDG_CONFIG_HOME/lazytf/config.yaml`
-3. `~/.config/lazytf/config.yaml`
-4. `/etc/lazytf/config.yaml`
-
-Example:
-
-```yaml
-version: 1
-theme:
-  name: default
-terraform:
-  default_flags:
-    - -compact-warnings
-  timeout: 10m
-history:
-  enabled: true
-  level: standard
-```
-
-### Nix config parity
-
-Both `nixosModules.default` and `homeManagerModules.default` write the same YAML keys under `programs.lazytf.settings`.
-
-NixOS:
-
-```nix
-programs.lazytf = {
-  enable = true;
-  settings = {
-    theme.name = "default";
-    terraform.default_flags = [ "-compact-warnings" ];
-    terraform.timeout = "10m";
-    history.enabled = true;
-    history.level = "standard";
-  };
-};
-```
-
-Home Manager:
-
-```nix
-programs.lazytf = {
-  enable = true;
-  settings = {
-    theme.name = "default";
-    terraform.default_flags = [ "-compact-warnings" ];
-    terraform.timeout = "10m";
-    history.enabled = true;
-    history.level = "standard";
-  };
-};
-```
-
-Notes:
-
-- Nix modules only write keys you set. lazytf applies runtime defaults for omitted values.
-- Keep YAML schema and Nix options in sync with `just generate-check` after config model changes.
-
-### Go
-
-```bash
-go install github.com/ushiradineth/lazytf/cmd/lazytf@latest
-```
-
-## Releases
-
-- Tagged releases (`vX.Y.Z`) run `.github/workflows/release.yml` and publish artifacts to GitHub Releases.
-- Manual release flow is available via GitHub Actions `workflow_dispatch` with `patch` or `minor` bump.
-- Release notes are generated from merged PRs and commits using GitHub native release notes plus `.github/release.yml` categories.
-- Homebrew cask updates are published to `ushiradineth/homebrew` by GoReleaser.
-
-### Versioning
-
-- Release source of truth is root `VERSION` (`X.Y.Z`), bumped by the release PR workflow.
-- GitHub release artifacts inject semver via ldflags from the release tag.
-- Nix flake builds inject version via ldflags from `VERSION`.
-- `just run`, `just build`, and `just install` inject version via ldflags from an exact git tag when present, otherwise short commit SHA.
-- Local/dev fallback version comes from `internal/consts/consts.go` when ldflags are not applied.
-
-## Prerequisites
-
-- Go 1.25.5 or later
+- Go 1.25.7 or later
 - [just](https://github.com/casey/just)
 
 ### With Nix
 
 - Install [direnv](https://direnv.net/)
-- `direnv allow`
-
-OR
-
-- `just shell`
+- `direnv allow` or `just shell`
 
 ### Without nix
 
@@ -208,11 +145,12 @@ Run `just` without arguments to see all available commands:
 4. Run `just check-all` to ensure quality
 5. Submit a pull request
 
-### Before Committing
+### Before Raising a Pull Request
 
 Always run the quality checks:
 
 - `just check-all`
+- `just ci`
 
 ## Credits
 
