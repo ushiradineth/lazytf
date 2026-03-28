@@ -12,6 +12,8 @@ import (
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
+const multilineContextLines = 6
+
 // DiffViewer renders a side-by-side diff for the selected resource.
 type DiffViewer struct {
 	styles       *styles.Styles
@@ -288,7 +290,8 @@ func (d *DiffViewer) renderMultilineBlock(item diff.MinimalDiff, change *terrafo
 
 	oldStr, _ := item.OldValue.(string)
 	newStr, _ := item.NewValue.(string)
-	lines := buildContextDiff(oldStr, newStr, 2)
+	oldStr, newStr = normalizeMultilineForDisplay(oldStr, newStr)
+	lines := buildContextDiff(oldStr, newStr, multilineContextLines)
 
 	var output []string
 	output = append(output, header)
@@ -532,6 +535,66 @@ func linePrefix(line string) string {
 		return "."
 	}
 	return ""
+}
+
+func normalizeMultilineForDisplay(before, after string) (string, string) {
+	beforeLines := splitLines(before)
+	afterLines := splitLines(after)
+	minIndent := minCommonIndent(beforeLines, afterLines)
+	if minIndent <= 0 {
+		return before, after
+	}
+	return strings.Join(trimCommonIndent(beforeLines, minIndent), "\n"), strings.Join(trimCommonIndent(afterLines, minIndent), "\n")
+}
+
+func minCommonIndent(beforeLines, afterLines []string) int {
+	minIndent := -1
+	apply := func(lines []string) {
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			indent := leadingIndentWidth(line)
+			if minIndent == -1 || indent < minIndent {
+				minIndent = indent
+			}
+		}
+	}
+	apply(beforeLines)
+	apply(afterLines)
+	if minIndent < 0 {
+		return 0
+	}
+	return minIndent
+}
+
+func leadingIndentWidth(line string) int {
+	count := 0
+	for _, r := range line {
+		if r == ' ' || r == '\t' {
+			count++
+			continue
+		}
+		break
+	}
+	return count
+}
+
+func trimCommonIndent(lines []string, n int) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		trim := n
+		idx := 0
+		for idx < len(line) && trim > 0 {
+			if line[idx] != ' ' && line[idx] != '\t' {
+				break
+			}
+			idx++
+			trim--
+		}
+		out[i] = line[idx:]
+	}
+	return out
 }
 
 func actionLabel(action terraform.ActionType) string {

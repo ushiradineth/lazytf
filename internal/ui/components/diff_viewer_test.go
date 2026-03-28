@@ -414,6 +414,29 @@ func TestContextDiffNoChangesPlaceholder(t *testing.T) {
 	}
 }
 
+func TestNormalizeMultilineForDisplayDedentsSharedIndent(t *testing.T) {
+	before := "        search:\n          shards: 5\n"
+	after := "        search:\n          shards: 10\n"
+
+	gotBefore, gotAfter := normalizeMultilineForDisplay(before, after)
+	if strings.HasPrefix(gotBefore, " ") || strings.HasPrefix(gotAfter, " ") {
+		t.Fatalf("expected first lines to be dedented, got before=%q after=%q", gotBefore, gotAfter)
+	}
+	if !strings.Contains(gotBefore, "  shards: 5") {
+		t.Fatalf("expected relative indentation preserved in before, got %q", gotBefore)
+	}
+	if !strings.Contains(gotAfter, "  shards: 10") {
+		t.Fatalf("expected relative indentation preserved in after, got %q", gotAfter)
+	}
+}
+
+func TestNormalizeMultilineForDisplayHandlesEmpty(t *testing.T) {
+	gotBefore, gotAfter := normalizeMultilineForDisplay("", "")
+	if gotBefore != "" || gotAfter != "" {
+		t.Fatalf("expected empty outputs, got before=%q after=%q", gotBefore, gotAfter)
+	}
+}
+
 func TestReplaceMarkerNestedPathMatch(t *testing.T) {
 	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
 	change := &terraform.Change{ReplacePaths: [][]string{{"network", "self_link"}}}
