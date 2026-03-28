@@ -320,10 +320,92 @@ func (b *planBuilder) applyHeredocValue(key, prefix, value string) {
 	case "-":
 		b.setBefore(path, value)
 	case "~":
+		if before, after, ok := splitHeredocDiff(value); ok {
+			b.setBefore(path, before)
+			b.setAfter(path, after)
+			return
+		}
 		b.setAfter(path, value)
 	default:
 		b.setAfter(path, value)
 	}
+}
+
+func splitHeredocDiff(value string) (before, after string, ok bool) {
+	lines := strings.Split(value, "\n")
+	beforeLines := make([]string, 0, len(lines))
+	afterLines := make([]string, 0, len(lines))
+
+	type markerCandidate struct {
+		indent int
+		sign   byte
+	}
+
+	candidates := make([]markerCandidate, 0, len(lines))
+	anchorCandidates := make([]markerCandidate, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if len(trimmed) < 2 || trimmed[1] != ' ' {
+			continue
+		}
+		sign := trimmed[0]
+		if sign != '-' && sign != '+' {
+			continue
+		}
+		indent := len(line) - len(trimmed)
+		rest := trimmed[2:]
+		candidate := markerCandidate{indent: indent, sign: sign}
+		candidates = append(candidates, candidate)
+		if sign == '+' || (len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t')) {
+			anchorCandidates = append(anchorCandidates, candidate)
+		}
+	}
+
+	if len(candidates) == 0 || len(anchorCandidates) == 0 {
+		return "", "", false
+	}
+
+	markerIndent := anchorCandidates[0].indent
+	for _, c := range anchorCandidates[1:] {
+		if c.indent < markerIndent {
+			markerIndent = c.indent
+		}
+	}
+
+	hasDiffMarkers := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if len(trimmed) >= 2 && trimmed[1] == ' ' {
+			sign := trimmed[0]
+			indent := len(line) - len(trimmed)
+			rest := trimmed[2:]
+			isTerraformMinus := sign == '-' && len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t')
+			isTerraformPlus := sign == '+'
+			if indent == markerIndent && (isTerraformMinus || isTerraformPlus) {
+				lineWithoutMarker := line[:indent] + trimmed[1:]
+				switch sign {
+				case '-':
+					hasDiffMarkers = true
+					beforeLines = append(beforeLines, lineWithoutMarker)
+					continue
+				case '+':
+					hasDiffMarkers = true
+					afterLines = append(afterLines, lineWithoutMarker)
+					continue
+				}
+			}
+		}
+
+		beforeLines = append(beforeLines, line)
+		afterLines = append(afterLines, line)
+	}
+
+	if !hasDiffMarkers {
+		return "", "", false
+	}
+
+	return strings.Join(beforeLines, "\n"), strings.Join(afterLines, "\n"), true
 }
 
 func parseHeaderLine(line string) (string, terraform.ActionType, bool) {

@@ -635,6 +635,120 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 	}
 }
 
+func TestTextParserHeredocUpdateParsesBeforeAndAfter(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # module.ops_domain.module.search_config.kubernetes_config_map.config_map will be updated in-place
+  ~ resource "kubernetes_config_map" "config_map" {
+      ~ data = {
+          ~ "search.yaml" = <<-EOT
+                search:
+                  endpoints:
+                    - https://search-0.demo.local
+                    - https://search-1.demo.local
+                  index_templates:
+                    products:
+              -       shards: 5
+              +       shards: 10
+                      replicas: 1
+            EOT
+        }
+    }
+`
+
+	parser := NewTextParser()
+	plan, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+
+	change := plan.Resources[0].Change
+	if change == nil {
+		t.Fatal("expected resource change to be populated")
+	}
+
+	beforeData, ok := change.Before["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected before data map, got %#v", change.Before["data"])
+	}
+	afterData, ok := change.After["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected after data map, got %#v", change.After["data"])
+	}
+
+	beforeYAML, ok := beforeData["search.yaml"].(string)
+	if !ok {
+		t.Fatalf("expected before search.yaml string, got %#v", beforeData["search.yaml"])
+	}
+	afterYAML, ok := afterData["search.yaml"].(string)
+	if !ok {
+		t.Fatalf("expected after search.yaml string, got %#v", afterData["search.yaml"])
+	}
+
+	if !strings.Contains(beforeYAML, "shards: 5") {
+		t.Fatalf("expected before heredoc to include old shard value, got %q", beforeYAML)
+	}
+	if !strings.Contains(afterYAML, "shards: 10") {
+		t.Fatalf("expected after heredoc to include new shard value, got %q", afterYAML)
+	}
+	if !strings.Contains(beforeYAML, "- https://search-0.demo.local") || !strings.Contains(afterYAML, "- https://search-0.demo.local") {
+		t.Fatalf("expected YAML list endpoint to remain in both before/after values\nbefore:\n%s\nafter:\n%s", beforeYAML, afterYAML)
+	}
+}
+
+func TestSplitHeredocDiff(t *testing.T) {
+	value := strings.Join([]string{
+		"    unchanged: true",
+		"- old: 1",
+		"+ old: 2",
+		"    tail: true",
+	}, "\n")
+
+	before, after, ok := splitHeredocDiff(value)
+	if !ok {
+		t.Fatal("expected heredoc diff markers to be detected")
+	}
+	if !strings.Contains(before, "old: 1") {
+		t.Fatalf("expected old value in before text, got %q", before)
+	}
+	if !strings.Contains(after, "old: 2") {
+		t.Fatalf("expected new value in after text, got %q", after)
+	}
+}
+
+func TestSplitHeredocDiffKeepsYAMLListLines(t *testing.T) {
+	value := strings.Join([]string{
+		"      endpoints:",
+		"        - https://search-0.demo.local",
+		"        -       shards: 5",
+		"        +       shards: 10",
+		"        - https://search-1.demo.local",
+	}, "\n")
+
+	before, after, ok := splitHeredocDiff(value)
+	if !ok {
+		t.Fatal("expected heredoc diff markers to be detected")
+	}
+	if !strings.Contains(before, "- https://search-0.demo.local") || !strings.Contains(after, "- https://search-0.demo.local") {
+		t.Fatalf("expected list entries to remain unchanged in both before/after")
+	}
+	if !strings.Contains(before, "shards: 5") {
+		t.Fatalf("expected old shards value in before, got %q", before)
+	}
+	if !strings.Contains(after, "shards: 10") {
+		t.Fatalf("expected new shards value in after, got %q", after)
+	}
+	if !strings.Contains(before, "               shards: 5") {
+		t.Fatalf("expected preserved indentation for before shards line, got %q", before)
+	}
+	if !strings.Contains(after, "               shards: 10") {
+		t.Fatalf("expected preserved indentation for after shards line, got %q", after)
+	}
+}
+
 func TestTextParserReadAction(t *testing.T) {
 	// Test read action (data source)
 	input := `Terraform will perform the following actions:
