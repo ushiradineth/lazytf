@@ -118,7 +118,7 @@ Home Manager module usage:
 
 ## Development Prerequisites
 
-- Go 1.25.7 or later
+- Go 1.25.8 or later
 - [just](https://github.com/casey/just)
 
 ### With Nix
