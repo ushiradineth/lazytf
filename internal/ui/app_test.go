@@ -4925,6 +4925,41 @@ func TestHandleMouseMsgClickSelectsEnvironmentRow(t *testing.T) {
 	}
 }
 
+func TestHandleMouseMsgClickEnvironmentEmitsChangeMessage(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	envs := []environment.Environment{
+		{Name: "dev", Strategy: environment.StrategyWorkspace},
+		{Name: "prod", Strategy: environment.StrategyWorkspace},
+	}
+	m.environmentPanel.SetEnvironmentInfo("", "", environment.StrategyWorkspace, envs)
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.Workspace.X + 2,
+		Y:      layout.Workspace.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, cmd := m.handleMouseMsg(click)
+	if cmd == nil {
+		t.Fatal("expected environment click to emit environment change command")
+	}
+	msg := cmd()
+	changed, ok := msg.(components.EnvironmentChangedMsg)
+	if !ok {
+		t.Fatalf("expected EnvironmentChangedMsg, got %T", msg)
+	}
+	if changed.Environment.Name != "prod" {
+		t.Fatalf("expected selected environment 'prod', got %q", changed.Environment.Name)
+	}
+}
+
 func TestHandleMouseMsgWheelUsesHoveredPanel(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{HistoryEnabled: true})
 	m.ready = true
@@ -4978,6 +5013,33 @@ func TestHandleMouseMsgWheelFallsBackToFocusedPanel(t *testing.T) {
 	selected := m.resourceList.GetSelectedResource()
 	if selected == nil || selected.Address != "aws_instance.b" {
 		t.Fatalf("expected focused resources panel to handle fallback wheel, got %#v", selected)
+	}
+}
+
+func TestHandleMouseMsgWheelOverPanelBorderFallsBackToFocusedPanel(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+	}}
+	m := NewExecutionModel(plan, ExecutionConfig{HistoryEnabled: true})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+	_ = m.panelManager.SetFocus(PanelResources)
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	wheel := tea.MouseMsg{
+		X:      layout.History.X + 1,
+		Y:      layout.History.Y,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+
+	_, _ = m.handleMouseMsg(wheel)
+	selected := m.resourceList.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.b" {
+		t.Fatalf("expected focused resources panel to handle border wheel fallback, got %#v", selected)
 	}
 }
 

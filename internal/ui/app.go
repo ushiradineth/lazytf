@@ -692,6 +692,17 @@ func panelContentRow(spec PanelSpec, y int) int {
 	return y - spec.Y - 1
 }
 
+func panelContentContains(spec PanelSpec, x, y int) bool {
+	if spec.Width < 3 || spec.Height < 3 {
+		return false
+	}
+	left := spec.X + 1
+	right := spec.X + spec.Width - 2
+	top := spec.Y + 1
+	bottom := spec.Y + spec.Height - 2
+	return x >= left && x <= right && y >= top && y <= bottom
+}
+
 func (m *Model) clearMousePressState() {
 	m.lastMouseLeftPress = false
 	m.lastMouseLeftPressX = 0
@@ -918,8 +929,11 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	event := tea.MouseEvent(msg)
-	panelID, spec, hasPanel := m.mousePanelAt(event)
 	intent := m.resolveMouseIntent(event)
+	if intent == mouseIntentNone {
+		return m, nil
+	}
+	panelID, spec, hasPanel := m.mousePanelAt(event)
 
 	switch intent {
 	case mouseIntentLeftClick:
@@ -931,7 +945,7 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(focusCmd, selectCmd)
 	case mouseIntentWheelUp, mouseIntentWheelDown:
 		targetPanel := panelID
-		if !hasPanel {
+		if !hasPanel || !panelContentContains(spec, event.X, event.Y) {
 			targetPanel = m.panelManager.GetFocusedPanel()
 		}
 		wheelCmd := m.handleMouseWheel(targetPanel, intent == mouseIntentWheelUp)
