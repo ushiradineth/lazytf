@@ -22,7 +22,7 @@
           version = appVersion;
 
           src = ./.;
-          vendorHash = "sha256-twmrMrtvUVzDiB8FHgDiAf9gbsCR+/mCZfmMucXWTcs=";
+          vendorHash = "sha256-v5nAjRilmxZQeI3PCLRaIwKPQf54JVgK9Sv4H0uc1oE=";
           proxyVendor = true;
           go = pkgs.go_1_25;
           doCheck = false;
