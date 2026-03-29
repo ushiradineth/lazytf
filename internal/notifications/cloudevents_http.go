@@ -17,6 +17,7 @@ import (
 const (
 	defaultTimeout     = 3 * time.Second
 	cloudEventsVersion = "1.0"
+	maxErrorBodyBytes  = 8 * 1024
 )
 
 type cloudEventsEnvelope struct {
@@ -154,7 +155,7 @@ func (n *CloudEventsHTTPNotifier) Notify(ctx context.Context, event OperationEve
 	}()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		responseBody, _ := io.ReadAll(resp.Body)
+		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		trimmedBody := strings.TrimSpace(string(responseBody))
 		if trimmedBody == "" {
 			return fmt.Errorf("notification request returned status %d", resp.StatusCode)

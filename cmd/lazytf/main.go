@@ -187,17 +187,18 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 	if err != nil {
 		return err
 	}
-	notifier, err := openNotifier(cfg)
-	if err != nil {
-		return err
-	}
-	// Ensure history store is closed if we fail before reaching executionModeRunner
+	// Ensure history store is closed if we fail before reaching executionModeRunner.
 	var runErr error
 	defer func() {
 		if runErr != nil && historyStore != nil {
 			_ = historyStore.Close()
 		}
 	}()
+
+	notifier, err := openNotifier(cfg)
+	if err != nil {
+		return err
+	}
 
 	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
 		Executor:       exec,

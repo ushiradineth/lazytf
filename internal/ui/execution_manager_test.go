@@ -3311,6 +3311,79 @@ func TestHandleApplyCompleteNotificationFailureIsNonFatal(t *testing.T) {
 	}
 }
 
+func TestHandlePlanCompleteEmitsNotificationOnSuccess(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.planRunning = true
+	m.planStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}}}
+	_, cmd := m.handlePlanComplete(PlanCompleteMsg{Plan: plan, Output: "Plan complete"})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	event := notifier.events[0]
+	if event.Action != "plan" {
+		t.Fatalf("expected action plan, got %q", event.Action)
+	}
+	if event.Status != notifications.StatusSuccess {
+		t.Fatalf("expected success status, got %q", event.Status)
+	}
+}
+
+func TestHandleRefreshCompleteEmitsFailedNotificationWhenSuccessFalseWithoutError(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.refreshRunning = true
+	m.refreshStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	result := testutil.NewMockResult("refresh output", 1)
+	_, cmd := m.handleRefreshComplete(RefreshCompleteMsg{Success: false, Result: result})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	if notifier.events[0].Action != "refresh" {
+		t.Fatalf("expected action refresh, got %q", notifier.events[0].Action)
+	}
+	if notifier.events[0].Status != notifications.StatusFailed {
+		t.Fatalf("expected failed status, got %q", notifier.events[0].Status)
+	}
+}
+
+func TestHandleApplyCompleteEmitsCanceledNotification(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.applyRunning = true
+	m.applyStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	result := testutil.NewMockErrorResult("context canceled", context.Canceled)
+	_, cmd := m.handleApplyComplete(ApplyCompleteMsg{Success: false, Error: context.Canceled, Result: result})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	if notifier.events[0].Status != notifications.StatusCanceled {
+		t.Fatalf("expected canceled status, got %q", notifier.events[0].Status)
+	}
+}
+
 // ============================================================================
 // Cleanup tests
 // ============================================================================
