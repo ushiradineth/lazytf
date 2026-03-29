@@ -8,6 +8,11 @@
           default = null;
           description = "Auto-generated from internal/config/config.schema.json";
         };
+        "mouse_enabled" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.bool);
+          default = null;
+          description = "Auto-generated from internal/config/config.schema.json";
+        };
       };
     });
     default = null;

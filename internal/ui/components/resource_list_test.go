@@ -111,6 +111,45 @@ func TestResourceListFilteringAndSelection(t *testing.T) {
 	}
 }
 
+func TestResourceListSelectVisibleRow(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(50, 8)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+		{Address: "aws_instance.c", Action: terraform.ActionDelete},
+	})
+
+	if !r.SelectVisibleRow(1) {
+		t.Fatal("expected visible row selection to succeed")
+	}
+	selected := r.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.b" {
+		t.Fatalf("expected second resource selected, got %#v", selected)
+	}
+}
+
+func TestResourceListSelectVisibleRowWithSummaryHeader(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(50, 8)
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+	})
+	r.SetSummary(1, 1, 0, 0)
+
+	if r.SelectVisibleRow(0) {
+		t.Fatal("expected summary header row to be non-selectable")
+	}
+	if !r.SelectVisibleRow(1) {
+		t.Fatal("expected first list row after summary header to be selectable")
+	}
+	selected := r.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.a" {
+		t.Fatalf("expected first resource selected, got %#v", selected)
+	}
+}
+
 func TestResourceListViewEmpty(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetSize(40, 5)

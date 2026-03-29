@@ -259,6 +259,11 @@ func (h *HistoryPanel) MoveDown() bool {
 	return h.listPanel.MoveDown()
 }
 
+// SelectVisibleRow updates selection from a visible list row.
+func (h *HistoryPanel) SelectVisibleRow(row int) bool {
+	return h.listPanel.SelectVisibleRow(row)
+}
+
 // Update handles Bubble Tea messages (implements Panel interface).
 func (h *HistoryPanel) Update(_ tea.Msg) (any, tea.Cmd) {
 	return h, nil

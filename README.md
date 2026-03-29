@@ -35,6 +35,41 @@ Build from source:
 nix build github:ushiradineth/lazytf
 ```
 
+## Usage
+
+Open interactive mode in the current Terraform working directory:
+
+```bash
+lazytf
+```
+
+### Mouse support
+
+- Mouse mode is enabled by default outside tmux.
+- Inside tmux, mouse mode is disabled by default.
+- You can explicitly enable mouse mode in tmux with:
+
+```bash
+lazytf --mouse
+```
+
+You can also set the default in config:
+
+```yaml
+general:
+  mouse_enabled: true
+```
+
+Precedence is: `--mouse` flag, then `general.mouse_enabled`, then tmux-aware default behavior.
+
+With mouse mode enabled:
+
+- Left click focuses a panel (`[1]` Environment, `[2]` Resources/State, `[3]` History, `[0]` Main, `[4]` Command Log).
+- Left click on list rows selects the clicked item (Environment panel clicks also trigger environment switch).
+- Mouse wheel scrolls the hovered panel, or the focused panel if the pointer is outside panel content.
+
+Mouse handling is protocol-agnostic at the app level. `lazytf` relies on Bubble Tea mouse events, so common terminal mouse reporting modes including SGR/1006 and legacy tracking modes map to the same click and wheel behavior.
+
 ## Configuration
 
 ### YAML config
@@ -52,6 +87,8 @@ Example:
 
 ```yaml
 version: 1
+general:
+  mouse_enabled: true
 theme:
   name: default
 terraform:

@@ -1380,3 +1380,47 @@ func TestEnvironmentPanelItemCount(t *testing.T) {
 		t.Errorf("expected 2 items, got %d", panel.ItemCount())
 	}
 }
+
+func TestEnvironmentPanelSelectVisibleRow(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+	panel.SetSize(40, 8)
+	panel.SetFocused(true)
+	envs := []environment.Environment{
+		{Name: "env-a", Strategy: environment.StrategyFolder},
+		{Name: "env-b", Strategy: environment.StrategyFolder},
+		{Name: "env-c", Strategy: environment.StrategyFolder},
+	}
+	panel.SetEnvironmentInfo("", "", environment.StrategyFolder, envs)
+
+	selected := panel.SelectVisibleRow(1)
+	if selected == nil {
+		t.Fatal("expected row selection to return environment")
+	}
+	if selected.Name != "env-b" {
+		t.Fatalf("expected env-b selected, got %q", selected.Name)
+	}
+	if panel.GetSelectedIndex() != 1 {
+		t.Fatalf("expected selected index 1, got %d", panel.GetSelectedIndex())
+	}
+}
+
+func TestEnvironmentPanelSelectVisibleRowWithFilterInput(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewEnvironmentPanel(s)
+	panel.SetSize(40, 8)
+	panel.SetFocused(true)
+	panel.SetEnvironmentInfo("", "", environment.StrategyFolder, []environment.Environment{
+		{Name: "env-a", Strategy: environment.StrategyFolder},
+		{Name: "env-b", Strategy: environment.StrategyFolder},
+	})
+	panel.filterActive = true
+
+	if env := panel.SelectVisibleRow(0); env != nil {
+		t.Fatal("expected filter input row to be non-selectable")
+	}
+	env := panel.SelectVisibleRow(1)
+	if env == nil || env.Name != "env-a" {
+		t.Fatalf("expected first environment selected after filter row, got %#v", env)
+	}
+}
