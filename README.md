@@ -61,7 +61,16 @@ terraform:
 history:
   enabled: true
   level: standard
+notifications:
+  enabled: true
+  sink:
+    protocol: cloudevents-http
+    url: https://example.com/hooks/lazytf
+    timeout: 3s
+    source: https://github.com/ushiradineth/lazytf
 ```
+
+Notification delivery uses CloudEvents 1.0 JSON over HTTP(S). `notifications.enabled` toggles delivery on or off.
 
 ### Nix
 

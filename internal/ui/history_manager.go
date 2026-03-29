@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
@@ -238,4 +239,58 @@ func truncateOutput(output string, maxBytes int) string {
 		return output
 	}
 	return output[:maxBytes]
+}
+
+func (m *Model) notifyOperationCmd(action, summary string, startedAt time.Time, result *terraform.ExecutionResult, opErr error) tea.Cmd {
+	if m.notifier == nil {
+		return nil
+	}
+	finishedAt := time.Now()
+	duration := computeOperationDuration(startedAt, finishedAt, result)
+	event := notifications.OperationEvent{
+		Action:      action,
+		Status:      notificationStatus(opErr),
+		Summary:     summary,
+		Environment: m.envCurrent,
+		WorkDir:     m.currentHistoryWorkDir(),
+		StartedAt:   startedAt,
+		FinishedAt:  finishedAt,
+		Duration:    duration,
+	}
+	if result != nil {
+		event.ExitCode = result.ExitCode
+	}
+	if opErr != nil {
+		event.Error = opErr.Error()
+	}
+	notifier := m.notifier
+	return func() tea.Msg {
+		if err := notifier.Notify(context.Background(), event); err != nil {
+			return NotificationFailedMsg{Action: action, Error: err}
+		}
+		return nil
+	}
+}
+
+func notificationStatus(err error) notifications.OperationStatus {
+	if err == nil {
+		return notifications.StatusSuccess
+	}
+	if errors.Is(err, context.Canceled) {
+		return notifications.StatusCanceled
+	}
+	return notifications.StatusFailed
+}
+
+func computeOperationDuration(startedAt, finishedAt time.Time, result *terraform.ExecutionResult) time.Duration {
+	if result != nil && result.Duration > 0 {
+		return result.Duration
+	}
+	if startedAt.IsZero() {
+		return 0
+	}
+	if finishedAt.Before(startedAt) {
+		return 0
+	}
+	return finishedAt.Sub(startedAt)
 }

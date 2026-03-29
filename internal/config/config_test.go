@@ -43,6 +43,13 @@ func TestSaveAndLoadConfig(t *testing.T) {
 			Enabled: true,
 			Level:   "minimal",
 		},
+		Notifications: NotificationsConfig{
+			Enabled: true,
+			Sink: NotificationSinkConfig{
+				Protocol: "cloudevents-http",
+				URL:      "https://example.com/hooks/lazytf",
+			},
+		},
 	}
 	if err := manager.Save(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -56,6 +63,15 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.History.Level != "minimal" {
 		t.Fatalf("expected history level to round-trip")
+	}
+	if !loaded.Notifications.Enabled {
+		t.Fatalf("expected notifications to round-trip")
+	}
+	if loaded.Notifications.Sink.Protocol != "cloudevents-http" {
+		t.Fatalf("expected notification protocol to round-trip")
+	}
+	if loaded.Notifications.Sink.URL != "https://example.com/hooks/lazytf" {
+		t.Fatalf("expected notification sink URL to round-trip")
 	}
 }
 
@@ -146,6 +162,52 @@ func TestValidateConfigErrors(t *testing.T) {
 	}
 	if err := (Config{History: HistoryConfig{Level: "bogus"}}).Validate(); err == nil {
 		t.Fatalf("expected error for invalid history level")
+	}
+	if err := (Config{
+		Notifications: NotificationsConfig{Enabled: true},
+	}).Validate(); err == nil {
+		t.Fatalf("expected error for enabled notifications without sink URL")
+	}
+	if err := (Config{
+		Notifications: NotificationsConfig{
+			Enabled: true,
+			Sink:    NotificationSinkConfig{Protocol: "smtp", URL: "https://example.com/hook"},
+		},
+	}).Validate(); err == nil {
+		t.Fatalf("expected error for unsupported notification protocol")
+	}
+	if err := (Config{
+		Notifications: NotificationsConfig{
+			Enabled: true,
+			Sink:    NotificationSinkConfig{Protocol: "cloudevents-http", URL: "ftp://example.com/hook"},
+		},
+	}).Validate(); err == nil {
+		t.Fatalf("expected error for unsupported notification URL scheme")
+	}
+}
+
+func TestDefaultConfigNotificationsDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Notifications.Enabled {
+		t.Fatalf("expected notifications to be disabled by default")
+	}
+	if cfg.Notifications.Sink.Protocol != "cloudevents-http" {
+		t.Fatalf("expected default notification protocol cloudevents-http, got %q", cfg.Notifications.Sink.Protocol)
+	}
+	if cfg.Notifications.Sink.Timeout <= 0 {
+		t.Fatalf("expected positive default notification timeout")
+	}
+}
+
+func TestValidateNotificationsAllowsDisabledWithMissingURL(t *testing.T) {
+	cfg := Config{
+		Notifications: NotificationsConfig{
+			Enabled: false,
+			Sink:    NotificationSinkConfig{Protocol: "cloudevents-http"},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected disabled notifications to validate, got %v", err)
 	}
 }
 

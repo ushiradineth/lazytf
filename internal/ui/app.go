@@ -16,6 +16,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
@@ -80,6 +81,7 @@ type Model struct {
 	diagnosticsFocused bool
 	historyDetail      *history.Entry
 	historyLogger      *history.Logger
+	notifier           notifications.Notifier
 	stateListView      *views.StateListView
 	stateShowView      *views.StateShowView
 	stateListContent   *components.StateListContent
@@ -175,6 +177,7 @@ type ExecutionConfig struct {
 	HistoryStore   *history.Store
 	HistoryLogger  *history.Logger
 	HistoryEnabled bool
+	Notifier       notifications.Notifier
 	Config         *config.Config
 	ConfigManager  *config.Manager
 }
@@ -297,6 +300,10 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	}
 	m.planFlags = append([]string{}, cfg.Flags...)
 	m.applyFlags = append([]string{}, cfg.Flags...)
+	m.notifier = cfg.Notifier
+	if m.notifier == nil {
+		m.notifier = notifications.NopNotifier{}
+	}
 	m.envWorkDir = cfg.WorkDir
 	m.envCurrent = cfg.EnvName
 	m.envStrategy = environment.StrategyUnknown
@@ -473,6 +480,9 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return model, cmd, true
 	case ErrorMsg:
 		model := m.handleErrorMsg(msg)
+		return model, nil, true
+	case NotificationFailedMsg:
+		model := m.handleNotificationFailed(msg)
 		return model, nil, true
 
 	// Action request messages from panels
@@ -921,6 +931,21 @@ func (m *Model) consumePendingConfirmCmd(fallback func() tea.Cmd) tea.Cmd {
 
 func (m *Model) handleErrorMsg(msg ErrorMsg) tea.Model {
 	m.err = msg.Err
+	return m
+}
+
+func (m *Model) handleNotificationFailed(msg NotificationFailedMsg) tea.Model {
+	if msg.Error == nil {
+		return m
+	}
+	summary := "Notification delivery failed"
+	if msg.Action != "" {
+		summary = "Notification delivery failed for " + msg.Action
+	}
+	m.addErrorDiagnostic(summary, msg.Error, "")
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("Notification failed", msg.Action, msg.Error.Error())
+	}
 	return m
 }
 

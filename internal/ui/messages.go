@@ -28,6 +28,12 @@ type ErrorMsg struct {
 	Err error
 }
 
+// NotificationFailedMsg is sent when external notification delivery fails.
+type NotificationFailedMsg struct {
+	Action string
+	Error  error
+}
+
 // QuitMsg is sent to quit the application.
 type QuitMsg struct{}
 
