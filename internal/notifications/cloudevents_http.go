@@ -145,6 +145,7 @@ func (n *CloudEventsHTTPNotifier) Notify(ctx context.Context, event OperationEve
 	}
 	req.Header.Set("Content-Type", "application/cloudevents+json")
 
+	// #nosec G704 -- Endpoint is user-configured and validated for webhook delivery.
 	resp, err := n.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send notification request: %w", err)
