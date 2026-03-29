@@ -277,6 +277,31 @@ func TestListPanel_GetScrollInfo(t *testing.T) {
 	_ = thumbSize
 }
 
+func TestListPanel_SelectVisibleRow(t *testing.T) {
+	s := styles.DefaultStyles()
+	panel := NewListPanel("[2]", s)
+	panel.SetSize(40, 8)
+	panel.SetItems([]ListPanelItem{
+		testItem{"item 1"},
+		testItem{"item 2"},
+		testItem{"item 3"},
+	})
+
+	if !panel.SelectVisibleRow(1) {
+		t.Fatal("expected row selection to succeed")
+	}
+	if panel.GetSelectedIndex() != 1 {
+		t.Fatalf("expected selected index 1, got %d", panel.GetSelectedIndex())
+	}
+
+	if panel.SelectVisibleRow(-1) {
+		t.Fatal("expected negative row selection to fail")
+	}
+	if panel.SelectVisibleRow(100) {
+		t.Fatal("expected out-of-range row selection to fail")
+	}
+}
+
 func TestListPanel_NilStyles(t *testing.T) {
 	panel := NewListPanel("[2]", nil)
 	if panel == nil {

@@ -137,6 +137,21 @@ func (l *ListPanel) SetSelectedIndex(index int) {
 	}
 }
 
+// SelectVisibleRow sets selection by visible row index within the content area.
+func (l *ListPanel) SelectVisibleRow(row int) bool {
+	if row < 0 || row >= l.contentHeight() {
+		return false
+	}
+	idx := l.scrollOffset + row
+	if idx < 0 || idx >= len(l.items) {
+		return false
+	}
+	l.selectedIndex = idx
+	l.lastMove = 0
+	l.adjustScrollOffset()
+	return true
+}
+
 // MoveUp moves the selection up.
 func (l *ListPanel) MoveUp() bool {
 	if l.selectedIndex > 0 {

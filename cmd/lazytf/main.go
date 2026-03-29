@@ -105,7 +105,7 @@ showing only changed attributes in a git-style diff format.`,
 }
 
 //nolint:gocognit,gocyclo // CLI setup branches by mode and config source.
-func run(_ *cobra.Command, args []string) error {
+func run(cmd *cobra.Command, args []string) error {
 	// Initialize profiler from flags or environment.
 	profiler := initProfiler()
 	if profiler != nil && profiler.IsEnabled() {
@@ -135,6 +135,7 @@ func run(_ *cobra.Command, args []string) error {
 	if noHistory {
 		cfg.History.Enabled = false
 	}
+	applyMouseConfig(cmd, cfg)
 	if envName == "" {
 		envName = strings.TrimSpace(cfg.General.DefaultEnvironment)
 	}
@@ -158,6 +159,17 @@ func run(_ *cobra.Command, args []string) error {
 	}
 
 	return runExecutionMode(&cfg, overrideFlags, configManager)
+}
+
+func applyMouseConfig(cmd *cobra.Command, cfg config.Config) {
+	if cmd != nil {
+		if flag := cmd.Flags().Lookup("mouse"); flag != nil && flag.Changed {
+			return
+		}
+	}
+	if cfg.General.MouseEnabled != nil {
+		mouseEnabled = *cfg.General.MouseEnabled
+	}
 }
 
 func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {

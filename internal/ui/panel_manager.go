@@ -259,6 +259,43 @@ func nextFocusIndex(reverse bool, currentIdx, total int) int {
 	return currentIdx + 1
 }
 
+func panelContains(spec PanelSpec, x, y int) bool {
+	if spec.Width <= 0 || spec.Height <= 0 {
+		return false
+	}
+	return x >= spec.X && x < spec.X+spec.Width && y >= spec.Y && y < spec.Y+spec.Height
+}
+
+// PanelAt returns the visible panel at a screen coordinate.
+func (pm *PanelManager) PanelAt(layout LayoutSpec, x, y int) (PanelID, bool) {
+	if x < 0 || y < 0 {
+		return 0, false
+	}
+
+	type panelWithSpec struct {
+		id   PanelID
+		spec PanelSpec
+	}
+	panels := []panelWithSpec{
+		{id: PanelWorkspace, spec: layout.Workspace},
+		{id: PanelResources, spec: layout.Resources},
+		{id: PanelHistory, spec: layout.History},
+		{id: PanelMain, spec: layout.Main},
+		{id: PanelCommandLog, spec: layout.CommandLog},
+	}
+
+	for _, panel := range panels {
+		if !pm.IsPanelVisible(panel.id) {
+			continue
+		}
+		if panelContains(panel.spec, x, y) {
+			return panel.id, true
+		}
+	}
+
+	return 0, false
+}
+
 // ToggleCommandLog toggles command log visibility.
 func (pm *PanelManager) ToggleCommandLog() bool {
 	pm.commandLogVisible = !pm.commandLogVisible

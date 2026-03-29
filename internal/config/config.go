@@ -39,6 +39,7 @@ type Config struct {
 // GeneralConfig groups general preferences.
 type GeneralConfig struct {
 	DefaultEnvironment string `yaml:"default_environment,omitempty"`
+	MouseEnabled       *bool  `yaml:"mouse_enabled,omitempty"`
 }
 
 // ThemeConfig holds theme selection settings.

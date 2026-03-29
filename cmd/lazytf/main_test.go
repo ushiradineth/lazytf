@@ -1124,6 +1124,99 @@ func TestRunProgramWithMouse(t *testing.T) {
 	}
 }
 
+func TestNewRootCommandMouseDefaultOutsideTmux(t *testing.T) {
+	t.Setenv("TMUX", "")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	_ = newRootCommand()
+	if !mouseEnabled {
+		t.Fatal("expected mouse enabled by default outside tmux")
+	}
+}
+
+func TestNewRootCommandMouseDefaultInsideTmux(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	_ = newRootCommand()
+	if mouseEnabled {
+		t.Fatal("expected mouse disabled by default inside tmux")
+	}
+}
+
+func TestNewRootCommandMouseFlagOverrideInsideTmux(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	cmd := newRootCommand()
+	if err := cmd.ParseFlags([]string{"--mouse=true"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if !mouseEnabled {
+		t.Fatal("expected --mouse flag to override tmux default")
+	}
+}
+
+func TestApplyMouseConfigUsesConfigWhenFlagNotSet(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	cmd := newRootCommand()
+	enabled := true
+	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &enabled}})
+
+	if !mouseEnabled {
+		t.Fatal("expected config mouse_enabled to apply when --mouse is not set")
+	}
+}
+
+func TestApplyMouseConfigDoesNotOverrideExplicitFlag(t *testing.T) {
+	t.Setenv("TMUX", "")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	cmd := newRootCommand()
+	if err := cmd.ParseFlags([]string{"--mouse=false"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	enabled := true
+	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &enabled}})
+
+	if mouseEnabled {
+		t.Fatal("expected explicit --mouse flag to take precedence over config")
+	}
+}
+
+func TestApplyMouseConfigCanDisableMouseFromConfig(t *testing.T) {
+	t.Setenv("TMUX", "")
+	oldMouse := mouseEnabled
+	t.Cleanup(func() {
+		mouseEnabled = oldMouse
+	})
+
+	cmd := newRootCommand()
+	disabled := false
+	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &disabled}})
+
+	if mouseEnabled {
+		t.Fatal("expected config mouse_enabled=false to disable mouse when --mouse is not set")
+	}
+}
+
 func testConfig() config.Config {
 	return config.Config{
 		Theme: config.ThemeConfig{

@@ -5,6 +5,9 @@
       "properties": {
         "default_environment": {
           "type": "string"
+        },
+        "mouse_enabled": {
+          "type": "boolean"
         }
       },
       "type": "object"

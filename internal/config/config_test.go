@@ -59,6 +59,30 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 }
 
+func TestSaveAndLoadConfigMouseEnabledRoundTrip(t *testing.T) {
+	manager, err := NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	mouseEnabled := false
+	cfg := Config{
+		General: GeneralConfig{MouseEnabled: &mouseEnabled},
+	}
+	if err := manager.Save(cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	loaded, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if loaded.General.MouseEnabled == nil {
+		t.Fatal("expected mouse_enabled to be present after round-trip")
+	}
+	if *loaded.General.MouseEnabled {
+		t.Fatal("expected mouse_enabled=false to round-trip")
+	}
+}
+
 func TestMigrateConfigVersion(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "config.yaml")
