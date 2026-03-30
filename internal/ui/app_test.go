@@ -133,7 +133,7 @@ func TestNotificationFailedMsgIsNonFatal(t *testing.T) {
 		t.Fatal("expected command log panel")
 	}
 	view := m.commandLogPanel.GetDiagnosticsPanel().View()
-	if !strings.Contains(view, "Notification delivery failed") {
+	if !strings.Contains(view, "Desktop notification for apply was not sent") {
 		t.Fatalf("expected notification diagnostics, got %q", view)
 	}
 }

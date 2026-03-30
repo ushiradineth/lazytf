@@ -49,34 +49,6 @@
           default = null;
           description = "Auto-generated from internal/config/config.schema.json";
         };
-        "sink" = lib.mkOption {
-          type = lib.types.nullOr (lib.types.submodule {
-            options = {
-              "protocol" = lib.mkOption {
-                type = lib.types.nullOr (lib.types.str);
-                default = null;
-                description = "Auto-generated from internal/config/config.schema.json";
-              };
-              "source" = lib.mkOption {
-                type = lib.types.nullOr (lib.types.str);
-                default = null;
-                description = "Auto-generated from internal/config/config.schema.json";
-              };
-              "timeout" = lib.mkOption {
-                type = lib.types.nullOr (lib.types.str);
-                default = null;
-                description = "Auto-generated from internal/config/config.schema.json";
-              };
-              "url" = lib.mkOption {
-                type = lib.types.nullOr (lib.types.str);
-                default = null;
-                description = "Auto-generated from internal/config/config.schema.json";
-              };
-            };
-          });
-          default = null;
-          description = "Auto-generated from internal/config/config.schema.json";
-        };
       };
     });
     default = null;

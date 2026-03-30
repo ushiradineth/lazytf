@@ -938,13 +938,13 @@ func (m *Model) handleNotificationFailed(msg NotificationFailedMsg) tea.Model {
 	if msg.Error == nil {
 		return m
 	}
-	summary := "Notification delivery failed"
+	summary := "Desktop notification was not sent"
 	if msg.Action != "" {
-		summary = "Notification delivery failed for " + msg.Action
+		summary = "Desktop notification for " + msg.Action + " was not sent"
 	}
 	m.addErrorDiagnostic(summary, msg.Error, "")
 	if m.commandLogPanel != nil {
-		m.commandLogPanel.AppendSessionLog("Notification failed", msg.Action, msg.Error.Error())
+		m.commandLogPanel.AppendSessionLog("Desktop notification failed", msg.Action, msg.Error.Error())
 	}
 	return m
 }

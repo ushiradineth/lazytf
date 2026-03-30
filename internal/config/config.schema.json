@@ -30,23 +30,6 @@
       "properties": {
         "enabled": {
           "type": "boolean"
-        },
-        "sink": {
-          "properties": {
-            "protocol": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string"
-            },
-            "timeout": {
-              "type": "string"
-            },
-            "url": {
-              "type": "string"
-            }
-          },
-          "type": "object"
         }
       },
       "type": "object"

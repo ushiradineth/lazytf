@@ -330,11 +330,7 @@ func openNotifier(cfg *config.Config) (notifications.Notifier, error) {
 		return notifications.NopNotifier{}, nil
 	}
 	return notifications.New(notifications.Config{
-		Enabled:  cfg.Notifications.Enabled,
-		Protocol: cfg.Notifications.Sink.Protocol,
-		URL:      cfg.Notifications.Sink.URL,
-		Timeout:  cfg.Notifications.Sink.Timeout,
-		Source:   cfg.Notifications.Sink.Source,
+		Enabled: cfg.Notifications.Enabled,
 	})
 }
 

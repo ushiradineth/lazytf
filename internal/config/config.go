@@ -13,7 +13,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,11 +24,6 @@ import (
 const currentVersion = 1
 
 const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json\n"
-
-const (
-	notificationProtocolCloudEventsHTTP = "cloudevents-http"
-	defaultNotificationTimeout          = 3 * time.Second
-)
 
 // Config defines the user configuration file schema.
 type Config struct {
@@ -72,16 +66,7 @@ type HistoryConfig struct {
 
 // NotificationsConfig controls operation notifications.
 type NotificationsConfig struct {
-	Enabled bool                   `yaml:"enabled,omitempty"`
-	Sink    NotificationSinkConfig `yaml:"sink,omitempty"`
-}
-
-// NotificationSinkConfig configures delivery target and protocol.
-type NotificationSinkConfig struct {
-	Protocol string        `yaml:"protocol,omitempty"`
-	URL      string        `yaml:"url,omitempty"`
-	Timeout  time.Duration `yaml:"timeout,omitempty"`
-	Source   string        `yaml:"source,omitempty"`
+	Enabled bool `yaml:"enabled,omitempty"`
 }
 
 // Manager loads and saves configuration files with locking.
@@ -317,12 +302,6 @@ func (c Config) WithDefaults() Config {
 	if c.History.CompressionThreshold == 0 {
 		c.History.CompressionThreshold = 64 * 1024 // 64KB default
 	}
-	if c.Notifications.Sink.Protocol == "" {
-		c.Notifications.Sink.Protocol = notificationProtocolCloudEventsHTTP
-	}
-	if c.Notifications.Sink.Timeout == 0 {
-		c.Notifications.Sink.Timeout = defaultNotificationTimeout
-	}
 	return c
 }
 
@@ -359,36 +338,7 @@ func validateHistoryLevel(level string) error {
 }
 
 func validateNotifications(cfg NotificationsConfig) error {
-	if cfg.Sink.Timeout < 0 {
-		return errors.New("notification timeout cannot be negative")
-	}
-	if !cfg.Enabled {
-		return nil
-	}
-
-	protocol := strings.TrimSpace(strings.ToLower(cfg.Sink.Protocol))
-	if protocol == "" {
-		protocol = notificationProtocolCloudEventsHTTP
-	}
-	if protocol != notificationProtocolCloudEventsHTTP {
-		return fmt.Errorf("invalid notification protocol: %s", cfg.Sink.Protocol)
-	}
-
-	target := strings.TrimSpace(cfg.Sink.URL)
-	if target == "" {
-		return errors.New("notification sink url is required when notifications are enabled")
-	}
-	parsed, err := url.Parse(target)
-	if err != nil {
-		return fmt.Errorf("parse notification sink url: %w", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("notification sink url must use http or https, got %q", parsed.Scheme)
-	}
-	if parsed.Host == "" {
-		return errors.New("notification sink url must include host")
-	}
-
+	_ = cfg
 	return nil
 }
 

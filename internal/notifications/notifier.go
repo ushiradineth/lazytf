@@ -4,26 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
 
-const (
-	// ProtocolCloudEventsHTTP sends CloudEvents JSON over HTTP(S).
-	ProtocolCloudEventsHTTP = "cloudevents-http"
-	defaultSource           = "https://github.com/ushiradineth/lazytf"
-)
-
-var eventTypeSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
-
 // Config controls notifier construction.
 type Config struct {
-	Enabled  bool
-	Protocol string
-	URL      string
-	Timeout  time.Duration
-	Source   string
+	Enabled bool
 }
 
 // OperationStatus is the normalized outcome of an operation.
@@ -68,14 +55,7 @@ func New(cfg Config) (Notifier, error) {
 	if !cfg.Enabled {
 		return NopNotifier{}, nil
 	}
-	protocol := strings.TrimSpace(strings.ToLower(cfg.Protocol))
-	if protocol == "" {
-		protocol = ProtocolCloudEventsHTTP
-	}
-	if protocol != ProtocolCloudEventsHTTP {
-		return nil, fmt.Errorf("unsupported notification protocol: %s", cfg.Protocol)
-	}
-	return NewCloudEventsHTTPNotifier(cfg.URL, cfg.Timeout, cfg.Source, nil)
+	return NewDesktopNotifier()
 }
 
 func (e OperationEvent) validate() error {
@@ -88,24 +68,4 @@ func (e OperationEvent) validate() error {
 	default:
 		return fmt.Errorf("invalid notification status: %s", e.Status)
 	}
-}
-
-// EventType builds a stable CloudEvents type value.
-func EventType(action string, status OperationStatus) string {
-	actionPart := sanitizeSegment(action)
-	if actionPart == "" {
-		actionPart = "unknown"
-	}
-	statusPart := sanitizeSegment(string(status))
-	if statusPart == "" {
-		statusPart = "unknown"
-	}
-	return "io.lazytf.operation." + actionPart + "." + statusPart
-}
-
-func sanitizeSegment(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = eventTypeSanitizer.ReplaceAllString(normalized, "-")
-	normalized = strings.Trim(normalized, "-")
-	return normalized
 }

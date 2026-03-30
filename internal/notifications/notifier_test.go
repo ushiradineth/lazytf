@@ -14,27 +14,13 @@ func TestNewReturnsNopWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestNewReturnsErrorOnUnsupportedProtocol(t *testing.T) {
-	_, err := New(Config{Enabled: true, Protocol: "smtp", URL: "https://example.com/hook"})
-	if err == nil {
-		t.Fatalf("expected error for unsupported protocol")
-	}
-}
-
-func TestNewUsesCloudEventsHTTPByDefault(t *testing.T) {
-	notifier, err := New(Config{Enabled: true, URL: "https://example.com/hook"})
+func TestNewUsesDesktopNotifierWhenEnabled(t *testing.T) {
+	notifier, err := New(Config{Enabled: true})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if _, ok := notifier.(*CloudEventsHTTPNotifier); !ok {
-		t.Fatalf("expected CloudEventsHTTPNotifier, got %T", notifier)
-	}
-}
-
-func TestEventTypeSanitizesSegments(t *testing.T) {
-	typeValue := EventType("state rm", StatusSuccess)
-	if typeValue != "io.lazytf.operation.state-rm.success" {
-		t.Fatalf("unexpected event type: %s", typeValue)
+	if _, ok := notifier.(*DesktopNotifier); !ok {
+		t.Fatalf("expected DesktopNotifier, got %T", notifier)
 	}
 }
 
