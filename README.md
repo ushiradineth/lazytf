@@ -98,7 +98,14 @@ terraform:
 history:
   enabled: true
   level: standard
+notifications:
+  enabled: true
 ```
+
+`notifications.enabled` toggles desktop notifications on operation completion.
+
+- macOS: Notification Center delivery through the desktop notifier backend.
+- Linux: Freedesktop desktop notification delivery (DBus or desktop fallback path, depending on environment).
 
 ### Nix
 

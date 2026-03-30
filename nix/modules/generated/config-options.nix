@@ -46,6 +46,19 @@
     default = null;
     description = "Auto-generated from internal/config/config.schema.json";
   };
+  "notifications" = lib.mkOption {
+    type = lib.types.nullOr (lib.types.submodule {
+      options = {
+        "enabled" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.bool);
+          default = null;
+          description = "Auto-generated from internal/config/config.schema.json";
+        };
+      };
+    });
+    default = null;
+    description = "Auto-generated from internal/config/config.schema.json";
+  };
   "presets" = lib.mkOption {
     type = lib.types.nullOr (lib.types.listOf (lib.types.submodule {
       options = {

@@ -17,6 +17,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/profile"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -198,13 +199,18 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 	if err != nil {
 		return err
 	}
-	// Ensure history store is closed if we fail before reaching executionModeRunner
+	// Ensure history store is closed if we fail before reaching executionModeRunner.
 	var runErr error
 	defer func() {
 		if runErr != nil && historyStore != nil {
 			_ = historyStore.Close()
 		}
 	}()
+
+	notifier, err := openNotifier(cfg)
+	if err != nil {
+		return err
+	}
 
 	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
 		Executor:       exec,
@@ -214,6 +220,7 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 		HistoryStore:   historyStore,
 		HistoryLogger:  historyLogger,
 		HistoryEnabled: cfg.History.Enabled,
+		Notifier:       notifier,
 		Config:         cfg,
 		ConfigManager:  configManager,
 	}, appStyles)
@@ -328,6 +335,15 @@ func shouldDisableHistoryForError(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "go-sqlite3 requires cgo")
+}
+
+func openNotifier(cfg *config.Config) (notifications.Notifier, error) {
+	if cfg == nil {
+		return notifications.NopNotifier{}, nil
+	}
+	return notifications.New(notifications.Config{
+		Enabled: cfg.Notifications.Enabled,
+	})
 }
 
 func applyPreset(cfg *config.Config, flags []string) ([]string, error) {

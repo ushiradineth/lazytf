@@ -43,6 +43,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 			Enabled: true,
 			Level:   "minimal",
 		},
+		Notifications: NotificationsConfig{Enabled: true},
 	}
 	if err := manager.Save(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -56,6 +57,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.History.Level != "minimal" {
 		t.Fatalf("expected history level to round-trip")
+	}
+	if !loaded.Notifications.Enabled {
+		t.Fatalf("expected notifications to round-trip")
 	}
 }
 
@@ -170,6 +174,36 @@ func TestValidateConfigErrors(t *testing.T) {
 	}
 	if err := (Config{History: HistoryConfig{Level: "bogus"}}).Validate(); err == nil {
 		t.Fatalf("expected error for invalid history level")
+	}
+	if err := (Config{
+		Notifications: NotificationsConfig{Enabled: true},
+	}).Validate(); err != nil {
+		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)
+	}
+}
+
+func TestDefaultConfigNotificationsDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Notifications.Enabled {
+		t.Fatalf("expected notifications to be disabled by default")
+	}
+}
+
+func TestValidateNotificationsAllowsDisabled(t *testing.T) {
+	cfg := Config{
+		Notifications: NotificationsConfig{Enabled: false},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected disabled desktop notifications to validate, got %v", err)
+	}
+}
+
+func TestValidateNotificationsAllowsEnabled(t *testing.T) {
+	cfg := Config{
+		Notifications: NotificationsConfig{Enabled: true},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
@@ -665,6 +666,32 @@ func TestShouldDisableHistoryForError(t *testing.T) {
 				t.Fatalf("expected %t, got %t", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestOpenNotifierDisabled(t *testing.T) {
+	cfg := testConfig()
+	cfg.Notifications.Enabled = false
+
+	notifier, err := openNotifier(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := notifier.(notifications.NopNotifier); !ok {
+		t.Fatalf("expected NopNotifier, got %T", notifier)
+	}
+}
+
+func TestOpenNotifierEnabledDesktop(t *testing.T) {
+	cfg := testConfig()
+	cfg.Notifications.Enabled = true
+
+	notifier, err := openNotifier(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := notifier.(*notifications.DesktopNotifier); !ok {
+		t.Fatalf("expected DesktopNotifier, got %T", notifier)
 	}
 }
 

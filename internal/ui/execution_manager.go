@@ -288,9 +288,11 @@ func (m *Model) handleRefreshComplete(msg RefreshCompleteMsg) (tea.Model, tea.Cm
 	if m.toast != nil {
 		toastCmd = m.toast.ShowSuccess("State refreshed successfully")
 	}
+	notifyCmd := m.notifyOperationCmd("refresh", m.flattenSummary(m.planSummary()), m.refreshStartedAt, msg.Result, nil)
 	return m, tea.Batch(
 		toastCmd,
 		m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", nil),
+		notifyCmd,
 	)
 }
 
@@ -1233,8 +1235,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 		m.addErrorDiagnostic("Plan failed", msg.Error, msg.Output)
 		// Route logs to command log panel
 		m.setFormattedLogOutput(msg.Output)
-		cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
-		return m, cmd
+		summary := m.flattenSummary(m.planSummary())
+		recordCmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, msg.Error)
+		notifyCmd := m.notifyOperationCmd("plan", summary, m.planStartedAt, msg.Result, msg.Error)
+		return m, tea.Batch(recordCmd, notifyCmd)
 	}
 
 	// Reset progress indicator on success
@@ -1269,8 +1273,10 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.updateExecutionViewForStreaming()
-	cmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
-	return m, cmd
+	summary := m.flattenSummary(m.planSummary())
+	recordCmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
+	notifyCmd := m.notifyOperationCmd("plan", summary, m.planStartedAt, msg.Result, nil)
+	return m, tea.Batch(recordCmd, notifyCmd)
 }
 
 func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
@@ -1348,8 +1354,9 @@ func (m *Model) handleApplyComplete(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	recordCmd := m.recordHistoryCmd(history.StatusSuccess, m.flattenSummary(summary), m.lastPlanOutput, msg.Result, nil)
 	operationCmd := m.recordOperationCmd("apply", m.applyFlagsForRecord(), true, m.applyStartedAt, msg.Result, "", nil)
 	reloadCmd := m.reloadHistoryCmd()
+	notifyCmd := m.notifyOperationCmd("apply", m.flattenSummary(summary), m.applyStartedAt, msg.Result, nil)
 
-	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
+	return m, tea.Batch(recordCmd, operationCmd, reloadCmd, notifyCmd)
 }
 
 func (m *Model) handleOperationStart(
@@ -1397,9 +1404,14 @@ func (m *Model) handleRefreshFailure(msg RefreshCompleteMsg) (tea.Model, tea.Cmd
 		}
 		m.addErrorDiagnostic("Refresh failed", msg.Error, output)
 	}
+	opErr := msg.Error
+	if opErr == nil && !msg.Success {
+		opErr = errors.New("refresh failed")
+	}
 	m.updateExecutionViewForStreaming()
-	cmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
-	return m, cmd
+	recordCmd := m.recordOperationCmd("refresh", nil, true, m.refreshStartedAt, msg.Result, "", msg.Error)
+	notifyCmd := m.notifyOperationCmd("refresh", m.flattenSummary(m.planSummary()), m.refreshStartedAt, msg.Result, opErr)
+	return m, tea.Batch(recordCmd, notifyCmd)
 }
 
 func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
@@ -1444,15 +1456,17 @@ func (m *Model) handleApplyFailure(msg ApplyCompleteMsg) (tea.Model, tea.Cmd) {
 	if opErr == nil && !msg.Success {
 		opErr = errors.New("apply failed")
 	}
+	summary := m.flattenSummary(m.planSummary())
 	m.updateExecutionViewForStreaming()
 
 	// Build commands - recordHistoryCmd will record and reload entries
 	// Always add explicit reload as safety measure to ensure UI is updated
-	recordCmd := m.recordHistoryCmd(status, m.flattenSummary(m.planSummary()), m.lastPlanOutput, msg.Result, msg.Error)
+	recordCmd := m.recordHistoryCmd(status, summary, m.lastPlanOutput, msg.Result, msg.Error)
 	operationCmd := m.recordOperationCmd("apply", m.applyFlagsForRecord(), true, m.applyStartedAt, msg.Result, "", opErr)
 	reloadCmd := m.reloadHistoryCmd()
+	notifyCmd := m.notifyOperationCmd("apply", summary, m.applyStartedAt, msg.Result, opErr)
 
-	return m, tea.Batch(recordCmd, operationCmd, reloadCmd)
+	return m, tea.Batch(recordCmd, operationCmd, reloadCmd, notifyCmd)
 }
 
 func (m *Model) showFormattedFiles(changedFiles []string) {

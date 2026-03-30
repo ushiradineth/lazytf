@@ -32,6 +32,7 @@ type Config struct {
 	Theme            ThemeConfig               `yaml:"theme,omitempty"`
 	Terraform        TerraformConfig           `yaml:"terraform,omitempty"`
 	History          HistoryConfig             `yaml:"history,omitempty"`
+	Notifications    NotificationsConfig       `yaml:"notifications,omitempty"`
 	Presets          []EnvironmentPreset       `yaml:"presets,omitempty"`
 	ProjectOverrides map[string]*ProjectConfig `yaml:"project_overrides,omitempty"`
 }
@@ -62,6 +63,11 @@ type HistoryConfig struct {
 	Level                string `yaml:"level,omitempty"`
 	Path                 string `yaml:"path,omitempty"`
 	CompressionThreshold int    `yaml:"compression_threshold,omitempty"`
+}
+
+// NotificationsConfig controls operation notifications.
+type NotificationsConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
 }
 
 // Manager loads and saves configuration files with locking.
@@ -314,7 +320,10 @@ func (c Config) Validate() error {
 	if c.Terraform.Parallelism < 0 {
 		return errors.New("terraform parallelism cannot be negative")
 	}
-	return validateHistoryLevel(c.History.Level)
+	if err := validateHistoryLevel(c.History.Level); err != nil {
+		return err
+	}
+	return validateNotifications(c.Notifications)
 }
 
 func validateHistoryLevel(level string) error {
@@ -327,6 +336,11 @@ func validateHistoryLevel(level string) error {
 	default:
 		return fmt.Errorf("invalid history level: %s", level)
 	}
+}
+
+func validateNotifications(cfg NotificationsConfig) error {
+	_ = cfg
+	return nil
 }
 
 func migrateConfig(cfg Config) (Config, bool, error) {

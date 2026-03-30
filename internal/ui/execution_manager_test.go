@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
 	"github.com/ushiradineth/lazytf/internal/ui/testutil"
@@ -25,6 +27,16 @@ func setupMockExecutor(t *testing.T) *testutil.MockExecutor {
 	mock := testutil.NewMockExecutor()
 	mock.MockWorkDir = t.TempDir()
 	return mock
+}
+
+type recordingNotifier struct {
+	events []notifications.OperationEvent
+	err    error
+}
+
+func (n *recordingNotifier) Notify(_ context.Context, event notifications.OperationEvent) error {
+	n.events = append(n.events, event)
+	return n.err
 }
 
 // ============================================================================
@@ -3207,6 +3219,168 @@ func TestHandlePlanCompleteClearsStaleDiagnostics(t *testing.T) {
 	view := m.commandLogPanel.GetDiagnosticsPanel().View()
 	if strings.Contains(view, "stale error") || strings.Contains(view, "Diagnostics") {
 		t.Fatalf("expected stale diagnostics to be cleared, got %q", view)
+	}
+}
+
+func executeBatchMessages(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
+	}
+	result := make([]tea.Msg, 0, len(batch))
+	for _, batchCmd := range batch {
+		if batchCmd == nil {
+			continue
+		}
+		result = append(result, batchCmd())
+	}
+	return result
+}
+
+func TestHandleApplyCompleteEmitsNotificationOnSuccess(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.applyRunning = true
+	m.applyStartedAt = time.Now().Add(-1 * time.Second)
+
+	result := testutil.NewMockResult("Apply complete", 0)
+	_, cmd := m.handleApplyComplete(ApplyCompleteMsg{Success: true, Result: result})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	event := notifier.events[0]
+	if event.Action != "apply" {
+		t.Fatalf("expected action apply, got %q", event.Action)
+	}
+	if event.Status != notifications.StatusSuccess {
+		t.Fatalf("expected status success, got %q", event.Status)
+	}
+}
+
+func TestHandleApplyCompleteNotificationFailureIsNonFatal(t *testing.T) {
+	notifier := &recordingNotifier{err: errors.New("endpoint down")}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.applyRunning = true
+	m.applyStartedAt = time.Now().Add(-1 * time.Second)
+
+	result := testutil.NewMockErrorResult("apply failed output", errors.New("apply failed"))
+	_, cmd := m.handleApplyComplete(ApplyCompleteMsg{Success: false, Error: errors.New("apply failed"), Result: result})
+	msgs := executeBatchMessages(cmd)
+
+	for _, msg := range msgs {
+		if msg == nil {
+			continue
+		}
+		if _, ok := msg.(NotificationFailedMsg); ok {
+			m.Update(msg)
+		}
+	}
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	if notifier.events[0].Status != notifications.StatusFailed {
+		t.Fatalf("expected failed notification status, got %q", notifier.events[0].Status)
+	}
+	if m.err != nil {
+		t.Fatalf("expected notification error to be non-fatal, got %v", m.err)
+	}
+	if m.commandLogPanel == nil {
+		t.Fatalf("expected command log panel")
+	}
+	view := m.commandLogPanel.GetDiagnosticsPanel().View()
+	if !strings.Contains(view, "Desktop notification for apply was not sent") {
+		t.Fatalf("expected notification failure diagnostics, got %q", view)
+	}
+}
+
+func TestHandlePlanCompleteEmitsNotificationOnSuccess(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.planRunning = true
+	m.planStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}}}
+	_, cmd := m.handlePlanComplete(PlanCompleteMsg{Plan: plan, Output: "Plan complete"})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	event := notifier.events[0]
+	if event.Action != "plan" {
+		t.Fatalf("expected action plan, got %q", event.Action)
+	}
+	if event.Status != notifications.StatusSuccess {
+		t.Fatalf("expected success status, got %q", event.Status)
+	}
+}
+
+func TestHandleRefreshCompleteEmitsFailedNotificationWhenSuccessFalseWithoutError(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.refreshRunning = true
+	m.refreshStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	result := testutil.NewMockResult("refresh output", 1)
+	_, cmd := m.handleRefreshComplete(RefreshCompleteMsg{Success: false, Result: result})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	if notifier.events[0].Action != "refresh" {
+		t.Fatalf("expected action refresh, got %q", notifier.events[0].Action)
+	}
+	if notifier.events[0].Status != notifications.StatusFailed {
+		t.Fatalf("expected failed status, got %q", notifier.events[0].Status)
+	}
+}
+
+func TestHandleApplyCompleteEmitsCanceledNotification(t *testing.T) {
+	notifier := &recordingNotifier{}
+	m := NewExecutionModel(nil, ExecutionConfig{Notifier: notifier})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.applyRunning = true
+	m.applyStartedAt = time.Now().Add(-500 * time.Millisecond)
+
+	result := testutil.NewMockErrorResult("context canceled", context.Canceled)
+	_, cmd := m.handleApplyComplete(ApplyCompleteMsg{Success: false, Error: context.Canceled, Result: result})
+	_ = executeBatchMessages(cmd)
+
+	if len(notifier.events) != 1 {
+		t.Fatalf("expected one notification event, got %d", len(notifier.events))
+	}
+	if notifier.events[0].Status != notifications.StatusCanceled {
+		t.Fatalf("expected canceled status, got %q", notifier.events[0].Status)
 	}
 }
 

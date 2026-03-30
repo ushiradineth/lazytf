@@ -115,6 +115,29 @@ func TestApplyWithoutPlanShowsToast(t *testing.T) {
 	}
 }
 
+func TestNotificationFailedMsgIsNonFatal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	model, _ := m.Update(NotificationFailedMsg{Action: "apply", Error: errors.New("endpoint timeout")})
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if m.err != nil {
+		t.Fatalf("expected non-fatal behavior, got %v", m.err)
+	}
+	if m.commandLogPanel == nil {
+		t.Fatal("expected command log panel")
+	}
+	view := m.commandLogPanel.GetDiagnosticsPanel().View()
+	if !strings.Contains(view, "Desktop notification for apply was not sent") {
+		t.Fatalf("expected notification diagnostics, got %q", view)
+	}
+}
+
 func TestExecutionModelWithoutPlanStartsInAboutMode(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	if m.mainArea == nil {

@@ -29,6 +29,14 @@
       },
       "type": "object"
     },
+    "notifications": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "presets": {
       "items": {
         "properties": {
