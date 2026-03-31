@@ -149,8 +149,8 @@ func TestExecutionModelWithoutPlanStartsInAboutMode(t *testing.T) {
 	if m.panelManager == nil {
 		t.Fatal("expected panel manager to be initialized")
 	}
-	if focused := m.panelManager.GetFocusedPanel(); focused != PanelResources {
-		t.Fatalf("expected focused panel %v, got %v", PanelResources, focused)
+	if focused := m.panelManager.GetFocusedPanel(); focused != PanelMain {
+		t.Fatalf("expected focused panel %v, got %v", PanelMain, focused)
 	}
 }
 
