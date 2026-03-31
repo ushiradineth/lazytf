@@ -27,40 +27,37 @@ const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.github
 
 // Config defines the user configuration file schema.
 type Config struct {
-	Version          int                       `yaml:"version" schema:"-"`
-	General          GeneralConfig             `yaml:"general,omitempty"`
-	Theme            ThemeConfig               `yaml:"theme,omitempty"`
-	Terraform        TerraformConfig           `yaml:"terraform,omitempty"`
-	History          HistoryConfig             `yaml:"history,omitempty"`
-	Presets          []EnvironmentPreset       `yaml:"presets,omitempty"`
-	ProjectOverrides map[string]*ProjectConfig `yaml:"project_overrides,omitempty"`
-}
-
-// GeneralConfig groups general preferences.
-type GeneralConfig struct {
-	DefaultEnvironment string `yaml:"default_environment,omitempty"`
+	Version            int                       `yaml:"version" schema:"-"`
+	DefaultEnvironment string                    `yaml:"default_environment,omitempty" description:"Default workspace or folder environment to select when lazytf starts."`
+	Mouse              *bool                     `yaml:"mouse,omitempty" description:"Enable mouse navigation in the UI. By default lazytf enables mouse outside tmux and disables it inside tmux to respect tmux mouse settings. Set this explicitly to override that behavior."`
+	Notification       *bool                     `yaml:"notification,omitempty" description:"Enable user notifications for important UI events. Set this explicitly to override the default behavior."`
+	Theme              ThemeConfig               `yaml:"theme,omitempty" description:"Theme settings for the lazytf UI."`
+	Terraform          TerraformConfig           `yaml:"terraform,omitempty" description:"Terraform execution settings used by lazytf."`
+	History            HistoryConfig             `yaml:"history,omitempty" description:"History storage and retention settings."`
+	Presets            []EnvironmentPreset       `yaml:"presets,omitempty" description:"Named presets that bundle environment selection, workdir, theme, and default Terraform flags."`
+	ProjectOverrides   map[string]*ProjectConfig `yaml:"project_overrides,omitempty" description:"Per-project overrides keyed by project path."`
 }
 
 // ThemeConfig holds theme selection settings.
 type ThemeConfig struct {
-	Name string `yaml:"name,omitempty"`
+	Name string `yaml:"name,omitempty" description:"Built-in UI theme name."`
 }
 
 // TerraformConfig holds terraform-specific settings.
 type TerraformConfig struct {
-	DefaultFlags []string      `yaml:"default_flags,omitempty"`
-	Binary       string        `yaml:"binary,omitempty"`
-	WorkingDir   string        `yaml:"working_dir,omitempty"`
-	Timeout      time.Duration `yaml:"timeout,omitempty"`
-	Parallelism  int           `yaml:"parallelism,omitempty"`
+	DefaultFlags []string      `yaml:"default_flags,omitempty" description:"Default flags appended to Terraform commands run by lazytf."`
+	Binary       string        `yaml:"binary,omitempty" description:"Path to the Terraform binary to run."`
+	WorkingDir   string        `yaml:"working_dir,omitempty" description:"Default working directory used when no folder or preset overrides it."`
+	Timeout      time.Duration `yaml:"timeout,omitempty" description:"Maximum time allowed for Terraform commands before lazytf cancels them."`
+	Parallelism  int           `yaml:"parallelism,omitempty" description:"Default Terraform parallelism value used when no explicit -parallelism flag is provided."`
 }
 
 // HistoryConfig configures history logging.
 type HistoryConfig struct {
-	Enabled              bool   `yaml:"enabled,omitempty"`
-	Level                string `yaml:"level,omitempty"`
-	Path                 string `yaml:"path,omitempty"`
-	CompressionThreshold int    `yaml:"compression_threshold,omitempty"`
+	Enabled              bool   `yaml:"enabled,omitempty" description:"Enable persistent operation history."`
+	Level                string `yaml:"level,omitempty" description:"History detail level. Supported values are minimal, standard, and full."`
+	Path                 string `yaml:"path,omitempty" description:"Path to the history database file."`
+	CompressionThreshold int    `yaml:"compression_threshold,omitempty" description:"Compress stored output larger than this many bytes."`
 }
 
 // Manager loads and saves configuration files with locking.

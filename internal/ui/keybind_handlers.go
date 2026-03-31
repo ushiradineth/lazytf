@@ -151,6 +151,9 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionPageDown, m.handleActionPageDown)
 	r.RegisterHandler(keybinds.ActionScrollTop, m.handleActionScrollTop)
 	r.RegisterHandler(keybinds.ActionScrollEnd, m.handleActionScrollEnd)
+	r.RegisterHandler(keybinds.ActionPrevHunk, m.handleActionPrevHunk)
+	r.RegisterHandler(keybinds.ActionNextHunk, m.handleActionNextHunk)
+	r.RegisterHandler(keybinds.ActionToggleHunk, m.handleActionToggleHunk)
 	r.RegisterHandler(keybinds.ActionSelect, m.handleActionSelect)
 	r.RegisterHandler(keybinds.ActionScrollUp, m.handleActionScrollUp)
 	r.RegisterHandler(keybinds.ActionScrollDown, m.handleActionScrollDown)
@@ -479,6 +482,30 @@ func (m *Model) handleActionScrollEnd(ctx *keybinds.Context) tea.Cmd {
 	return m.handleScrollEdge(ctx.FocusedPanel, false)
 }
 
+func (m *Model) handleActionPrevHunk(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
+		return nil
+	}
+	m.mainArea.PrevDiffHunk()
+	return nil
+}
+
+func (m *Model) handleActionNextHunk(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
+		return nil
+	}
+	m.mainArea.NextDiffHunk()
+	return nil
+}
+
+func (m *Model) handleActionToggleHunk(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
+		return nil
+	}
+	m.mainArea.ToggleDiffHunk()
+	return nil
+}
+
 // handlePageNavigation handles page up/down navigation within panels.
 func (m *Model) handlePageNavigation(panel keybinds.PanelID, pageUp bool) tea.Cmd {
 	keyType := tea.KeyPgDown
@@ -583,29 +610,73 @@ func (m *Model) handleVerticalNavigation(panel keybinds.PanelID, moveUp bool) te
 }
 
 func (m *Model) handleActionSelect(ctx *keybinds.Context) tea.Cmd {
+	if ctx != nil && ctx.ActiveModal == keybinds.ModalTheme {
+		return m.commitSelectedTheme()
+	}
+
 	switch ctx.FocusedPanel {
 	case keybinds.PanelResources:
-		if m.resourcesActiveTab == 0 {
-			m.resourceList.ToggleGroup()
-		} else if m.stateListContent != nil {
-			if m.stateListContent.OnSelect != nil {
-				selected := m.stateListContent.GetSelected()
-				if selected != nil {
-					return m.stateListContent.OnSelect(selected.Address)
-				}
-			}
-		}
+		return m.handleActionSelectResourcesPanel()
 	case keybinds.PanelHistory:
-		// Focus main panel and show detail
-		m.historyFocused = false
-		if m.panelManager != nil {
-			m.panelManager.SetFocus(PanelMain)
-		}
-		return m.showSelectedHistoryDetail()
+		return m.handleActionSelectHistoryPanel()
 	case keybinds.PanelNone, keybinds.PanelWorkspace, keybinds.PanelMain, keybinds.PanelCommandLog:
 		// No select action for these panels
 	}
 	return nil
+}
+
+func (m *Model) handleActionSelectResourcesPanel() tea.Cmd {
+	if m.resourcesActiveTab == 1 {
+		return m.handleActionSelectStateTab()
+	}
+	return m.handleActionSelectResourceTab()
+}
+
+func (m *Model) handleActionSelectResourceTab() tea.Cmd {
+	if m.resourceList == nil {
+		return nil
+	}
+	if m.resourceList.GetSelectedResource() == nil {
+		m.resourceList.ToggleGroup()
+		return nil
+	}
+
+	m.focusMainAreaFromResourcesSelection()
+	m.historyFocused = false
+	if m.panelManager == nil {
+		return nil
+	}
+	m.updateLayout()
+	return m.panelManager.SetFocus(PanelMain)
+}
+
+func (m *Model) focusMainAreaFromResourcesSelection() {
+	if m.mainArea == nil {
+		return
+	}
+	mode := m.mainArea.GetMode()
+	if mode == ModeHistoryDetail || mode == ModeAbout || mode == ModeStateShow {
+		m.mainArea.SetMode(ModeDiff)
+	}
+}
+
+func (m *Model) handleActionSelectStateTab() tea.Cmd {
+	if m.stateListContent == nil || m.stateListContent.OnSelect == nil {
+		return nil
+	}
+	selected := m.stateListContent.GetSelected()
+	if selected == nil {
+		return nil
+	}
+	return m.stateListContent.OnSelect(selected.Address)
+}
+
+func (m *Model) handleActionSelectHistoryPanel() tea.Cmd {
+	m.historyFocused = false
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelMain)
+	}
+	return m.showSelectedHistoryDetail()
 }
 
 func (m *Model) handleActionScrollUp(ctx *keybinds.Context) tea.Cmd {

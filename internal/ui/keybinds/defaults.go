@@ -240,6 +240,32 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 		Condition:   ConditionExecutionMode,
 	})
+
+	// Main panel diff hunk navigation
+	r.Register(Binding{
+		Keys:        []string{"["},
+		Action:      ActionPrevHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "previous tree item",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"]"},
+		Action:      ActionNextHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "next tree item",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"enter", " "},
+		Action:      ActionToggleHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "toggle tree fold",
+		Category:    "Navigation",
+	})
 }
 
 //nolint:funlen // Keybind registration is naturally verbose
@@ -548,6 +574,13 @@ func registerModalBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:   []string{"T", "esc"},
 		Action: ActionToggleTheme,
+		Scope:  ScopeModal,
+		Modal:  ModalTheme,
+		Hidden: true,
+	})
+	r.Register(Binding{
+		Keys:   []string{"enter"},
+		Action: ActionSelect,
 		Scope:  ScopeModal,
 		Modal:  ModalTheme,
 		Hidden: true,

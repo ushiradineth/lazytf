@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 )
 
 type workspaceManager interface {
+	Current(ctx context.Context) (string, error)
 	Switch(ctx context.Context, name string) error
 }
 
@@ -39,6 +41,7 @@ type teaProgram interface {
 
 var (
 	planFile            string
+	readOnly            bool
 	mouseEnabled        bool
 	tfFlags             string
 	workDir             string
@@ -78,17 +81,18 @@ func runMain() error {
 
 func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "lazytf [plan-file]",
+		Use:   "lazytf",
 		Short: "A minimal TUI for reviewing Terraform plans",
 		Long: `lazytf is a Terminal User Interface for reviewing Terraform plans.
 It displays plan changes in a clean, minimal interface inspired by Terraform Cloud,
 showing only changed attributes in a git-style diff format.`,
 		Version: consts.Version,
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.NoArgs,
 		RunE:    run,
 	}
 
-	rootCmd.Flags().StringVarP(&planFile, "file", "f", "", "Path to Terraform plan output file")
+	rootCmd.Flags().StringVarP(&planFile, "plan", "p", "", "Path to Terraform plan file, or '-' to read plan text from stdin")
+	rootCmd.Flags().BoolVar(&readOnly, "readonly", false, "Open plan in read-only mode (requires --plan)")
 	mouseEnabled = os.Getenv("TMUX") == ""
 	rootCmd.Flags().BoolVar(&mouseEnabled, "mouse", mouseEnabled, "Enable mouse support (disabled by default in tmux)")
 	rootCmd.Flags().StringVar(&tfFlags, "tf-flags", "", "Additional flags to pass to terraform")
@@ -105,7 +109,14 @@ showing only changed attributes in a git-style diff format.`,
 }
 
 //nolint:gocognit,gocyclo // CLI setup branches by mode and config source.
-func run(_ *cobra.Command, args []string) error {
+func run(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return errors.New("positional arguments are not supported; use --plan <path> or --plan -")
+	}
+	if readOnly && strings.TrimSpace(planFile) == "" {
+		return errors.New("--readonly requires --plan")
+	}
+
 	// Initialize profiler from flags or environment.
 	profiler := initProfiler()
 	if profiler != nil && profiler.IsEnabled() {
@@ -135,8 +146,11 @@ func run(_ *cobra.Command, args []string) error {
 	if noHistory {
 		cfg.History.Enabled = false
 	}
+	if cmd != nil && !cmd.Flags().Changed("mouse") && cfg.Mouse != nil {
+		mouseEnabled = *cfg.Mouse
+	}
 	if envName == "" {
-		envName = strings.TrimSpace(cfg.General.DefaultEnvironment)
+		envName = strings.TrimSpace(cfg.DefaultEnvironment)
 	}
 	if workDir == "." && strings.TrimSpace(cfg.Terraform.WorkingDir) != "" {
 		workDir = cfg.Terraform.WorkingDir
@@ -152,15 +166,37 @@ func run(_ *cobra.Command, args []string) error {
 		overrideFlags = append(overrideFlags, override.Flags...)
 	}
 
-	// If a plan file is provided, run in read-only mode
-	if len(args) > 0 || planFile != "" {
-		return runReadOnlyMode(&cfg, args)
+	// If a plan input is provided, preload plan into execution mode by default.
+	if strings.TrimSpace(planFile) != "" {
+		return runPlanInputMode(&cfg, overrideFlags, configManager)
 	}
 
-	return runExecutionMode(&cfg, overrideFlags, configManager)
+	return runExecutionMode(&cfg, overrideFlags, configManager, nil, "")
 }
 
-func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
+func runExecutionMode(
+	cfg *config.Config,
+	overrideFlags []string,
+	configManager *config.Manager,
+	preloadedPlan *terraform.Plan,
+	preloadedPlanPath string,
+) error {
+	if err := configureWorkDirAndWorkspace(); err != nil {
+		return err
+	}
+	return runExecutionModeConfigured(cfg, overrideFlags, configManager, preloadedPlan, preloadedPlanPath, "", "", false)
+}
+
+func runExecutionModeConfigured(
+	cfg *config.Config,
+	overrideFlags []string,
+	configManager *config.Manager,
+	preloadedPlan *terraform.Plan,
+	preloadedPlanPath string,
+	preloadedPlanDir string,
+	preloadedPlanEnv string,
+	preloadedPlanFromStdin bool,
+) error {
 	// Clean temp files from previous runs
 	cleanupTempFilesOnStartup()
 
@@ -172,9 +208,6 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 	if err != nil {
 		return err
 	}
-	if err := configureWorkDirAndWorkspace(); err != nil {
-		return err
-	}
 	// Execution model applies flags per operation.
 	// Keep executor defaults empty to avoid duplicate arguments.
 	exec, err := buildExecutor(cfg, nil)
@@ -182,6 +215,16 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 		return err
 	}
 	selectedEnv := resolveSelectedEnv()
+	if strings.TrimSpace(preloadedPlanEnv) != "" {
+		selectedEnv = strings.TrimSpace(preloadedPlanEnv)
+	}
+	resolvedPreloadedPlanDir := preloadedPlanDir
+	if strings.TrimSpace(resolvedPreloadedPlanDir) == "" {
+		resolvedPreloadedPlanDir = workDir
+	}
+	if absDir, absErr := filepath.Abs(resolvedPreloadedPlanDir); absErr == nil {
+		resolvedPreloadedPlanDir = absDir
+	}
 	historyStore, historyLogger, err := openHistory(cfg)
 	if err != nil {
 		return err
@@ -194,17 +237,22 @@ func runExecutionMode(cfg *config.Config, overrideFlags []string, configManager 
 		}
 	}()
 
-	model := ui.NewExecutionModelWithStyles(nil, ui.ExecutionConfig{
-		Executor:       exec,
-		Flags:          flags,
-		WorkDir:        workDir,
-		EnvName:        selectedEnv,
-		HistoryStore:   historyStore,
-		HistoryLogger:  historyLogger,
-		HistoryEnabled: cfg.History.Enabled,
-		Config:         cfg,
-		ConfigManager:  configManager,
-	}, appStyles)
+	execCfg := ui.ExecutionConfig{
+		Executor:               exec,
+		Flags:                  flags,
+		WorkDir:                workDir,
+		EnvName:                selectedEnv,
+		PreloadedPlanPath:      preloadedPlanPath,
+		PreloadedPlanEnv:       strings.TrimSpace(preloadedPlanEnv),
+		PreloadedPlanDir:       resolvedPreloadedPlanDir,
+		PreloadedPlanFromStdin: preloadedPlanFromStdin,
+		HistoryStore:           historyStore,
+		HistoryLogger:          historyLogger,
+		HistoryEnabled:         cfg.History.Enabled,
+		Config:                 cfg,
+		ConfigManager:          configManager,
+	}
+	model := ui.NewExecutionModelWithStyles(preloadedPlan, execCfg, appStyles)
 	runErr = executionModeRunner(model, historyStore)
 	return runErr
 }
@@ -342,23 +390,22 @@ func applyPreset(cfg *config.Config, flags []string) ([]string, error) {
 	return flags, nil
 }
 
-func runReadOnlyMode(cfg *config.Config, args []string) error {
-	// Determine plan file path.
-	var planPath string
-	if len(args) > 0 {
-		planPath = args[0]
-	} else {
-		planPath = planFile
+func runPlanInputMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
+	if err := configureWorkDirAndWorkspace(); err != nil {
+		return err
 	}
-
-	// Parse the plan output.
-	parser := parser.NewTextParser()
-	plan, err := parser.ParseFile(planPath)
+	plan, planPath, fromStdin, planWorkDir, planEnv, err := loadPlanInput(cfg, strings.TrimSpace(planFile))
 	if err != nil {
-		return fmt.Errorf("failed to parse plan file: %w", err)
+		return err
+	}
+	if strings.TrimSpace(planWorkDir) == "" {
+		planWorkDir = workDir
 	}
 
-	// Create and run the TUI.
+	if !readOnly {
+		return runExecutionModeConfigured(cfg, overrideFlags, configManager, plan, planPath, planWorkDir, planEnv, fromStdin)
+	}
+
 	appTheme, err := styles.ResolveTheme(cfg.Theme.Name)
 	if err != nil {
 		return err
@@ -366,6 +413,127 @@ func runReadOnlyMode(cfg *config.Config, args []string) error {
 	appStyles := styles.NewStyles(appTheme)
 	model := ui.NewModelWithStyles(plan, appStyles)
 	return programRunner(model)
+}
+
+func detectCurrentWorkspaceForPlanInput(targetWorkDir string) string {
+	manager, err := newWorkspaceManager(targetWorkDir)
+	if err != nil {
+		return ""
+	}
+	workspace, err := manager.Current(context.Background())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(workspace)
+}
+
+func loadPlanInput(cfg *config.Config, input string) (*terraform.Plan, string, bool, string, string, error) {
+	if input == "-" {
+		return loadPlanFromStdin()
+	}
+	return loadPlanFromBinaryFile(cfg, input)
+}
+
+func loadPlanFromStdin() (*terraform.Plan, string, bool, string, string, error) {
+	if stdinIsTerminal() {
+		return nil, "", false, "", "", errors.New("--plan - requires piped input, for example: terraform plan -no-color | lazytf --plan -")
+	}
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, "", false, "", "", fmt.Errorf("read stdin plan input: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return nil, "", false, "", "", errors.New("stdin plan input is empty")
+	}
+	textParser := parser.NewTextParser()
+	plan, err := textParser.Parse(strings.NewReader(string(data)))
+	if err != nil {
+		return nil, "", false, "", "", fmt.Errorf("failed to parse stdin plan input: %w", err)
+	}
+	effectiveWorkDir := workDir
+	if absDir, absErr := filepath.Abs(workDir); absErr == nil {
+		effectiveWorkDir = absDir
+	}
+	return plan, "", true, effectiveWorkDir, detectCurrentWorkspaceForPlanInput(effectiveWorkDir), nil
+}
+
+func loadPlanFromBinaryFile(cfg *config.Config, planPath string) (*terraform.Plan, string, bool, string, string, error) {
+	resolvedPlanPath := planPath
+	if !filepath.IsAbs(resolvedPlanPath) {
+		absPlanPath, absErr := filepath.Abs(resolvedPlanPath)
+		if absErr != nil {
+			return nil, "", false, "", "", fmt.Errorf("resolve plan path %q: %w", planPath, absErr)
+		}
+		resolvedPlanPath = absPlanPath
+	}
+	resolvedPlanPath = filepath.Clean(resolvedPlanPath)
+
+	effectiveWorkDir := workDir
+	if absDir, absErr := filepath.Abs(workDir); absErr == nil {
+		effectiveWorkDir = absDir
+	}
+
+	exec, err := buildExecutor(cfg, nil)
+	if err != nil {
+		return nil, "", false, "", "", err
+	}
+	showResult, err := exec.Show(context.Background(), resolvedPlanPath, terraform.ShowOptions{})
+	if err != nil {
+		retryExec, retryErr := buildRetryExecutorFromWorkdirHint(exec, resolvedPlanPath)
+		if retryErr == nil && retryExec != nil {
+			showResult, err = retryExec.Show(context.Background(), resolvedPlanPath, terraform.ShowOptions{})
+			effectiveWorkDir = retryExec.WorkDir()
+		}
+	}
+	if err != nil {
+		return nil, "", false, "", "", fmt.Errorf("failed to show plan file %q: %w", resolvedPlanPath, err)
+	}
+	textParser := parser.NewTextParser()
+	plan, err := textParser.Parse(strings.NewReader(showResult.Output))
+	if err != nil {
+		return nil, "", false, "", "", fmt.Errorf("failed to parse terraform show output: %w", err)
+	}
+	planEnv := detectCurrentWorkspaceForPlanInput(effectiveWorkDir)
+	return plan, resolvedPlanPath, false, effectiveWorkDir, planEnv, nil
+}
+
+func buildRetryExecutorFromWorkdirHint(base *terraform.Executor, planPath string) (*terraform.Executor, error) {
+	if base == nil {
+		return nil, errors.New("base executor is nil")
+	}
+	hintedWorkDir, err := readPlanWorkdirHint(planPath)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(hintedWorkDir) == "" {
+		return nil, errors.New("no plan workdir hint found")
+	}
+	return base.CloneWithWorkDir(hintedWorkDir)
+}
+
+func readPlanWorkdirHint(planPath string) (string, error) {
+	hintPath := planPath + ".workdir"
+	data, err := os.ReadFile(hintPath)
+	if err != nil {
+		return "", err
+	}
+	hint := strings.TrimSpace(string(data))
+	if hint == "" {
+		return "", errors.New("empty plan workdir hint")
+	}
+	if filepath.IsAbs(hint) {
+		return "", errors.New("absolute plan workdir hints are not allowed")
+	}
+	resolved := filepath.Join(filepath.Dir(planPath), hint)
+	return filepath.Clean(resolved), nil
+}
+
+func stdinIsTerminal() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (info.Mode() & os.ModeCharDevice) != 0
 }
 
 func runProgram(model tea.Model) error {

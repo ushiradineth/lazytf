@@ -1,15 +1,7 @@
 { lib }:
 {
-  "general" = lib.mkOption {
-    type = lib.types.nullOr (lib.types.submodule {
-      options = {
-        "default_environment" = lib.mkOption {
-          type = lib.types.nullOr (lib.types.str);
-          default = null;
-          description = "Auto-generated from internal/config/config.schema.json";
-        };
-      };
-    });
+  "default_environment" = lib.mkOption {
+    type = lib.types.nullOr (lib.types.str);
     default = null;
     description = "Auto-generated from internal/config/config.schema.json";
   };
@@ -38,6 +30,16 @@
         };
       };
     });
+    default = null;
+    description = "Auto-generated from internal/config/config.schema.json";
+  };
+  "mouse" = lib.mkOption {
+    type = lib.types.nullOr (lib.types.bool);
+    default = null;
+    description = "Auto-generated from internal/config/config.schema.json";
+  };
+  "notification" = lib.mkOption {
+    type = lib.types.nullOr (lib.types.bool);
     default = null;
     description = "Auto-generated from internal/config/config.schema.json";
   };

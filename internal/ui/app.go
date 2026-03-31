@@ -69,35 +69,38 @@ type Model struct {
 	operationState   *terraform.OperationState
 	diagnosticsPanel *components.DiagnosticsPanel
 
-	historyStore       *history.Store
-	historyPanel       *components.HistoryPanel
-	historyEntries     []history.Entry
-	historyEnabled     bool
-	showHistory        bool
-	historyHeight      int
-	historySelected    int
-	historyFocused     bool
-	diagnosticsFocused bool
-	historyDetail      *history.Entry
-	historyLogger      *history.Logger
-	stateListView      *views.StateListView
-	stateShowView      *views.StateShowView
-	stateListContent   *components.StateListContent
-	stateMoveSource    string
-	stateMoveInput     string
-	stateMoveCursorOn  bool
-	pendingConfirmCmd  tea.Cmd
-	resourcesActiveTab int // 0 = Resources, 1 = State
-	lastPlanOutput     string
-	planEnvironment    string
-	planWorkDir        string
-	config             *config.Config
-	configView         *views.ConfigView
-	envWorkDir         string
-	envCurrent         string
-	envStrategy        environment.StrategyType
-	envDetection       *environment.DetectionResult
-	envOptions         []environment.Environment
+	historyStore             *history.Store
+	historyPanel             *components.HistoryPanel
+	historyEntries           []history.Entry
+	historyEnabled           bool
+	showHistory              bool
+	historyHeight            int
+	historySelected          int
+	historyFocused           bool
+	diagnosticsFocused       bool
+	historyDetail            *history.Entry
+	historyLogger            *history.Logger
+	stateListView            *views.StateListView
+	stateShowView            *views.StateShowView
+	stateListContent         *components.StateListContent
+	stateMoveSource          string
+	stateMoveInput           string
+	stateMoveCursorOn        bool
+	pendingConfirmCmd        tea.Cmd
+	resourcesActiveTab       int // 0 = Resources, 1 = State
+	lastPlanOutput           string
+	planEnvironment          string
+	planWorkDir              string
+	planNeedsPinBeforeApply  bool
+	pendingApplyAfterPlanPin bool
+	config                   *config.Config
+	configManager            *config.Manager
+	configView               *views.ConfigView
+	envWorkDir               string
+	envCurrent               string
+	envStrategy              environment.StrategyType
+	envDetection             *environment.DetectionResult
+	envOptions               []environment.Environment
 
 	// Overlay components
 	toast         *components.Toast
@@ -168,15 +171,19 @@ var newWorkspaceManager = func(workDir string) (workspaceManager, error) {
 
 // ExecutionConfig configures execution mode behavior.
 type ExecutionConfig struct {
-	Executor       *terraform.Executor
-	Flags          []string
-	WorkDir        string
-	EnvName        string
-	HistoryStore   *history.Store
-	HistoryLogger  *history.Logger
-	HistoryEnabled bool
-	Config         *config.Config
-	ConfigManager  *config.Manager
+	Executor               *terraform.Executor
+	Flags                  []string
+	WorkDir                string
+	EnvName                string
+	PreloadedPlanPath      string
+	PreloadedPlanEnv       string
+	PreloadedPlanDir       string
+	PreloadedPlanFromStdin bool
+	HistoryStore           *history.Store
+	HistoryLogger          *history.Logger
+	HistoryEnabled         bool
+	Config                 *config.Config
+	ConfigManager          *config.Manager
 }
 
 // NewModel creates a new application model.
@@ -279,6 +286,8 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 }
 
 // NewExecutionModelWithStyles creates a model configured for terraform execution with styles.
+//
+//nolint:funlen // Constructor wires execution dependencies and startup state in one place.
 func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appStyles *styles.Styles) *Model {
 	m := NewModelWithStyles(plan, appStyles)
 	m.executionMode = true
@@ -299,6 +308,19 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	m.applyFlags = append([]string{}, cfg.Flags...)
 	m.envWorkDir = cfg.WorkDir
 	m.envCurrent = cfg.EnvName
+	if strings.TrimSpace(cfg.PreloadedPlanPath) != "" {
+		m.planFilePath = cfg.PreloadedPlanPath
+		m.planEnvironment = cfg.PreloadedPlanEnv
+		m.planWorkDir = cfg.PreloadedPlanDir
+	}
+	m.planNeedsPinBeforeApply = cfg.PreloadedPlanFromStdin
+	m.resourcesActiveTab = 0
+	if m.resourcesController != nil {
+		m.resourcesController.SetActiveTab(0)
+	}
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelResources)
+	}
 	m.envStrategy = environment.StrategyUnknown
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
@@ -316,7 +338,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	if plan == nil {
 		m.mainArea.SetMode(ModeAbout)
 		if m.panelManager != nil {
-			m.panelManager.SetFocus(PanelMain)
+			m.panelManager.SetFocus(PanelResources)
 		}
 	}
 
@@ -340,6 +362,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 		m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
 	}
 	m.config = cfg.Config
+	m.configManager = cfg.ConfigManager
 	m.configView = views.NewConfigView(m.styles)
 	if m.configView != nil {
 		m.configView.SetConfig(m.config)
@@ -581,6 +604,10 @@ func (m *Model) updateEnvironmentPanel(_ []string) {
 }
 
 func (m *Model) applyCurrentEnvironment() {
+	if m.plan != nil {
+		// Preserve preloaded plans during startup environment reconciliation.
+		return
+	}
 	if m.envCurrent == "" {
 		return
 	}
@@ -849,7 +876,20 @@ func (m *Model) showConfirmApplyModal() {
 	// Build the confirmation message with plan summary
 	summary := m.planSummaryVerbose()
 	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
-	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.beginApply())
+	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.deferConfirmCommand(m.beginApply))
+}
+
+func (m *Model) deferConfirmCommand(factory func() tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		if factory == nil {
+			return nil
+		}
+		cmd := factory()
+		if cmd == nil {
+			return nil
+		}
+		return cmd()
+	}
 }
 
 func (m *Model) showConfirmModal(title, message, yesLabel string, yesCmd tea.Cmd) {

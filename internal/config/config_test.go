@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -128,6 +129,73 @@ func TestNewManagerEmptyPathUsesDefault(t *testing.T) {
 	if manager.Path() != expected {
 		t.Fatalf("expected %s, got %s", expected, manager.Path())
 	}
+}
+
+func TestGeneratedSchemaIncludesMouseDescription(t *testing.T) {
+	type schemaNode struct {
+		Description string                 `json:"description"`
+		Properties  map[string]*schemaNode `json:"properties"`
+	}
+
+	data, err := os.ReadFile("config.schema.json")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+
+	var root schemaNode
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+
+	mouse := root.Properties["mouse"]
+	if mouse == nil {
+		t.Fatal("expected mouse property in schema")
+	}
+	if !strings.Contains(mouse.Description, "tmux") {
+		t.Fatalf("expected mouse description to mention tmux, got %q", mouse.Description)
+	}
+}
+
+func TestGeneratedSchemaIncludesPresetThemeEnum(t *testing.T) {
+	type schemaNode struct {
+		Enum       []string               `json:"enum"`
+		Properties map[string]*schemaNode `json:"properties"`
+		Items      *schemaNode            `json:"items"`
+	}
+
+	data, err := os.ReadFile("config.schema.json")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+
+	var root schemaNode
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+
+	presets := root.Properties["presets"]
+	if presets == nil || presets.Items == nil {
+		t.Fatal("expected presets items schema")
+	}
+	theme := presets.Items.Properties["theme"]
+	if theme == nil {
+		t.Fatal("expected preset theme schema")
+	}
+	if len(theme.Enum) == 0 {
+		t.Fatal("expected preset theme enum values")
+	}
+	if !contains(theme.Enum, "monochrome") {
+		t.Fatalf("expected monochrome preset theme suggestion, got %v", theme.Enum)
+	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestManagerPathNil(t *testing.T) {
