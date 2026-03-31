@@ -11,6 +11,7 @@ import (
 
 type schemaNode struct {
 	Type                 string                 `json:"type"`
+	Description          string                 `json:"description"`
 	Properties           map[string]*schemaNode `json:"properties"`
 	Items                *schemaNode            `json:"items"`
 	AdditionalProperties *schemaNode            `json:"additionalProperties"`
@@ -93,7 +94,13 @@ func renderProperties(properties map[string]*schemaNode, indent int) string {
 		b.WriteString(ind(indent + 1))
 		b.WriteString("default = null;\n")
 		b.WriteString(ind(indent + 1))
-		b.WriteString("description = \"Auto-generated from internal/config/config.schema.json\";\n")
+		description := strings.TrimSpace(node.Description)
+		if description == "" {
+			description = "Auto-generated from internal/config/config.schema.json"
+		}
+		b.WriteString("description = ")
+		b.WriteString(nixString(description))
+		b.WriteString(";\n")
 		b.WriteString(ind(indent))
 		b.WriteString("};\n")
 	}
@@ -144,4 +151,11 @@ func renderTypeExpr(node *schemaNode, indent int) string {
 
 func ind(level int) string {
 	return strings.Repeat("  ", level)
+}
+
+func nixString(value string) string {
+	escaped := strings.ReplaceAll(value, "\\", "\\\\")
+	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+	escaped = strings.ReplaceAll(escaped, "\n", " ")
+	return "\"" + escaped + "\""
 }
