@@ -175,11 +175,8 @@ func TestTruncateMiddle(t *testing.T) {
 
 func TestFormatSingleLineValueEscapesNewlines(t *testing.T) {
 	got := formatSingleLineValue("a\nb")
-	if !strings.Contains(got, `\n`) {
-		t.Fatalf("expected newline escape, got %q", got)
-	}
-	if !strings.HasPrefix(got, "\"") || !strings.HasSuffix(got, "\"") {
-		t.Fatalf("expected quoted string, got %q", got)
+	if !strings.Contains(got, "⏎") {
+		t.Fatalf("expected newline marker, got %q", got)
 	}
 }
 
@@ -414,6 +411,186 @@ func TestContextDiffNoChangesPlaceholder(t *testing.T) {
 	}
 }
 
+func TestNormalizeMultilineForDisplayDedentsSharedIndent(t *testing.T) {
+	before := "        search:\n          shards: 5\n"
+	after := "        search:\n          shards: 10\n"
+
+	gotBefore, gotAfter := normalizeMultilineForDisplay(before, after)
+	if strings.HasPrefix(gotBefore, " ") || strings.HasPrefix(gotAfter, " ") {
+		t.Fatalf("expected first lines to be dedented, got before=%q after=%q", gotBefore, gotAfter)
+	}
+	if !strings.Contains(gotBefore, "  shards: 5") {
+		t.Fatalf("expected relative indentation preserved in before, got %q", gotBefore)
+	}
+	if !strings.Contains(gotAfter, "  shards: 10") {
+		t.Fatalf("expected relative indentation preserved in after, got %q", gotAfter)
+	}
+}
+
+func TestNormalizeMultilineForDisplayHandlesEmpty(t *testing.T) {
+	gotBefore, gotAfter := normalizeMultilineForDisplay("", "")
+	if gotBefore != "" || gotAfter != "" {
+		t.Fatalf("expected empty outputs, got before=%q after=%q", gotBefore, gotAfter)
+	}
+}
+
+func TestShouldRenderRawFallback(t *testing.T) {
+	resource := &terraform.ResourceChange{
+		Address:     "aws_instance.web",
+		Action:      terraform.ActionUpdate,
+		ParseStatus: terraform.ParseStatusPartial,
+		RawBlock:    "# aws_instance.web will be updated in-place",
+	}
+	if !shouldRenderRawFallback(resource, 3) {
+		t.Fatal("expected raw fallback to be enabled for partial resource with raw block")
+	}
+
+	resource.ParseStatus = terraform.ParseStatusComplete
+	if !shouldRenderRawFallback(resource, 0) {
+		t.Fatal("expected raw fallback when diff count is zero and raw block exists")
+	}
+
+	if shouldRenderRawFallback(resource, 2) {
+		t.Fatal("did not expect raw fallback for complete resource with material diffs")
+	}
+}
+
+func TestRenderDestroyReasonUsesTerraformStyleComments(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	resource := &terraform.ResourceChange{
+		Address: "module.edge_domain.module.users_service.kubernetes_service.service",
+		Action:  terraform.ActionDelete,
+		RawBlock: strings.Join([]string{
+			"# module.edge_domain.module.users_service.kubernetes_service.service will be destroyed",
+			"  # (because kubernetes_service.service is not in configuration)",
+			"- resource \"kubernetes_service\" \"service\" {",
+		}, "\n"),
+	}
+
+	out := stripANSIDiffViewer(viewer.renderDestroyReason(resource))
+	if !strings.Contains(out, "will be destroyed") {
+		t.Fatalf("expected destroy comment line, got %q", out)
+	}
+	if !strings.Contains(out, "because kubernetes_service.service is not in configuration") {
+		t.Fatalf("expected because reason line, got %q", out)
+	}
+	if strings.Contains(out, "Sections affected") {
+		t.Fatalf("did not expect compact summary sections, got %q", out)
+	}
+}
+
+func TestRenderDestroyReasonFallbackWithoutRawBlock(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	resource := &terraform.ResourceChange{
+		Address:      "module.edge_domain.module.users_service.kubernetes_service.service",
+		Action:       terraform.ActionDelete,
+		ResourceType: "kubernetes_service",
+		ResourceName: "service",
+	}
+
+	out := stripANSIDiffViewer(viewer.renderDestroyReason(resource))
+	if !strings.Contains(out, "# module.edge_domain.module.users_service.kubernetes_service.service will be destroyed") {
+		t.Fatalf("expected fallback destroy line, got %q", out)
+	}
+	if !strings.Contains(out, "# (because kubernetes_service.service is not in configuration)") {
+		t.Fatalf("expected fallback because line, got %q", out)
+	}
+}
+
+func TestFormatSingleLineValueCompactsEscapedNewlines(t *testing.T) {
+	got := formatSingleLineValue(`line1\nline2\tvalue`)
+	if !strings.Contains(got, "⏎") {
+		t.Fatalf("expected escaped newline marker, got %q", got)
+	}
+}
+
+func TestFormatSingleLineValueCompactsDoubleEscapedNewlines(t *testing.T) {
+	got := formatSingleLineValue(`line1\\nline2\\tvalue`)
+	if strings.Contains(got, `\\n`) || strings.Contains(got, `\\t`) {
+		t.Fatalf("expected escaped markers normalized, got %q", got)
+	}
+	if !strings.Contains(got, "⏎") {
+		t.Fatalf("expected newline marker, got %q", got)
+	}
+}
+
+func TestFormatSingleLineValueUnescapesQuotedBlob(t *testing.T) {
+	got := formatSingleLineValue(`\"controller\":\\n  \"config\": true`)
+	if strings.Contains(got, `\"`) {
+		t.Fatalf("expected escaped quotes removed, got %q", got)
+	}
+	if strings.Contains(got, `\\n`) {
+		t.Fatalf("expected escaped newline removed, got %q", got)
+	}
+	if !strings.Contains(got, `"controller":`) {
+		t.Fatalf("expected readable quoted key, got %q", got)
+	}
+}
+
+func TestIsMultilineChangeForAddEscapedBlob(t *testing.T) {
+	item := diff.MinimalDiff{
+		Path:     []string{"values", "__item_1"},
+		Action:   diff.DiffAdd,
+		NewValue: `\"controller\":\n  \"config\": true`,
+	}
+	if !isMultilineChange(item) {
+		t.Fatalf("expected add blob to be treated as multiline")
+	}
+}
+
+func TestViewRendersRawFallbackForPartialResource(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(120, 20)
+
+	resource := &terraform.ResourceChange{
+		Address:     "module.ops.kubernetes_config_map.config_map",
+		Action:      terraform.ActionUpdate,
+		ParseStatus: terraform.ParseStatusPartial,
+		RawBlock: strings.Join([]string{
+			"# module.ops.kubernetes_config_map.config_map will be updated in-place",
+			"~ resource \"kubernetes_config_map\" \"config_map\" {",
+			"    ~ metadata {",
+			"    }",
+			"}",
+		}, "\n"),
+	}
+
+	out := stripANSIDiffViewer(viewer.View(resource))
+	if !strings.Contains(out, "raw terraform block") {
+		t.Fatalf("expected raw fallback header, got %q", out)
+	}
+	if !strings.Contains(out, "~ metadata {") {
+		t.Fatalf("expected raw block content, got %q", out)
+	}
+}
+
+func TestViewDeleteShowsTerraformStyleDestroyReason(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(120, 20)
+
+	resource := &terraform.ResourceChange{
+		Address: "module.edge_domain.module.users_service.kubernetes_service.service",
+		Action:  terraform.ActionDelete,
+		RawBlock: strings.Join([]string{
+			"# module.edge_domain.module.users_service.kubernetes_service.service will be destroyed",
+			"  # (because kubernetes_service.service is not in configuration)",
+			"- resource \"kubernetes_service\" \"service\" {",
+		}, "\n"),
+		Change: &terraform.Change{
+			Before: map[string]any{"id": "demo-platform/admin-ui-service"},
+			After:  nil,
+		},
+	}
+
+	out := stripANSIDiffViewer(viewer.View(resource))
+	if !strings.Contains(out, "(because kubernetes_service.service is not in configuration)") {
+		t.Fatalf("expected terraform-style destroy reason, got %q", out)
+	}
+	if strings.Contains(out, "Sections affected") {
+		t.Fatalf("did not expect compact destroy summary, got %q", out)
+	}
+}
+
 func TestReplaceMarkerNestedPathMatch(t *testing.T) {
 	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
 	change := &terraform.Change{ReplacePaths: [][]string{{"network", "self_link"}}}
@@ -542,21 +719,23 @@ func TestViewNoResourceSelectedEmpty(t *testing.T) {
 	}
 }
 
-func TestRenderWithNilAfterMap(t *testing.T) {
+func TestRenderWithNilAfterMapDeleteShowsReason(t *testing.T) {
 	engine := diff.NewEngine()
 	viewer := NewDiffViewer(styles.DefaultStyles(), engine)
 	viewer.SetSize(80, 20)
 	resource := &terraform.ResourceChange{
 		Address: "aws_instance.web",
 		Action:  terraform.ActionDelete,
+		RawBlock: "# aws_instance.web will be destroyed\n" +
+			"  # (because aws_instance.web is not in configuration)",
 		Change: &terraform.Change{
 			Before: map[string]any{"name": "old"},
 			After:  nil,
 		},
 	}
 	out := viewer.View(resource)
-	if !strings.Contains(out, "old") {
-		t.Fatalf("expected before value to render")
+	if !strings.Contains(out, "will be destroyed") {
+		t.Fatalf("expected destroy reason to render")
 	}
 }
 
@@ -617,15 +796,20 @@ func TestIsMultilineChangeFalse(t *testing.T) {
 }
 
 func TestIsMultilineChangeNonChangeAction(t *testing.T) {
-	// isMultilineChange returns false for non-change actions
+	// add/remove actions with multiline content should render as multiline blocks
 	addItem := diff.MinimalDiff{Action: diff.DiffAdd, NewValue: "a\nb"}
-	if isMultilineChange(addItem) {
-		t.Error("expected isMultilineChange to return false for add action")
+	if !isMultilineChange(addItem) {
+		t.Error("expected isMultilineChange to return true for add action with multiline content")
 	}
 
 	removeItem := diff.MinimalDiff{Action: diff.DiffRemove, OldValue: "a\nb"}
-	if isMultilineChange(removeItem) {
-		t.Error("expected isMultilineChange to return false for remove action")
+	if !isMultilineChange(removeItem) {
+		t.Error("expected isMultilineChange to return true for remove action with multiline content")
+	}
+
+	plainAdd := diff.MinimalDiff{Action: diff.DiffAdd, NewValue: "single-line"}
+	if isMultilineChange(plainAdd) {
+		t.Error("expected isMultilineChange to return false for plain single-line add")
 	}
 }
 
@@ -1112,5 +1296,252 @@ func TestDiffViewerGetScrollInfo(t *testing.T) {
 	}
 	if visible != 15 {
 		t.Errorf("expected visible=15, got %d", visible)
+	}
+}
+
+func TestBuildDiffHunksGroupsByRootPath(t *testing.T) {
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"name"}, Action: diff.DiffChange, OldValue: "old", NewValue: "new"},
+		{Path: []string{"tags", "env"}, Action: diff.DiffChange, OldValue: "dev", NewValue: "prod"},
+		{Path: []string{"tags", "owner"}, Action: diff.DiffChange, OldValue: "ops", NewValue: "platform"},
+	}
+
+	hunks := buildDiffHunks(diffs)
+	if len(hunks) != 2 {
+		t.Fatalf("expected root + nested section hunks, got %d", len(hunks))
+	}
+	if hunks[0].title != "root" || len(hunks[0].diffs) != 3 {
+		t.Fatalf("unexpected first hunk: %+v", hunks[0])
+	}
+	if hunks[1].title != "tags" || len(hunks[1].diffs) != 2 {
+		t.Fatalf("unexpected second hunk: %+v", hunks[1])
+	}
+}
+
+func TestBuildDiffHunksFlatPathsCreateSingleRootSection(t *testing.T) {
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"atomic"}, Action: diff.DiffAdd, NewValue: false},
+		{Path: []string{"chart"}, Action: diff.DiffAdd, NewValue: "nginx"},
+		{Path: []string{"lint"}, Action: diff.DiffAdd, NewValue: false},
+	}
+
+	hunks := buildDiffHunks(diffs)
+	if len(hunks) != 1 {
+		t.Fatalf("expected single root section for flat paths, got %d", len(hunks))
+	}
+	if hunks[0].title != "root" {
+		t.Fatalf("expected root section title, got %+v", hunks[0])
+	}
+}
+
+func TestBuildDiffHunksListItemMultilineGetsOwnSection(t *testing.T) {
+	diffs := []diff.MinimalDiff{
+		{Path: []string{"values", "__item_0"}, Action: diff.DiffAdd, NewValue: "single-line"},
+		{Path: []string{"values", "__item_1"}, Action: diff.DiffAdd, NewValue: `\"controller\":\n  \"config\": true`},
+	}
+
+	hunks := buildDiffHunks(diffs)
+	if len(hunks) < 3 {
+		t.Fatalf("expected root, values, and multiline list-item sections; got %d", len(hunks))
+	}
+	if hunks[1].title != "values" {
+		t.Fatalf("expected values section, got %+v", hunks[1])
+	}
+	found := false
+	for _, h := range hunks {
+		if h.title == "[1]" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected multiline list item section [1], got %+v", hunks)
+	}
+}
+
+func TestDiffViewerHunkNavigationAndToggle(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.hunks = []diffHunk{{key: "name"}, {key: "tags"}}
+	viewer.hunkLineStarts = []int{0, 6}
+	viewer.height = 4
+
+	if moved := viewer.NextHunk(); !moved {
+		t.Fatal("expected NextHunk to move")
+	}
+	if viewer.activeHunk != 1 {
+		t.Fatalf("expected activeHunk=1, got %d", viewer.activeHunk)
+	}
+	if viewer.scrollOffset != 6 {
+		t.Fatalf("expected scrollOffset=6, got %d", viewer.scrollOffset)
+	}
+
+	if toggled := viewer.ToggleCurrentHunk(); !toggled {
+		t.Fatal("expected ToggleCurrentHunk to toggle")
+	}
+	if !viewer.foldedHunks["tags"] {
+		t.Fatal("expected selected hunk to be folded")
+	}
+
+	if moved := viewer.PrevHunk(); !moved {
+		t.Fatal("expected PrevHunk to move")
+	}
+	if viewer.activeHunk != 0 {
+		t.Fatalf("expected activeHunk=0, got %d", viewer.activeHunk)
+	}
+}
+
+func TestRenderInlineChangeWithTrimRemovesParentPrefix(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	item := diff.MinimalDiff{
+		Path:     []string{"metadata", "labels", "platform.domain"},
+		Action:   diff.DiffChange,
+		OldValue: "ops",
+		NewValue: "ops_internal",
+	}
+	out := stripANSIDiffViewer(viewer.renderInlineChangeWithTrim(item, nil, 2))
+	if !strings.Contains(out, `"platform.domain": "ops" → "ops_internal"`) {
+		t.Fatalf("expected trimmed leaf path, got %q", out)
+	}
+	if strings.Contains(out, "metadata.labels") {
+		t.Fatalf("expected parent prefix removed, got %q", out)
+	}
+}
+
+func TestDiffViewerTreeParentAndChild(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.hunks = []diffHunk{
+		{key: "(root)", title: "root", parentKey: ""},
+		{key: "metadata", title: "metadata", parentKey: "(root)"},
+		{key: "metadata/labels", title: "labels", parentKey: "metadata"},
+	}
+	viewer.hunkLineStarts = []int{0, 3, 6}
+	viewer.foldedHunks = map[string]bool{}
+
+	viewer.activeHunk = 1
+	if moved := viewer.TreeChild(); !moved {
+		t.Fatal("expected TreeChild to move to first child")
+	}
+	if viewer.activeHunk != 2 {
+		t.Fatalf("expected active hunk 2, got %d", viewer.activeHunk)
+	}
+
+	if moved := viewer.TreeParent(); !moved {
+		t.Fatal("expected TreeParent to move to parent")
+	}
+	if viewer.activeHunk != 1 {
+		t.Fatalf("expected active hunk 1, got %d", viewer.activeHunk)
+	}
+
+	if moved := viewer.TreeParent(); !moved {
+		t.Fatal("expected TreeParent to move to root")
+	}
+	if viewer.activeHunk != 0 {
+		t.Fatalf("expected active hunk 0, got %d", viewer.activeHunk)
+	}
+	if viewer.foldedHunks["metadata"] {
+		t.Fatal("did not expect metadata section to be collapsed by TreeParent")
+	}
+}
+
+func TestRenderHeaderIncludesTreeInfo(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.hunks = []diffHunk{{key: "a"}, {key: "b"}}
+	viewer.activeHunk = 1
+	resource := &terraform.ResourceChange{Address: "aws_instance.web", Action: terraform.ActionUpdate}
+
+	out := viewer.renderHeader(resource, []diff.MinimalDiff{{Path: []string{"name"}, Action: diff.DiffChange}})
+	out = stripANSIDiffViewer(out)
+	if !strings.Contains(out, "[tree 2/2]") {
+		t.Fatalf("expected tree info in header, got %q", out)
+	}
+}
+
+func TestExpandCompositeDiffsForDisplayFlattensMapAdd(t *testing.T) {
+	diffs := []diff.MinimalDiff{{
+		Path:   []string{"metadata"},
+		Action: diff.DiffAdd,
+		NewValue: map[string]any{
+			"labels": map[string]any{"team": "ops"},
+		},
+	}}
+
+	expanded := expandCompositeDiffsForDisplay(diffs)
+	if len(expanded) != 1 {
+		t.Fatalf("expected 1 leaf diff, got %d", len(expanded))
+	}
+	if got := strings.Join(expanded[0].Path, "."); got != "metadata.labels.team" {
+		t.Fatalf("expected flattened path metadata.labels.team, got %q", got)
+	}
+	if expanded[0].Action != diff.DiffAdd {
+		t.Fatalf("expected add action, got %s", expanded[0].Action)
+	}
+}
+
+func TestViewCreateExpandsNestedMetadataAndSpec(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(120, 24)
+
+	resource := &terraform.ResourceChange{
+		Address: "module.orders_domain.module.orders_service.kubernetes_service.service",
+		Action:  terraform.ActionCreate,
+		Change: &terraform.Change{
+			Before: map[string]any{},
+			After: map[string]any{
+				"metadata": map[string]any{
+					"name": "orders-service",
+				},
+				"spec": map[string]any{
+					"type": "ClusterIP",
+				},
+				"wait_for_load_balancer": true,
+			},
+		},
+	}
+
+	out := stripANSIDiffViewer(viewer.View(resource))
+	if !strings.Contains(out, "metadata") || !strings.Contains(out, "spec") {
+		t.Fatalf("expected metadata/spec sections, got %q", out)
+	}
+	if !strings.Contains(out, `+ name: "orders-service"`) {
+		t.Fatalf("expected nested metadata leaf, got %q", out)
+	}
+	if !strings.Contains(out, `+ type: "ClusterIP"`) {
+		t.Fatalf("expected nested spec leaf, got %q", out)
+	}
+	if strings.Contains(out, "+ metadata: {...}") || strings.Contains(out, "+ spec: {...}") {
+		t.Fatalf("did not expect collapsed top-level maps, got %q", out)
+	}
+}
+
+func TestViewCreateRendersEscapedBlobAsMultilineBlock(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(140, 30)
+
+	resource := &terraform.ResourceChange{
+		Address: "module.foundation.module.ingress.helm_release.release",
+		Action:  terraform.ActionCreate,
+		Change: &terraform.Change{
+			Before: map[string]any{},
+			After: map[string]any{
+				"values": []any{
+					"",
+					`\"controller\":\n  \"config\":\n    \"compute-full-forwarded-for\": \"true\"`,
+				},
+			},
+		},
+	}
+
+	out := stripANSIDiffViewer(viewer.View(resource))
+	if !strings.Contains(out, "[1] (1)") {
+		t.Fatalf("expected [1] tree section header, got %q", out)
+	}
+	if !strings.Contains(out, "-----") {
+		t.Fatalf("expected multiline block separator under list item, got %q", out)
+	}
+	if !strings.Contains(out, `+ "controller":`) {
+		t.Fatalf("expected multiline decoded content, got %q", out)
+	}
+	if strings.Contains(out, "⏎") {
+		t.Fatalf("did not expect compact newline markers in multiline block, got %q", out)
 	}
 }

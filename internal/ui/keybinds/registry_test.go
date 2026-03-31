@@ -334,6 +334,44 @@ func TestRegistry_Resolve_ApplyInExecutionMode(t *testing.T) {
 	}
 }
 
+func TestRegistry_Resolve_MainPanelToggleHunkOverridesSelect(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{FocusedPanel: PanelMain}
+	binding := r.Resolve("enter", ctx)
+
+	if binding == nil {
+		t.Fatal("expected binding for enter on main panel")
+	}
+	if binding.Action != ActionToggleHunk {
+		t.Fatalf("expected ActionToggleHunk, got %v", binding.Action)
+	}
+}
+
+func TestRegistry_Resolve_MainPanelTreeArrowKeys(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{FocusedPanel: PanelMain}
+	prev := r.Resolve("up", ctx)
+	if prev == nil || prev.Action != ActionPrevHunk {
+		t.Fatalf("expected 'up' to resolve to ActionPrevHunk, got %#v", prev)
+	}
+	next := r.Resolve("down", ctx)
+	if next == nil || next.Action != ActionNextHunk {
+		t.Fatalf("expected 'down' to resolve to ActionNextHunk, got %#v", next)
+	}
+	left := r.Resolve("left", ctx)
+	if left == nil || left.Action != ActionTreeParent {
+		t.Fatalf("expected 'left' to resolve to ActionTreeParent, got %#v", left)
+	}
+	right := r.Resolve("right", ctx)
+	if right == nil || right.Action != ActionTreeChild {
+		t.Fatalf("expected 'right' to resolve to ActionTreeChild, got %#v", right)
+	}
+}
+
 func TestBinding_KeyString(t *testing.T) {
 	tests := []struct {
 		name     string

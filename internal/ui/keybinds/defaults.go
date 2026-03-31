@@ -240,6 +240,48 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 		Condition:   ConditionExecutionMode,
 	})
+
+	// Main panel tree navigation
+	r.Register(Binding{
+		Keys:        []string{"up", "k"},
+		Action:      ActionPrevHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree previous",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{KeyDown, "j"},
+		Action:      ActionNextHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree next",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"left", "h"},
+		Action:      ActionTreeParent,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree parent",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"right", "l"},
+		Action:      ActionTreeChild,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree child / expand",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"enter", " "},
+		Action:      ActionToggleHunk,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "toggle tree fold",
+		Category:    "Navigation",
+	})
 }
 
 //nolint:funlen // Keybind registration is naturally verbose
