@@ -73,8 +73,8 @@ func TestConfigViewViewWithConfig(t *testing.T) {
 	view.SetSize(80, 40)
 
 	cfg := &config.Config{
-		General: config.GeneralConfig{DefaultEnvironment: "dev"},
-		Theme:   config.ThemeConfig{Name: "mocha"},
+		DefaultEnvironment: "dev",
+		Theme:              config.ThemeConfig{Name: "mocha"},
 		Terraform: config.TerraformConfig{
 			Binary:       "/usr/local/bin/terraform",
 			WorkingDir:   "/projects/infra",

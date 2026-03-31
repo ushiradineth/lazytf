@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ushiradineth/lazytf/internal/config"
+	"github.com/ushiradineth/lazytf/internal/styles"
 )
 
 type orderedMap map[string]any
@@ -150,7 +151,14 @@ func schemaForType(t reflect.Type) map[string]any {
 			if name == "" {
 				name = strings.ToLower(field.Name)
 			}
-			properties[name] = schemaForType(field.Type)
+			fieldSchema := schemaForType(field.Type)
+			if description := strings.TrimSpace(field.Tag.Get("description")); description != "" {
+				fieldSchema["description"] = description
+			}
+			if isThemeField(t, field, name) {
+				fieldSchema["enum"] = styles.BuiltInThemeNames()
+			}
+			properties[name] = fieldSchema
 		}
 		return map[string]any{
 			"type":       "object",
@@ -159,4 +167,14 @@ func schemaForType(t reflect.Type) map[string]any {
 	default:
 		return map[string]any{"type": "string"}
 	}
+}
+
+func isThemeField(parent reflect.Type, field reflect.StructField, name string) bool {
+	if parent == reflect.TypeOf(config.ThemeConfig{}) && name == "name" {
+		return true
+	}
+	if field.Type.Kind() != reflect.String {
+		return false
+	}
+	return (parent == reflect.TypeOf(config.EnvironmentPreset{}) || parent == reflect.TypeOf(config.ProjectConfig{})) && name == "theme"
 }

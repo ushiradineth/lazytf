@@ -240,6 +240,7 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 		Condition:   ConditionExecutionMode,
 	})
+
 }
 
 //nolint:funlen // Keybind registration is naturally verbose
@@ -548,6 +549,13 @@ func registerModalBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:   []string{"T", "esc"},
 		Action: ActionToggleTheme,
+		Scope:  ScopeModal,
+		Modal:  ModalTheme,
+		Hidden: true,
+	})
+	r.Register(Binding{
+		Keys:   []string{"enter"},
+		Action: ActionSelect,
 		Scope:  ScopeModal,
 		Modal:  ModalTheme,
 		Hidden: true,

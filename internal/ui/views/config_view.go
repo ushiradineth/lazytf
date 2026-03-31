@@ -62,7 +62,7 @@ func (v *ConfigView) View() string {
 
 	lines = append(lines, "")
 	lines = append(lines, v.styles.Highlight.Render("General"))
-	lines = append(lines, "default env: "+fallback(cfg.General.DefaultEnvironment, "default"))
+	lines = append(lines, "default env: "+fallback(cfg.DefaultEnvironment, "default"))
 
 	lines = append(lines, "")
 	lines = append(lines, v.styles.Highlight.Render("Terraform"))
