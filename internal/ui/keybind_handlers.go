@@ -154,6 +154,8 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionPrevHunk, m.handleActionPrevHunk)
 	r.RegisterHandler(keybinds.ActionNextHunk, m.handleActionNextHunk)
 	r.RegisterHandler(keybinds.ActionToggleHunk, m.handleActionToggleHunk)
+	r.RegisterHandler(keybinds.ActionTreeParent, m.handleActionTreeParent)
+	r.RegisterHandler(keybinds.ActionTreeChild, m.handleActionTreeChild)
 	r.RegisterHandler(keybinds.ActionSelect, m.handleActionSelect)
 	r.RegisterHandler(keybinds.ActionScrollUp, m.handleActionScrollUp)
 	r.RegisterHandler(keybinds.ActionScrollDown, m.handleActionScrollDown)
@@ -486,7 +488,10 @@ func (m *Model) handleActionPrevHunk(ctx *keybinds.Context) tea.Cmd {
 	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
 		return nil
 	}
-	m.mainArea.PrevDiffHunk()
+	if !m.mainArea.PrevDiffHunk() {
+		_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: tea.KeyUp})
+		return cmd
+	}
 	return nil
 }
 
@@ -494,7 +499,10 @@ func (m *Model) handleActionNextHunk(ctx *keybinds.Context) tea.Cmd {
 	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
 		return nil
 	}
-	m.mainArea.NextDiffHunk()
+	if !m.mainArea.NextDiffHunk() {
+		_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+		return cmd
+	}
 	return nil
 }
 
@@ -503,6 +511,22 @@ func (m *Model) handleActionToggleHunk(ctx *keybinds.Context) tea.Cmd {
 		return nil
 	}
 	m.mainArea.ToggleDiffHunk()
+	return nil
+}
+
+func (m *Model) handleActionTreeParent(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
+		return nil
+	}
+	m.mainArea.DiffTreeParent()
+	return nil
+}
+
+func (m *Model) handleActionTreeChild(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelMain || m.mainArea == nil {
+		return nil
+	}
+	m.mainArea.DiffTreeChild()
 	return nil
 }
 

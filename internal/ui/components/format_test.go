@@ -15,6 +15,8 @@ func TestFormatPathForDisplay(t *testing.T) {
 		{[]string{`path`, `with\\slash`}, `path."with\\\\slash"`},
 		{[]string{`spec[0]`, `foo.bar`}, `spec[0]."foo.bar"`},
 		{[]string{"values[0]"}, "values[0]"},
+		{[]string{"spec", "__item_1", "port"}, "spec[1].port"},
+		{[]string{"__item_2"}, "[2]"},
 	}
 
 	for _, tt := range tests {

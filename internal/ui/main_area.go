@@ -169,11 +169,67 @@ func (m *MainArea) GetHistoryView() *views.HistoryView {
 
 // SetSelectedResource updates the selected resource for diff view.
 func (m *MainArea) SetSelectedResource(resource *terraform.ResourceChange) {
+	if sameSelectedResource(m.selectedResource, resource) {
+		m.selectedResource = resource
+		return
+	}
+
 	m.selectedResource = resource
 	// Reset scroll position when resource changes
 	if m.diffViewer != nil {
 		m.diffViewer.ResetScroll()
 	}
+}
+
+func sameSelectedResource(a, b *terraform.ResourceChange) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a == b {
+		return true
+	}
+
+	return a.Address == b.Address && a.Action == b.Action && a.Change == b.Change
+}
+
+// NextDiffHunk moves selection to the next diff hunk.
+func (m *MainArea) NextDiffHunk() bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.NextHunk()
+}
+
+// PrevDiffHunk moves selection to the previous diff hunk.
+func (m *MainArea) PrevDiffHunk() bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.PrevHunk()
+}
+
+// ToggleDiffHunk toggles fold state of the selected diff hunk.
+func (m *MainArea) ToggleDiffHunk() bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.ToggleCurrentHunk()
+}
+
+// DiffTreeParent moves to parent node.
+func (m *MainArea) DiffTreeParent() bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.TreeParent()
+}
+
+// DiffTreeChild expands current node or moves to first child node.
+func (m *MainArea) DiffTreeChild() bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.TreeChild()
 }
 
 // Update handles Bubble Tea messages (implements Panel interface).

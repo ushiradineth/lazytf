@@ -59,6 +59,19 @@ func TestHistoryViewViewContent(t *testing.T) {
 	}
 }
 
+func TestHistoryViewViewContentFillsAssignedHeight(t *testing.T) {
+	s := styles.DefaultStyles()
+	view := NewHistoryView(s)
+	view.SetSize(80, 20)
+	view.SetContent("line one\nline two")
+
+	content := view.ViewContent()
+	lines := strings.Split(content, "\n")
+	if len(lines) != 20 {
+		t.Fatalf("expected embedded history content to fill assigned height, got %d lines", len(lines))
+	}
+}
+
 func TestHistoryViewViewContentNilStyles(t *testing.T) {
 	view := &HistoryView{}
 	content := view.ViewContent()

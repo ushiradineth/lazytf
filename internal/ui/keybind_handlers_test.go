@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -378,6 +379,120 @@ func TestHandleActionSelectPanelNone(t *testing.T) {
 	cmd := m.handleActionSelect(ctx)
 	if cmd != nil {
 		t.Error("expected nil cmd for PanelNone")
+	}
+}
+
+func TestHandleActionSelectResourceFocusesMainPanel(t *testing.T) {
+	m := NewExecutionModel(&terraform.Plan{Resources: []terraform.ResourceChange{{
+		Address: "aws_instance.example",
+		Action:  terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{"name": "old"},
+			After:  map[string]any{"name": "new"},
+		},
+	}}}, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	if m.panelManager != nil {
+		_ = m.panelManager.SetFocus(PanelResources)
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	_ = m.handleActionSelect(ctx)
+
+	if m.panelManager == nil {
+		t.Fatal("expected panel manager")
+	}
+	if got := m.panelManager.GetFocusedPanel(); got != PanelMain {
+		t.Fatalf("expected focus on main panel, got %v", got)
+	}
+}
+
+func TestHandleActionNextPrevToggleHunk(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.example",
+		Action:  terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{
+				"name": "old",
+				"tags": map[string]any{"env": "dev"},
+			},
+			After: map[string]any{
+				"name": "new",
+				"tags": map[string]any{"env": "prod"},
+			},
+		},
+	}
+
+	if m.mainArea == nil {
+		t.Fatal("expected mainArea")
+	}
+	m.mainArea.SetMode(ModeDiff)
+	m.mainArea.SetSelectedResource(resource)
+	_ = m.mainArea.View() // Build hunk state
+
+	if _, total := m.mainArea.GetDiffViewer().GetHunkInfo(); total < 2 {
+		t.Fatalf("expected at least 2 hunks, got %d", total)
+	}
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelMain}
+	_ = m.handleActionNextHunk(ctx)
+	current, total := m.mainArea.GetDiffViewer().GetHunkInfo()
+	if total < 2 || current != 2 {
+		t.Fatalf("expected to move to hunk 2, got %d/%d", current, total)
+	}
+
+	_ = m.handleActionToggleHunk(ctx)
+	out := m.mainArea.View()
+	if !strings.Contains(out, "▶") {
+		t.Fatalf("expected folded hunk marker after toggle, got %q", out)
+	}
+
+	_ = m.handleActionPrevHunk(ctx)
+	current, _ = m.mainArea.GetDiffViewer().GetHunkInfo()
+	if current != 1 {
+		t.Fatalf("expected to move back to first hunk, got %d", current)
+	}
+
+	_ = m.handleActionTreeChild(ctx)
+	current, _ = m.mainArea.GetDiffViewer().GetHunkInfo()
+	if current != 2 {
+		t.Fatalf("expected right/tree-child to move to child item, got %d", current)
+	}
+
+	_ = m.handleActionTreeParent(ctx)
+	current, _ = m.mainArea.GetDiffViewer().GetHunkInfo()
+	if current != 1 {
+		t.Fatalf("expected left/tree-parent to move to parent item, got %d", current)
+	}
+}
+
+func TestHandleActionHunkNoopOutsideMainPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+
+	if cmd := m.handleActionNextHunk(ctx); cmd != nil {
+		t.Fatal("expected nil command for next hunk outside main panel")
+	}
+	if cmd := m.handleActionPrevHunk(ctx); cmd != nil {
+		t.Fatal("expected nil command for prev hunk outside main panel")
+	}
+	if cmd := m.handleActionToggleHunk(ctx); cmd != nil {
+		t.Fatal("expected nil command for toggle hunk outside main panel")
+	}
+	if cmd := m.handleActionTreeChild(ctx); cmd != nil {
+		t.Fatal("expected nil command for tree child outside main panel")
+	}
+	if cmd := m.handleActionTreeParent(ctx); cmd != nil {
+		t.Fatal("expected nil command for tree parent outside main panel")
 	}
 }
 

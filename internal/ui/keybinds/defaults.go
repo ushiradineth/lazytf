@@ -241,21 +241,37 @@ func registerNavigationBindings(r *Registry) {
 		Condition:   ConditionExecutionMode,
 	})
 
-	// Main panel diff hunk navigation
+	// Main panel tree navigation
 	r.Register(Binding{
-		Keys:        []string{"["},
+		Keys:        []string{"up", "k"},
 		Action:      ActionPrevHunk,
 		Scope:       ScopePanel,
 		Panel:       PanelMain,
-		Description: "previous tree item",
+		Description: "tree previous",
 		Category:    "Navigation",
 	})
 	r.Register(Binding{
-		Keys:        []string{"]"},
+		Keys:        []string{KeyDown, "j"},
 		Action:      ActionNextHunk,
 		Scope:       ScopePanel,
 		Panel:       PanelMain,
-		Description: "next tree item",
+		Description: "tree next",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"left", "h"},
+		Action:      ActionTreeParent,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree parent",
+		Category:    "Navigation",
+	})
+	r.Register(Binding{
+		Keys:        []string{"right", "l"},
+		Action:      ActionTreeChild,
+		Scope:       ScopePanel,
+		Panel:       PanelMain,
+		Description: "tree child / expand",
 		Category:    "Navigation",
 	})
 	r.Register(Binding{
