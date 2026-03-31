@@ -1,12 +1,10 @@
-# lazytf
-
-lazygit but for Terraform :D
+![banner](./.github/banner.png)
 
 ## Installation
 
 ### Binary releases
 
-Download platform archives and checksums from GitHub Releases.
+Download platform archives and checksums from [GitHub Releases](https://github.com/ushiradineth/lazytf/releases/latest).
 
 ### Go
 
@@ -29,17 +27,67 @@ Run without installing:
 nix run github:ushiradineth/lazytf
 ```
 
-Build from source:
+NixOS module usage:
 
-```bash
-nix build github:ushiradineth/lazytf
+```nix
+{
+  inputs.lazytf.url = "github:ushiradineth/lazytf";
+
+  outputs = {
+    nixpkgs,
+    lazytf,
+    ...
+  }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        lazytf.nixosModules.default
+        ({...}: {
+          nixpkgs.overlays = [lazytf.overlays.default];
+          programs.lazytf = {
+            enable = true;
+            settings.theme.name = "default";
+          };
+        })
+      ];
+    };
+  };
+}
+```
+
+Home Manager module usage:
+
+```nix
+{
+  inputs.lazytf.url = "github:ushiradineth/lazytf";
+
+  outputs = {
+    home-manager,
+    lazytf,
+    ...
+  }: {
+    homeConfigurations.user = home-manager.lib.homeManagerConfiguration {
+      modules = [
+        lazytf.homeManagerModules.default
+        ({pkgs, ...}: {
+          nixpkgs.overlays = [lazytf.overlays.default];
+          programs.lazytf = {
+            enable = true;
+            settings.theme.name = "default";
+          };
+        })
+      ];
+    };
+  };
+}
 ```
 
 ## Configuration
 
 ### YAML config
 
-Config is stored in YAML and supports a schema hint for editors.
+Config is stored in YAML and supports a yaml schema hint for editors.
+
+Add `# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json` to the top of your config file.
 
 Path resolution order:
 
@@ -61,50 +109,34 @@ terraform:
 history:
   enabled: true
   level: standard
+mouse: true
+notification: true
 ```
 
-### Nix
+## Usage
 
-NixOS module usage:
+Execution mode with a binary plan file:
 
-```nix
-{
-  inputs.lazytf.url = "github:ushiradineth/lazytf";
-
-  outputs = { self, nixpkgs, lazytf, ... }: {
-    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
-      modules = [
-        lazytf.nixosModules.default
-        ({ pkgs, ... }: {
-          nixpkgs.overlays = [ lazytf.overlays.default ];
-          programs.lazytf.enable = true;
-          programs.lazytf.settings.theme.name = "default";
-        })
-      ];
-    };
-  };
-}
+```bash
+lazytf --plan plan.tfplan
 ```
 
-Home Manager module usage:
+When the plan was created in a different Terraform working directory, pass `--workdir`:
 
-```nix
-{
-  inputs.lazytf.url = "github:ushiradineth/lazytf";
+```bash
+lazytf --plan ../tmpkube/plan.tfplan --workdir ../tmpkube
+```
 
-  outputs = { home-manager, lazytf, ... }: {
-    homeConfigurations.user = home-manager.lib.homeManagerConfiguration {
-      modules = [
-        lazytf.homeManagerModules.default
-        ({ pkgs, ... }: {
-          nixpkgs.overlays = [ lazytf.overlays.default ];
-          programs.lazytf.enable = true;
-          programs.lazytf.settings.theme.name = "default";
-        })
-      ];
-    };
-  };
-}
+Execution mode from stdin plan text:
+
+```bash
+terraform plan -no-color | lazytf --plan -
+```
+
+Read-only mode is opt-in:
+
+```bash
+terraform plan -no-color | lazytf --plan - --readonly
 ```
 
 ## Development Prerequisites
