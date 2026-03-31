@@ -18,6 +18,8 @@ func TestResolveTheme(t *testing.T) {
 		{"Terraform-Cloud mixed case", "Terraform-Cloud", false, TerraformCloudTheme.Name},
 		{"monokai", "monokai", false, MonokaiTheme.Name},
 		{"Monokai uppercase", "Monokai", false, MonokaiTheme.Name},
+		{"monochrome", "monochrome", false, MonochromeTheme.Name},
+		{"Monochrome uppercase", "Monochrome", false, MonochromeTheme.Name},
 		{"nord", "nord", false, NordTheme.Name},
 		{"Nord uppercase", "Nord", false, NordTheme.Name},
 		{"github-dark", "github-dark", false, GitHubDarkTheme.Name},
@@ -44,4 +46,14 @@ func TestResolveTheme(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuiltInThemeNamesIncludesMonochrome(t *testing.T) {
+	names := BuiltInThemeNames()
+	for _, name := range names {
+		if name == "monochrome" {
+			return
+		}
+	}
+	t.Fatal("expected monochrome in built-in theme names")
 }

@@ -80,6 +80,17 @@ var (
 		adaptive("#E6DB74", "#E6DB74"), // highlight
 	)
 
+	// MonochromeTheme is a grayscale theme with strong contrast.
+	MonochromeTheme = newTheme(
+		"monochrome",
+		adaptive("#FFFFFF", "#121212"), // background
+		adaptive("#111111", "#F5F5F5"), // foreground
+		adaptive("#B0B0B0", "#5A5A5A"), // border
+		adaptive("#4A4A4A", "#D0D0D0"), // selected
+		adaptive("#7A7A7A", "#8A8A8A"), // dimmed
+		adaptive("#000000", "#FFFFFF"), // highlight
+	)
+
 	// NordTheme is based on the Nord color palette.
 	NordTheme = newTheme(
 		"nord",
