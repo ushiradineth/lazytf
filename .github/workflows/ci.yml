@@ -31,7 +31,7 @@ jobs:
       profiling: ${{ steps.filter.outputs.profiling }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Filter changed paths
         id: filter
@@ -77,7 +77,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.nix == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -110,7 +110,7 @@ jobs:
     if: needs.changes.outputs.go == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -148,7 +148,7 @@ jobs:
     if: needs.changes.outputs.go == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -181,7 +181,7 @@ jobs:
     if: needs.changes.outputs.integration == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -205,7 +205,7 @@ jobs:
     if: needs.changes.outputs.e2e == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -229,7 +229,7 @@ jobs:
     if: needs.changes.outputs.profiling == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -248,7 +248,7 @@ jobs:
     if: needs.changes.outputs.release == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -275,7 +275,7 @@ jobs:
     if: needs.changes.outputs.nix == 'true' || needs.changes.outputs.go == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Nix
         uses: cachix/install-nix-action@v27
