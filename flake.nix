@@ -56,7 +56,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.go
+            pkgs.go_1_25
 
             pkgs.gopls
             pkgs.gofumpt
