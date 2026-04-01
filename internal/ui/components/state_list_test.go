@@ -256,6 +256,29 @@ func TestStateListContentMoveDown(t *testing.T) {
 	}
 }
 
+func TestStateListContentSelectVisibleRow(t *testing.T) {
+	s := styles.DefaultStyles()
+	content := NewStateListContent(s)
+	content.SetSize(50, 20)
+	content.SetResources([]terraform.StateResource{
+		{Address: "a"},
+		{Address: "b"},
+		{Address: "c"},
+	})
+
+	if !content.SelectVisibleRow(1) {
+		t.Fatal("expected visible row selection to succeed")
+	}
+	selected := content.GetSelected()
+	if selected == nil || selected.Address != "b" {
+		t.Fatalf("expected address b selected, got %#v", selected)
+	}
+
+	if content.SelectVisibleRow(-1) {
+		t.Fatal("expected negative row selection to fail")
+	}
+}
+
 func TestStateListContentHandleKeyUp(t *testing.T) {
 	s := styles.DefaultStyles()
 	content := NewStateListContent(s)

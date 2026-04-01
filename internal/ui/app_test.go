@@ -115,6 +115,29 @@ func TestApplyWithoutPlanShowsToast(t *testing.T) {
 	}
 }
 
+func TestNotificationFailedMsgIsNonFatal(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	model, _ := m.Update(NotificationFailedMsg{Action: "apply", Error: errors.New("endpoint timeout")})
+	if model == nil {
+		t.Fatal("expected non-nil model")
+	}
+	if m.err != nil {
+		t.Fatalf("expected non-fatal behavior, got %v", m.err)
+	}
+	if m.commandLogPanel == nil {
+		t.Fatal("expected command log panel")
+	}
+	view := m.commandLogPanel.GetDiagnosticsPanel().View()
+	if !strings.Contains(view, "Desktop notification for apply was not sent") {
+		t.Fatalf("expected notification diagnostics, got %q", view)
+	}
+}
+
 func TestExecutionModelWithoutPlanStartsInAboutMode(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	if m.mainArea == nil {
@@ -4816,6 +4839,291 @@ func TestHandleKeyMsgWithPanel(t *testing.T) {
 	model, cmd := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	_ = model
 	_ = cmd
+}
+
+func TestHandleMouseMsgClickFocusesPanel(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.a", Action: terraform.ActionCreate}}}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.Main.X + 1,
+		Y:      layout.Main.Y + 1,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(click)
+	if m.panelManager.GetFocusedPanel() != PanelMain {
+		t.Fatalf("expected main panel focused, got %v", m.panelManager.GetFocusedPanel())
+	}
+}
+
+func TestHandleMouseMsgClickSelectsResourceRow(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+		{Address: "aws_instance.c", Action: terraform.ActionDelete},
+	}}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.Resources.X + 2,
+		Y:      layout.Resources.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(click)
+	selected := m.resourceList.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.b" {
+		t.Fatalf("expected second resource selected, got %#v", selected)
+	}
+}
+
+func TestHandleMouseMsgClickSelectsHistoryRow(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{HistoryEnabled: true})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	entries := []history.Entry{
+		{ID: 1, Summary: "one"},
+		{ID: 2, Summary: "two"},
+		{ID: 3, Summary: "three"},
+	}
+	m.historyEntries = entries
+	m.historyPanel.SetEntries(entries)
+	m.historySelected = 0
+	m.syncHistorySelection()
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.History.X + 2,
+		Y:      layout.History.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(click)
+	if m.historySelected != 1 {
+		t.Fatalf("expected history selection index 1, got %d", m.historySelected)
+	}
+}
+
+func TestHandleMouseMsgClickSelectsEnvironmentRow(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	envs := []environment.Environment{
+		{Name: "dev", Strategy: environment.StrategyWorkspace},
+		{Name: "prod", Strategy: environment.StrategyWorkspace},
+	}
+	m.environmentPanel.SetEnvironmentInfo("", "", environment.StrategyWorkspace, envs)
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.Workspace.X + 2,
+		Y:      layout.Workspace.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(click)
+	if m.environmentPanel.GetSelectedIndex() != 1 {
+		t.Fatalf("expected environment selection index 1, got %d", m.environmentPanel.GetSelectedIndex())
+	}
+}
+
+func TestHandleMouseMsgClickEnvironmentEmitsChangeMessage(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	envs := []environment.Environment{
+		{Name: "dev", Strategy: environment.StrategyWorkspace},
+		{Name: "prod", Strategy: environment.StrategyWorkspace},
+	}
+	m.environmentPanel.SetEnvironmentInfo("", "", environment.StrategyWorkspace, envs)
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	click := tea.MouseMsg{
+		X:      layout.Workspace.X + 2,
+		Y:      layout.Workspace.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, cmd := m.handleMouseMsg(click)
+	if cmd == nil {
+		t.Fatal("expected environment click to emit environment change command")
+	}
+	msg := cmd()
+	changed, ok := msg.(components.EnvironmentChangedMsg)
+	if !ok {
+		t.Fatalf("expected EnvironmentChangedMsg, got %T", msg)
+	}
+	if changed.Environment.Name != "prod" {
+		t.Fatalf("expected selected environment 'prod', got %q", changed.Environment.Name)
+	}
+}
+
+func TestHandleMouseMsgWheelUsesHoveredPanel(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{HistoryEnabled: true})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	entries := []history.Entry{
+		{ID: 1, Summary: "one"},
+		{ID: 2, Summary: "two"},
+	}
+	m.historyEntries = entries
+	m.historyPanel.SetEntries(entries)
+	m.historySelected = 0
+	m.syncHistorySelection()
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	wheel := tea.MouseMsg{
+		X:      layout.History.X + 2,
+		Y:      layout.History.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+
+	_, _ = m.handleMouseMsg(wheel)
+	if m.historySelected != 1 {
+		t.Fatalf("expected hovered history panel to handle wheel, got selected index %d", m.historySelected)
+	}
+}
+
+func TestHandleMouseMsgWheelFallsBackToFocusedPanel(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+	}}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+	_ = m.panelManager.SetFocus(PanelResources)
+
+	wheel := tea.MouseMsg{
+		X:      0,
+		Y:      m.height - 1,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+
+	_, _ = m.handleMouseMsg(wheel)
+	selected := m.resourceList.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.b" {
+		t.Fatalf("expected focused resources panel to handle fallback wheel, got %#v", selected)
+	}
+}
+
+func TestHandleMouseMsgWheelOverPanelBorderFallsBackToFocusedPanel(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{
+		{Address: "aws_instance.a", Action: terraform.ActionCreate},
+		{Address: "aws_instance.b", Action: terraform.ActionUpdate},
+	}}
+	m := NewExecutionModel(plan, ExecutionConfig{HistoryEnabled: true})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+	_ = m.panelManager.SetFocus(PanelResources)
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	wheel := tea.MouseMsg{
+		X:      layout.History.X + 1,
+		Y:      layout.History.Y,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+
+	_, _ = m.handleMouseMsg(wheel)
+	selected := m.resourceList.GetSelectedResource()
+	if selected == nil || selected.Address != "aws_instance.b" {
+		t.Fatalf("expected focused resources panel to handle border wheel fallback, got %#v", selected)
+	}
+}
+
+func TestHandleMouseMsgPressReleaseDedupesClick(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+	m.environmentPanel.SetEnvironmentInfo("", "", environment.StrategyWorkspace, []environment.Environment{
+		{Name: "dev", Strategy: environment.StrategyWorkspace},
+		{Name: "prod", Strategy: environment.StrategyWorkspace},
+	})
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	press := tea.MouseMsg{
+		X:      layout.Workspace.X + 2,
+		Y:      layout.Workspace.Y + 2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+	release := tea.MouseMsg{
+		X:      layout.Workspace.X + 2,
+		Y:      layout.Workspace.Y + 2,
+		Action: tea.MouseActionRelease,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(press)
+	if m.environmentPanel.GetSelectedIndex() != 1 {
+		t.Fatalf("expected press to select second row, got %d", m.environmentPanel.GetSelectedIndex())
+	}
+	_, _ = m.handleMouseMsg(release)
+	if m.lastMouseLeftPress {
+		t.Fatal("expected mouse press state to be cleared after release")
+	}
+	if m.environmentPanel.GetSelectedIndex() != 1 {
+		t.Fatalf("expected release dedupe to preserve selection index 1, got %d", m.environmentPanel.GetSelectedIndex())
+	}
+}
+
+func TestHandleMouseMsgReleaseWithoutPressStillActsAsClick(t *testing.T) {
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.a", Action: terraform.ActionCreate}}}
+	m := NewExecutionModel(plan, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 40
+	m.updateLayout()
+
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	release := tea.MouseMsg{
+		X:      layout.Main.X + 1,
+		Y:      layout.Main.Y + 1,
+		Action: tea.MouseActionRelease,
+		Button: tea.MouseButtonLeft,
+	}
+
+	_, _ = m.handleMouseMsg(release)
+	if m.panelManager.GetFocusedPanel() != PanelMain {
+		t.Fatalf("expected release-only click to focus main panel, got %v", m.panelManager.GetFocusedPanel())
+	}
 }
 
 func TestHandleApplyOutputLine(t *testing.T) {

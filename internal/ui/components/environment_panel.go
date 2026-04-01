@@ -389,6 +389,28 @@ func (e *EnvironmentPanel) SetSelectedIndex(index int) {
 	}
 }
 
+// SelectVisibleRow updates selection from a visible content row and returns the selected environment.
+func (e *EnvironmentPanel) SelectVisibleRow(row int) *environment.Environment {
+	if row < 0 {
+		return nil
+	}
+	if e.filterActive {
+		row--
+	}
+	if row < 0 {
+		return nil
+	}
+	idx := e.scrollOffset + row
+	if idx < 0 || idx >= len(e.filteredItems) {
+		return nil
+	}
+	e.selectedIndex = idx
+	e.lastMove = 0
+	e.adjustScrollOffset()
+	env := e.filteredItems[idx].env
+	return &env
+}
+
 // ItemCount returns the total number of filtered items (implements SelectablePanel).
 func (e *EnvironmentPanel) ItemCount() int {
 	return len(e.filteredItems)

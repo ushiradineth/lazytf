@@ -17,6 +17,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
@@ -48,6 +49,7 @@ func TestRun_ReadOnlyRequiresPlan(t *testing.T) {
 	t.Cleanup(func() {
 		planFile = oldPlanFile
 		readOnly = oldReadOnly
+<<<<<<< fix/history-pane-height-alignment
 	})
 	useTempConfig(t)
 	planFile = ""
@@ -70,6 +72,30 @@ func TestRun_PlanStdinRequiresPipe(t *testing.T) {
 		readOnly = oldReadOnly
 	})
 	useTempConfig(t)
+=======
+	})
+	useTempConfig(t)
+	planFile = ""
+	readOnly = true
+
+	err := run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatalf("expected readonly/plan validation error")
+	}
+	if !strings.Contains(err.Error(), "--readonly requires --plan") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_PlanStdinRequiresPipe(t *testing.T) {
+	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		readOnly = oldReadOnly
+	})
+	useTempConfig(t)
+>>>>>>> main
 
 	planFile = "-"
 	readOnly = true
@@ -77,6 +103,7 @@ func TestRun_PlanStdinRequiresPipe(t *testing.T) {
 	err := run(&cobra.Command{}, nil)
 	if err == nil {
 		t.Fatalf("expected stdin pipe requirement error")
+<<<<<<< fix/history-pane-height-alignment
 	}
 	if !strings.Contains(err.Error(), "requires piped input") {
 		t.Fatalf("unexpected error: %v", err)
@@ -108,6 +135,39 @@ func TestRun_PlanStdinEmptyInput(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected empty stdin error")
 	}
+=======
+	}
+	if !strings.Contains(err.Error(), "requires piped input") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_PlanStdinEmptyInput(t *testing.T) {
+	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	oldStdin := os.Stdin
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		readOnly = oldReadOnly
+		os.Stdin = oldStdin
+	})
+	useTempConfig(t)
+
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	_ = writePipe.Close()
+	os.Stdin = readPipe
+
+	planFile = "-"
+	readOnly = true
+
+	err = run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatalf("expected empty stdin error")
+	}
+>>>>>>> main
 	if !strings.Contains(err.Error(), "stdin plan input is empty") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -598,6 +658,13 @@ func TestRun_PlanInputRunsExecutionModeByDefault(t *testing.T) {
 }
 
 func TestRun_PlanStdinRunsExecutionModeByDefault(t *testing.T) {
+<<<<<<< fix/history-pane-height-alignment
+=======
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+>>>>>>> main
 	oldPlanFile := planFile
 	oldReadOnly := readOnly
 	oldStdin := os.Stdin
@@ -622,6 +689,18 @@ func TestRun_PlanStdinRunsExecutionModeByDefault(t *testing.T) {
 	_ = writePipe.Close()
 	os.Stdin = readPipe
 
+<<<<<<< fix/history-pane-height-alignment
+=======
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+>>>>>>> main
 	called := false
 	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		called = true
@@ -917,6 +996,34 @@ func TestShouldDisableHistoryForError(t *testing.T) {
 				t.Fatalf("expected %t, got %t", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestOpenNotifierDisabled(t *testing.T) {
+	cfg := testConfig()
+	notificationEnabled := false
+	cfg.Notification = &notificationEnabled
+
+	notifier, err := openNotifier(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := notifier.(notifications.NopNotifier); !ok {
+		t.Fatalf("expected NopNotifier, got %T", notifier)
+	}
+}
+
+func TestOpenNotifierEnabledDesktop(t *testing.T) {
+	cfg := testConfig()
+	notificationEnabled := true
+	cfg.Notification = &notificationEnabled
+
+	notifier, err := openNotifier(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := notifier.(*notifications.DesktopNotifier); !ok {
+		t.Fatalf("expected DesktopNotifier, got %T", notifier)
 	}
 }
 
@@ -1419,7 +1526,11 @@ func TestRun_UsesConfigMouseWhenFlagNotSet(t *testing.T) {
 		return nil
 	}
 
+<<<<<<< fix/history-pane-height-alignment
 	cmd := newRootCommand()
+=======
+	cmd := &cobra.Command{}
+>>>>>>> main
 	if err := run(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

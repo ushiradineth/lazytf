@@ -21,13 +21,17 @@ brew install --cask lazytf
 
 ### Nix
 
-Run without installing:
+#### Run without installing
 
 ```bash
 nix run github:ushiradineth/lazytf
 ```
 
+<<<<<<< fix/history-pane-height-alignment
 NixOS module usage:
+=======
+#### NixOS module usage
+>>>>>>> main
 
 ```nix
 {
@@ -54,7 +58,11 @@ NixOS module usage:
 }
 ```
 
+<<<<<<< fix/history-pane-height-alignment
 Home Manager module usage:
+=======
+#### Home Manager module usage
+>>>>>>> main
 
 ```nix
 {
@@ -100,6 +108,8 @@ Example:
 
 ```yaml
 version: 1
+general:
+  mouse_enabled: true
 theme:
   name: default
 terraform:
@@ -141,7 +151,7 @@ terraform plan -no-color | lazytf --plan - --readonly
 
 ## Development Prerequisites
 
-- Go 1.25.7 or later
+- Go 1.25.8 or later
 - [just](https://github.com/casey/just)
 
 ### With Nix

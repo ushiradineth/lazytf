@@ -434,6 +434,7 @@ func TestNormalizeMultilineForDisplayHandlesEmpty(t *testing.T) {
 	}
 }
 
+<<<<<<< fix/history-pane-height-alignment
 func TestShouldRenderRawFallback(t *testing.T) {
 	resource := &terraform.ResourceChange{
 		Address:     "aws_instance.web",
@@ -591,6 +592,8 @@ func TestViewDeleteShowsTerraformStyleDestroyReason(t *testing.T) {
 	}
 }
 
+=======
+>>>>>>> main
 func TestReplaceMarkerNestedPathMatch(t *testing.T) {
 	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
 	change := &terraform.Change{ReplacePaths: [][]string{{"network", "self_link"}}}

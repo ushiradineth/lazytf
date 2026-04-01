@@ -16,6 +16,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/diff"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
+	"github.com/ushiradineth/lazytf/internal/notifications"
 	"github.com/ushiradineth/lazytf/internal/styles"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
@@ -47,60 +48,58 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode    bool
-	executor         terraform.ExecutorInterface
-	applyView        *views.ApplyView
-	planView         *views.PlanView
-	planFlags        []string
-	applyFlags       []string
-	planRunFlags     []string
-	applyRunFlags    []string
-	planRunning      bool
-	applyRunning     bool
-	refreshRunning   bool
-	operationRunning bool
-	outputChan       <-chan string
-	cancelFunc       context.CancelFunc
-	execView         executionView
-	planStartedAt    time.Time
-	applyStartedAt   time.Time
-	refreshStartedAt time.Time
-	planFilePath     string
-	operationState   *terraform.OperationState
-	diagnosticsPanel *components.DiagnosticsPanel
-
-	historyStore             *history.Store
-	historyPanel             *components.HistoryPanel
-	historyEntries           []history.Entry
-	historyEnabled           bool
-	showHistory              bool
-	historyHeight            int
-	historySelected          int
-	historyFocused           bool
-	diagnosticsFocused       bool
-	historyDetail            *history.Entry
-	historyLogger            *history.Logger
-	stateListView            *views.StateListView
-	stateShowView            *views.StateShowView
-	stateListContent         *components.StateListContent
-	stateMoveSource          string
-	stateMoveInput           string
-	stateMoveCursorOn        bool
-	pendingConfirmCmd        tea.Cmd
-	resourcesActiveTab       int // 0 = Resources, 1 = State
-	lastPlanOutput           string
-	planEnvironment          string
-	planWorkDir              string
-	planNeedsPinBeforeApply  bool
-	pendingApplyAfterPlanPin bool
-	config                   *config.Config
-	configManager            *config.Manager
-	configView               *views.ConfigView
-	envWorkDir               string
-	envCurrent               string
-	envStrategy              environment.StrategyType
-	envDetection             *environment.DetectionResult
-	envOptions               []environment.Environment
+	executionMode      bool
+	executor           terraform.ExecutorInterface
+	applyView          *views.ApplyView
+	planView           *views.PlanView
+	planFlags          []string
+	applyFlags         []string
+	planRunFlags       []string
+	applyRunFlags      []string
+	planRunning        bool
+	applyRunning       bool
+	refreshRunning     bool
+	operationRunning   bool
+	outputChan         <-chan string
+	cancelFunc         context.CancelFunc
+	execView           executionView
+	planStartedAt      time.Time
+	applyStartedAt     time.Time
+	refreshStartedAt   time.Time
+	planFilePath       string
+	operationState     *terraform.OperationState
+	diagnosticsPanel   *components.DiagnosticsPanel
+	historyStore       *history.Store
+	historyPanel       *components.HistoryPanel
+	historyEntries     []history.Entry
+	historyEnabled     bool
+	showHistory        bool
+	historyHeight      int
+	historySelected    int
+	historyFocused     bool
+	diagnosticsFocused bool
+	historyDetail      *history.Entry
+	historyLogger      *history.Logger
+	notifier           notifications.Notifier
+	stateListView      *views.StateListView
+	stateShowView      *views.StateShowView
+	stateListContent   *components.StateListContent
+	stateMoveSource    string
+	stateMoveInput     string
+	stateMoveCursorOn  bool
+	pendingConfirmCmd  tea.Cmd
+	resourcesActiveTab int // 0 = Resources, 1 = State
+	lastPlanOutput     string
+	planEnvironment    string
+	planWorkDir        string
+	config             *config.Config
+	configManager      *config.Manager
+	configView         *views.ConfigView
+	envWorkDir         string
+	envCurrent         string
+	envStrategy        environment.StrategyType
+	envDetection       *environment.DetectionResult
+	envOptions         []environment.Environment
 
 	// Overlay components
 	toast         *components.Toast
@@ -124,6 +123,11 @@ type Model struct {
 
 	// Keybind registry
 	keybindRegistry *keybinds.Registry
+
+	// Mouse handling state
+	lastMouseLeftPressX int
+	lastMouseLeftPressY int
+	lastMouseLeftPress  bool
 }
 
 type executionView int
@@ -150,6 +154,15 @@ const (
 	ModalConfirmApply
 	ModalStateMoveDestination
 	ModalTheme
+)
+
+type mouseIntent int
+
+const (
+	mouseIntentNone mouseIntent = iota
+	mouseIntentLeftClick
+	mouseIntentWheelUp
+	mouseIntentWheelDown
 )
 
 type environmentDetector interface {
@@ -182,6 +195,7 @@ type ExecutionConfig struct {
 	HistoryStore           *history.Store
 	HistoryLogger          *history.Logger
 	HistoryEnabled         bool
+	Notifier               notifications.Notifier
 	Config                 *config.Config
 	ConfigManager          *config.Manager
 }
@@ -306,6 +320,10 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	}
 	m.planFlags = append([]string{}, cfg.Flags...)
 	m.applyFlags = append([]string{}, cfg.Flags...)
+	m.notifier = cfg.Notifier
+	if m.notifier == nil {
+		m.notifier = notifications.NopNotifier{}
+	}
 	m.envWorkDir = cfg.WorkDir
 	m.envCurrent = cfg.EnvName
 	if strings.TrimSpace(cfg.PreloadedPlanPath) != "" {
@@ -491,11 +509,17 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case components.EnvironmentChangedMsg:
 		model, cmd := m.handleEnvironmentChanged(msg)
 		return model, cmd, true
+	case tea.MouseMsg:
+		model, cmd := m.handleMouseMsg(msg)
+		return model, cmd, true
 	case tea.KeyMsg:
 		model, cmd := m.handleKeyMsg(msg)
 		return model, cmd, true
 	case ErrorMsg:
 		model := m.handleErrorMsg(msg)
+		return model, nil, true
+	case NotificationFailedMsg:
+		model := m.handleNotificationFailed(msg)
 		return model, nil, true
 
 	// Action request messages from panels
@@ -679,6 +703,290 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func panelSpecForID(layout LayoutSpec, panelID PanelID) (PanelSpec, bool) {
+	switch panelID {
+	case PanelWorkspace:
+		return layout.Workspace, true
+	case PanelResources:
+		return layout.Resources, true
+	case PanelHistory:
+		return layout.History, true
+	case PanelMain:
+		return layout.Main, true
+	case PanelCommandLog:
+		return layout.CommandLog, true
+	default:
+		return PanelSpec{}, false
+	}
+}
+
+func panelContentRow(spec PanelSpec, y int) int {
+	return y - spec.Y - 1
+}
+
+func panelContentContains(spec PanelSpec, x, y int) bool {
+	if spec.Width < 3 || spec.Height < 3 {
+		return false
+	}
+	left := spec.X + 1
+	right := spec.X + spec.Width - 2
+	top := spec.Y + 1
+	bottom := spec.Y + spec.Height - 2
+	return x >= left && x <= right && y >= top && y <= bottom
+}
+
+func (m *Model) clearMousePressState() {
+	m.lastMouseLeftPress = false
+	m.lastMouseLeftPressX = 0
+	m.lastMouseLeftPressY = 0
+}
+
+func mouseIntentFromWheelButton(button tea.MouseButton) mouseIntent {
+	if button == tea.MouseButtonWheelUp {
+		return mouseIntentWheelUp
+	}
+	if button == tea.MouseButtonWheelDown {
+		return mouseIntentWheelDown
+	}
+	return mouseIntentNone
+}
+
+func (m *Model) resolveLeftClickIntent(event tea.MouseEvent) mouseIntent {
+	if event.Action == tea.MouseActionPress {
+		m.lastMouseLeftPress = true
+		m.lastMouseLeftPressX = event.X
+		m.lastMouseLeftPressY = event.Y
+		return mouseIntentLeftClick
+	}
+
+	if event.Action == tea.MouseActionRelease {
+		if m.lastMouseLeftPress && event.X == m.lastMouseLeftPressX && event.Y == m.lastMouseLeftPressY {
+			m.clearMousePressState()
+			return mouseIntentNone
+		}
+		m.clearMousePressState()
+		return mouseIntentLeftClick
+	}
+
+	if event.Action == tea.MouseActionMotion {
+		return mouseIntentNone
+	}
+
+	return mouseIntentNone
+}
+
+func (m *Model) resolveMouseIntent(event tea.MouseEvent) mouseIntent {
+	if intent := mouseIntentFromWheelButton(event.Button); intent != mouseIntentNone {
+		m.clearMousePressState()
+		return intent
+	}
+
+	if event.Button != tea.MouseButtonLeft {
+		return mouseIntentNone
+	}
+
+	return m.resolveLeftClickIntent(event)
+}
+
+func (m *Model) mousePanelAt(event tea.MouseEvent) (PanelID, PanelSpec, bool) {
+	if m.panelManager == nil {
+		return 0, PanelSpec{}, false
+	}
+	layout := m.panelManager.CalculateLayout(m.width, m.height)
+	panelID, ok := m.panelManager.PanelAt(layout, event.X, event.Y)
+	if !ok {
+		return 0, PanelSpec{}, false
+	}
+	spec, specOK := panelSpecForID(layout, panelID)
+	if !specOK {
+		return 0, PanelSpec{}, false
+	}
+	return panelID, spec, true
+}
+
+func (m *Model) focusPanelByMouse(panelID PanelID) tea.Cmd {
+	switch panelID {
+	case PanelWorkspace:
+		return m.handleActionFocusWorkspace(nil)
+	case PanelResources:
+		return m.handleActionFocusResources(nil)
+	case PanelHistory:
+		return m.handleActionFocusHistory(nil)
+	case PanelMain:
+		return m.handleActionFocusMain(nil)
+	case PanelCommandLog:
+		return m.handleActionFocusCommandLog(nil)
+	default:
+		return nil
+	}
+}
+
+func (m *Model) handleMousePanelSelection(panelID PanelID, spec PanelSpec, event tea.MouseEvent) tea.Cmd {
+	row := panelContentRow(spec, event.Y)
+
+	switch panelID {
+	case PanelResources:
+		if m.resourcesActiveTab == 0 {
+			if m.resourceList != nil {
+				m.resourceList.SelectVisibleRow(row)
+			}
+			return nil
+		}
+		if m.stateListContent != nil && m.stateListContent.SelectVisibleRow(row) {
+			return m.showSelectedStateDetail()
+		}
+		return nil
+	case PanelHistory:
+		if m.historyPanel != nil && m.historyPanel.SelectVisibleRow(row) {
+			m.historySelected = m.historyPanel.GetSelectedIndex()
+			return m.showSelectedHistoryDetail()
+		}
+		return nil
+	case PanelWorkspace:
+		if m.environmentPanel == nil {
+			return nil
+		}
+		selected := m.environmentPanel.SelectVisibleRow(row)
+		if selected == nil {
+			return nil
+		}
+		return func() tea.Msg {
+			return components.EnvironmentChangedMsg{Environment: *selected}
+		}
+	default:
+		return nil
+	}
+}
+
+func (m *Model) handleMouseWheelWorkspace(wheelUp bool) tea.Cmd {
+	if m.environmentPanel == nil {
+		return nil
+	}
+	selected := m.environmentPanel.GetSelectedIndex()
+	if wheelUp {
+		selected--
+	} else {
+		selected++
+	}
+	m.environmentPanel.SetSelectedIndex(selected)
+	return nil
+}
+
+func (m *Model) handleMouseWheelResources(wheelUp bool) tea.Cmd {
+	if m.resourcesActiveTab == 0 {
+		if m.resourceList == nil {
+			return nil
+		}
+		if wheelUp {
+			m.resourceList.MoveUp()
+		} else {
+			m.resourceList.MoveDown()
+		}
+		return nil
+	}
+	if m.stateListContent == nil {
+		return nil
+	}
+	if wheelUp {
+		m.stateListContent.MoveUp()
+	} else {
+		m.stateListContent.MoveDown()
+	}
+	return m.showSelectedStateDetail()
+}
+
+func (m *Model) handleMouseWheelHistory(wheelUp bool) tea.Cmd {
+	if m.historyPanel == nil {
+		return nil
+	}
+	if wheelUp {
+		m.historyPanel.MoveUp()
+	} else {
+		m.historyPanel.MoveDown()
+	}
+	m.historySelected = m.historyPanel.GetSelectedIndex()
+	return m.showSelectedHistoryDetail()
+}
+
+func (m *Model) handleMouseWheelMain(wheelUp bool) tea.Cmd {
+	if m.mainArea == nil {
+		return nil
+	}
+	keyType := tea.KeyDown
+	if wheelUp {
+		keyType = tea.KeyUp
+	}
+	_, cmd := m.mainArea.HandleKey(tea.KeyMsg{Type: keyType})
+	return cmd
+}
+
+func (m *Model) handleMouseWheelCommandLog(wheelUp bool) tea.Cmd {
+	if m.commandLogPanel == nil {
+		return nil
+	}
+	keyType := tea.KeyDown
+	if wheelUp {
+		keyType = tea.KeyUp
+	}
+	_, cmd := m.commandLogPanel.HandleKey(tea.KeyMsg{Type: keyType})
+	return cmd
+}
+
+func (m *Model) handleMouseWheel(panelID PanelID, wheelUp bool) tea.Cmd {
+	switch panelID {
+	case PanelWorkspace:
+		return m.handleMouseWheelWorkspace(wheelUp)
+	case PanelResources:
+		return m.handleMouseWheelResources(wheelUp)
+	case PanelHistory:
+		return m.handleMouseWheelHistory(wheelUp)
+	case PanelMain:
+		return m.handleMouseWheelMain(wheelUp)
+	case PanelCommandLog:
+		return m.handleMouseWheelCommandLog(wheelUp)
+	default:
+		return nil
+	}
+}
+
+func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if !m.ready || m.width <= 0 || m.height <= 0 || m.panelManager == nil {
+		return m, nil
+	}
+	if m.execView != viewMain {
+		return m, nil
+	}
+	if m.modalState != ModalNone {
+		return m, nil
+	}
+
+	event := tea.MouseEvent(msg)
+	intent := m.resolveMouseIntent(event)
+	if intent == mouseIntentNone {
+		return m, nil
+	}
+	panelID, spec, hasPanel := m.mousePanelAt(event)
+
+	switch intent {
+	case mouseIntentLeftClick:
+		if !hasPanel {
+			return m, nil
+		}
+		focusCmd := m.focusPanelByMouse(panelID)
+		selectCmd := m.handleMousePanelSelection(panelID, spec, event)
+		return m, tea.Batch(focusCmd, selectCmd)
+	case mouseIntentWheelUp, mouseIntentWheelDown:
+		targetPanel := panelID
+		if !hasPanel || !panelContentContains(spec, event.X, event.Y) {
+			targetPanel = m.panelManager.GetFocusedPanel()
+		}
+		wheelCmd := m.handleMouseWheel(targetPanel, intent == mouseIntentWheelUp)
+		return m, wheelCmd
+	default:
+		return m, nil
+	}
 }
 
 func (m *Model) handlePriorityKey(msg tea.KeyMsg) (bool, tea.Cmd) {
@@ -961,6 +1269,21 @@ func (m *Model) consumePendingConfirmCmd(fallback func() tea.Cmd) tea.Cmd {
 
 func (m *Model) handleErrorMsg(msg ErrorMsg) tea.Model {
 	m.err = msg.Err
+	return m
+}
+
+func (m *Model) handleNotificationFailed(msg NotificationFailedMsg) tea.Model {
+	if msg.Error == nil {
+		return m
+	}
+	summary := "Desktop notification was not sent"
+	if msg.Action != "" {
+		summary = "Desktop notification for " + msg.Action + " was not sent"
+	}
+	m.addErrorDiagnostic(summary, msg.Error, "")
+	if m.commandLogPanel != nil {
+		m.commandLogPanel.AppendSessionLog("Desktop notification failed", msg.Action, msg.Error.Error())
+	}
 	return m
 }
 

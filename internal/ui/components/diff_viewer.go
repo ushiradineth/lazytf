@@ -1045,8 +1045,11 @@ func (d *DiffViewer) renderMultilineBlockWithTrim(item diff.MinimalDiff, change 
 	marker := replaceMarker(item.Path, change)
 	oldStr, _ := item.OldValue.(string)
 	newStr, _ := item.NewValue.(string)
+<<<<<<< fix/history-pane-height-alignment
 	oldStr = normalizeEscapedWhitespace(oldStr)
 	newStr = normalizeEscapedWhitespace(newStr)
+=======
+>>>>>>> main
 	oldStr, newStr = normalizeMultilineForDisplay(oldStr, newStr)
 	lines := buildContextDiff(oldStr, newStr, multilineContextLines)
 

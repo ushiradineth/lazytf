@@ -38,12 +38,14 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
+	notificationEnabled := true
 	cfg := Config{
 		Theme: ThemeConfig{Name: "Nord"},
 		History: HistoryConfig{
 			Enabled: true,
 			Level:   "minimal",
 		},
+		Notification: &notificationEnabled,
 	}
 	if err := manager.Save(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -57,6 +59,33 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.History.Level != "minimal" {
 		t.Fatalf("expected history level to round-trip")
+	}
+	if loaded.Notification == nil || !*loaded.Notification {
+		t.Fatalf("expected notifications to round-trip")
+	}
+}
+
+func TestSaveAndLoadConfigMouseEnabledRoundTrip(t *testing.T) {
+	manager, err := NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	mouseEnabled := false
+	cfg := Config{
+		Mouse: &mouseEnabled,
+	}
+	if err := manager.Save(cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	loaded, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if loaded.Mouse == nil {
+		t.Fatal("expected mouse_enabled to be present after round-trip")
+	}
+	if *loaded.Mouse {
+		t.Fatal("expected mouse_enabled=false to round-trip")
 	}
 }
 
@@ -214,6 +243,39 @@ func TestValidateConfigErrors(t *testing.T) {
 	}
 	if err := (Config{History: HistoryConfig{Level: "bogus"}}).Validate(); err == nil {
 		t.Fatalf("expected error for invalid history level")
+	}
+	notificationEnabled := true
+	if err := (Config{
+		Notification: &notificationEnabled,
+	}).Validate(); err != nil {
+		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)
+	}
+}
+
+func TestDefaultConfigNotificationsDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Notification != nil && *cfg.Notification {
+		t.Fatalf("expected notifications to be disabled by default")
+	}
+}
+
+func TestValidateNotificationsAllowsDisabled(t *testing.T) {
+	notificationEnabled := false
+	cfg := Config{
+		Notification: &notificationEnabled,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected disabled desktop notifications to validate, got %v", err)
+	}
+}
+
+func TestValidateNotificationsAllowsEnabled(t *testing.T) {
+	notificationEnabled := true
+	cfg := Config{
+		Notification: &notificationEnabled,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)
 	}
 }
 

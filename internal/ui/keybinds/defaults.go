@@ -241,6 +241,7 @@ func registerNavigationBindings(r *Registry) {
 		Condition:   ConditionExecutionMode,
 	})
 
+<<<<<<< fix/history-pane-height-alignment
 	// Main panel tree navigation
 	r.Register(Binding{
 		Keys:        []string{"up", "k"},
@@ -282,6 +283,8 @@ func registerNavigationBindings(r *Registry) {
 		Description: "toggle tree fold",
 		Category:    "Navigation",
 	})
+=======
+>>>>>>> main
 }
 
 //nolint:funlen // Keybind registration is naturally verbose

@@ -126,6 +126,11 @@ func (s *StateListContent) MoveDown() {
 	s.listPanel.MoveDown()
 }
 
+// SelectVisibleRow sets selection from a visible content row.
+func (s *StateListContent) SelectVisibleRow(row int) bool {
+	return s.listPanel.SelectVisibleRow(row)
+}
+
 // HandleKey handles key events.
 func (s *StateListContent) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	switch msg.String() {

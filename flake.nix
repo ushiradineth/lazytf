@@ -6,23 +6,21 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs =
-    {
-      self,
-      flake-utils,
-      nixpkgs,
-    }:
+  outputs = {
+    self,
+    flake-utils,
+    nixpkgs,
+  }:
     (flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs { inherit system; };
+      system: let
+        pkgs = import nixpkgs {inherit system;};
         appVersion = pkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
           version = appVersion;
 
           src = ./.;
-          vendorHash = "sha256-twmrMrtvUVzDiB8FHgDiAf9gbsCR+/mCZfmMucXWTcs=";
+          vendorHash = "sha256-df/siwSWcTKWbpdTCDdZy+vr0IKmWeD/DkrEbvNwsBQ=";
           proxyVendor = true;
           go = pkgs.go_1_25;
           doCheck = false;
@@ -45,8 +43,7 @@
             mainProgram = "lazytf";
           };
         };
-      in
-      {
+      in {
         packages.default = lazytf;
         packages.lazytf = lazytf;
 
@@ -56,7 +53,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.go
+            pkgs.go_1_25
 
             pkgs.gopls
             pkgs.gofumpt

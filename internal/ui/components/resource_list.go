@@ -177,6 +177,32 @@ func (r *ResourceList) SetSummary(create, update, deleteCount, replace int) {
 	r.updateViewport()
 }
 
+func (r *ResourceList) summaryHeaderLines() int {
+	if r.summaryCreate > 0 || r.summaryUpdate > 0 || r.summaryDelete > 0 || r.summaryReplace > 0 {
+		return 1
+	}
+	return 0
+}
+
+// SelectVisibleRow sets selection by visible row index within the panel content area.
+func (r *ResourceList) SelectVisibleRow(row int) bool {
+	if row < 0 || r.viewport.Height <= 0 {
+		return false
+	}
+	listRow := row - r.summaryHeaderLines()
+	if listRow < 0 {
+		return false
+	}
+	idx := r.viewport.YOffset + listRow
+	if idx < 0 || idx >= len(r.visibleItems) {
+		return false
+	}
+	r.selectedIndex = idx
+	r.lastMove = 0
+	r.adjustViewportOffset()
+	return true
+}
+
 // MoveUp moves the selection up.
 func (r *ResourceList) MoveUp() {
 	r.moveSelection(-1)
