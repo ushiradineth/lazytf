@@ -52,8 +52,12 @@ func TestDesktopNotifierNotifySendsFormattedNotification(t *testing.T) {
 	if strings.Contains(message, "Workdir:") {
 		t.Fatalf("did not expect workdir in success message, got %q", message)
 	}
-	if icon != nil {
-		t.Fatalf("expected no custom icon payload, got %T", icon)
+	iconValue, ok := icon.(string)
+	if !ok {
+		t.Fatalf("expected icon payload to be string, got %T", icon)
+	}
+	if iconValue != "" {
+		t.Fatalf("expected empty icon payload, got %q", iconValue)
 	}
 }
 
