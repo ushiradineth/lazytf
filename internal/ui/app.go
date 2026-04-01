@@ -48,60 +48,58 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode            bool
-	executor                 terraform.ExecutorInterface
-	applyView                *views.ApplyView
-	planView                 *views.PlanView
-	planFlags                []string
-	applyFlags               []string
-	planRunFlags             []string
-	applyRunFlags            []string
-	planRunning              bool
-	applyRunning             bool
-	refreshRunning           bool
-	operationRunning         bool
-	outputChan               <-chan string
-	cancelFunc               context.CancelFunc
-	execView                 executionView
-	planStartedAt            time.Time
-	applyStartedAt           time.Time
-	refreshStartedAt         time.Time
-	planFilePath             string
-	operationState           *terraform.OperationState
-	diagnosticsPanel         *components.DiagnosticsPanel
-	historyStore             *history.Store
-	historyPanel             *components.HistoryPanel
-	historyEntries           []history.Entry
-	historyEnabled           bool
-	showHistory              bool
-	historyHeight            int
-	historySelected          int
-	historyFocused           bool
-	diagnosticsFocused       bool
-	historyDetail            *history.Entry
-	historyLogger            *history.Logger
-	notifier                 notifications.Notifier
-	stateListView            *views.StateListView
-	stateShowView            *views.StateShowView
-	stateListContent         *components.StateListContent
-	stateMoveSource          string
-	stateMoveInput           string
-	stateMoveCursorOn        bool
-	pendingConfirmCmd        tea.Cmd
-	resourcesActiveTab       int // 0 = Resources, 1 = State
-	lastPlanOutput           string
-	planEnvironment          string
-	planWorkDir              string
-	planNeedsPinBeforeApply  bool
-	pendingApplyAfterPlanPin bool
-	config                   *config.Config
-	configManager            *config.Manager
-	configView               *views.ConfigView
-	envWorkDir               string
-	envCurrent               string
-	envStrategy              environment.StrategyType
-	envDetection             *environment.DetectionResult
-	envOptions               []environment.Environment
+	executionMode      bool
+	executor           terraform.ExecutorInterface
+	applyView          *views.ApplyView
+	planView           *views.PlanView
+	planFlags          []string
+	applyFlags         []string
+	planRunFlags       []string
+	applyRunFlags      []string
+	planRunning        bool
+	applyRunning       bool
+	refreshRunning     bool
+	operationRunning   bool
+	outputChan         <-chan string
+	cancelFunc         context.CancelFunc
+	execView           executionView
+	planStartedAt      time.Time
+	applyStartedAt     time.Time
+	refreshStartedAt   time.Time
+	planFilePath       string
+	operationState     *terraform.OperationState
+	diagnosticsPanel   *components.DiagnosticsPanel
+	historyStore       *history.Store
+	historyPanel       *components.HistoryPanel
+	historyEntries     []history.Entry
+	historyEnabled     bool
+	showHistory        bool
+	historyHeight      int
+	historySelected    int
+	historyFocused     bool
+	diagnosticsFocused bool
+	historyDetail      *history.Entry
+	historyLogger      *history.Logger
+	notifier           notifications.Notifier
+	stateListView      *views.StateListView
+	stateShowView      *views.StateShowView
+	stateListContent   *components.StateListContent
+	stateMoveSource    string
+	stateMoveInput     string
+	stateMoveCursorOn  bool
+	pendingConfirmCmd  tea.Cmd
+	resourcesActiveTab int // 0 = Resources, 1 = State
+	lastPlanOutput     string
+	planEnvironment    string
+	planWorkDir        string
+	config             *config.Config
+	configManager      *config.Manager
+	configView         *views.ConfigView
+	envWorkDir         string
+	envCurrent         string
+	envStrategy        environment.StrategyType
+	envDetection       *environment.DetectionResult
+	envOptions         []environment.Environment
 
 	// Overlay components
 	toast         *components.Toast
@@ -333,7 +331,6 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 		m.planEnvironment = cfg.PreloadedPlanEnv
 		m.planWorkDir = cfg.PreloadedPlanDir
 	}
-	m.planNeedsPinBeforeApply = cfg.PreloadedPlanFromStdin
 	m.resourcesActiveTab = 0
 	if m.resourcesController != nil {
 		m.resourcesController.SetActiveTab(0)

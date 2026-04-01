@@ -23,7 +23,7 @@ func TestHandleActionSelectThemeModalSavesTheme(t *testing.T) {
 	m.height = 30
 	m.updateLayout()
 	m.toggleThemeModal()
-	m.themeModal.SetSelectedIndex(themeIndex(t, "monochrome"))
+	m.themeModal.SetSelectedIndex(themeIndex(t, themeNameMonochrome))
 
 	cmd := m.handleActionSelect(&keybinds.Context{ActiveModal: keybinds.ModalTheme})
 	if cmd == nil {
@@ -32,10 +32,10 @@ func TestHandleActionSelectThemeModalSavesTheme(t *testing.T) {
 	if m.modalState != ModalNone {
 		t.Fatalf("expected theme modal to close, got %v", m.modalState)
 	}
-	if m.styles.Theme.Name != "monochrome" {
+	if m.styles.Theme.Name != themeNameMonochrome {
 		t.Fatalf("expected monochrome theme, got %q", m.styles.Theme.Name)
 	}
-	if m.config == nil || m.config.Theme.Name != "monochrome" {
+	if m.config == nil || m.config.Theme.Name != themeNameMonochrome {
 		t.Fatalf("expected model config theme to update, got %#v", m.config)
 	}
 
@@ -43,7 +43,7 @@ func TestHandleActionSelectThemeModalSavesTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load saved config: %v", err)
 	}
-	if saved.Theme.Name != "monochrome" {
+	if saved.Theme.Name != themeNameMonochrome {
 		t.Fatalf("expected saved theme monochrome, got %q", saved.Theme.Name)
 	}
 }
@@ -68,7 +68,7 @@ func TestHandleActionSelectThemeModalFallsBackWhenSaveFails(t *testing.T) {
 	m.height = 30
 	m.updateLayout()
 	m.toggleThemeModal()
-	m.themeModal.SetSelectedIndex(themeIndex(t, "monochrome"))
+	m.themeModal.SetSelectedIndex(themeIndex(t, themeNameMonochrome))
 
 	cmd := m.handleActionSelect(&keybinds.Context{ActiveModal: keybinds.ModalTheme})
 	if cmd == nil {
@@ -77,10 +77,10 @@ func TestHandleActionSelectThemeModalFallsBackWhenSaveFails(t *testing.T) {
 	if m.modalState != ModalNone {
 		t.Fatalf("expected theme modal to close, got %v", m.modalState)
 	}
-	if m.styles.Theme.Name != "monochrome" {
+	if m.styles.Theme.Name != themeNameMonochrome {
 		t.Fatalf("expected monochrome theme, got %q", m.styles.Theme.Name)
 	}
-	if m.config == nil || m.config.Theme.Name != "monochrome" {
+	if m.config == nil || m.config.Theme.Name != themeNameMonochrome {
 		t.Fatalf("expected in-memory config theme to update, got %#v", m.config)
 	}
 	if _, err := os.Stat(filepath.Join(readOnlyDir, "config.yaml")); !errors.Is(err, os.ErrNotExist) {
