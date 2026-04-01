@@ -1461,10 +1461,7 @@ func TestRun_UsesConfigMouseWhenFlagNotSet(t *testing.T) {
 		return nil
 	}
 
-	cmd := newRootCommand()
-	if flag := cmd.Flags().Lookup("mouse"); flag != nil {
-		flag.Changed = false
-	}
+	cmd := &cobra.Command{}
 	if err := run(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
