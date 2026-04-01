@@ -331,6 +331,7 @@ func (b *planBuilder) applyHeredocValue(key, prefix, value string) {
 	}
 }
 
+//nolint:gocognit,gocyclo // Heredoc diff parsing needs branch-heavy marker handling.
 func splitHeredocDiff(value string) (before, after string, ok bool) {
 	lines := strings.Split(value, "\n")
 	beforeLines := make([]string, 0, len(lines))
@@ -338,7 +339,6 @@ func splitHeredocDiff(value string) (before, after string, ok bool) {
 
 	type markerCandidate struct {
 		indent int
-		sign   byte
 	}
 
 	candidates := make([]markerCandidate, 0, len(lines))
@@ -354,9 +354,9 @@ func splitHeredocDiff(value string) (before, after string, ok bool) {
 		}
 		indent := len(line) - len(trimmed)
 		rest := trimmed[2:]
-		candidate := markerCandidate{indent: indent, sign: sign}
+		candidate := markerCandidate{indent: indent}
 		candidates = append(candidates, candidate)
-		if sign == '+' || (len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t')) {
+		if sign == '+' || (rest != "" && (rest[0] == ' ' || rest[0] == '\t')) {
 			anchorCandidates = append(anchorCandidates, candidate)
 		}
 	}
@@ -380,7 +380,7 @@ func splitHeredocDiff(value string) (before, after string, ok bool) {
 			sign := trimmed[0]
 			indent := len(line) - len(trimmed)
 			rest := trimmed[2:]
-			isTerraformMinus := sign == '-' && len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t')
+			isTerraformMinus := sign == '-' && rest != "" && (rest[0] == ' ' || rest[0] == '\t')
 			isTerraformPlus := sign == '+'
 			if indent == markerIndent && (isTerraformMinus || isTerraformPlus) {
 				lineWithoutMarker := line[:indent] + trimmed[1:]

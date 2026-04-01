@@ -92,6 +92,8 @@ func (m *Model) updateSettingsModalContent() {
 // defaultThemeName is the name of the default theme.
 const defaultThemeName = "default"
 
+const themeNameMonochrome = "monochrome"
+
 func fallbackValue(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return defaultThemeName
@@ -113,7 +115,7 @@ func themeDisplayName(name string) string {
 		return "Terraform Cloud"
 	case "monokai":
 		return "Monokai"
-	case "monochrome":
+	case themeNameMonochrome:
 		return "Monochrome"
 	case "nord":
 		return "Nord"
