@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -37,13 +38,14 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
+	notificationEnabled := true
 	cfg := Config{
 		Theme: ThemeConfig{Name: "Nord"},
 		History: HistoryConfig{
 			Enabled: true,
 			Level:   "minimal",
 		},
-		Notifications: NotificationsConfig{Enabled: true},
+		Notification: &notificationEnabled,
 	}
 	if err := manager.Save(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -58,7 +60,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	if loaded.History.Level != "minimal" {
 		t.Fatalf("expected history level to round-trip")
 	}
-	if !loaded.Notifications.Enabled {
+	if loaded.Notification == nil || !*loaded.Notification {
 		t.Fatalf("expected notifications to round-trip")
 	}
 }
@@ -70,7 +72,7 @@ func TestSaveAndLoadConfigMouseEnabledRoundTrip(t *testing.T) {
 	}
 	mouseEnabled := false
 	cfg := Config{
-		General: GeneralConfig{MouseEnabled: &mouseEnabled},
+		Mouse: &mouseEnabled,
 	}
 	if err := manager.Save(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -79,10 +81,10 @@ func TestSaveAndLoadConfigMouseEnabledRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if loaded.General.MouseEnabled == nil {
+	if loaded.Mouse == nil {
 		t.Fatal("expected mouse_enabled to be present after round-trip")
 	}
-	if *loaded.General.MouseEnabled {
+	if *loaded.Mouse {
 		t.Fatal("expected mouse_enabled=false to round-trip")
 	}
 }
@@ -158,6 +160,73 @@ func TestNewManagerEmptyPathUsesDefault(t *testing.T) {
 	}
 }
 
+func TestGeneratedSchemaIncludesMouseDescription(t *testing.T) {
+	type schemaNode struct {
+		Description string                 `json:"description"`
+		Properties  map[string]*schemaNode `json:"properties"`
+	}
+
+	data, err := os.ReadFile("config.schema.json")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+
+	var root schemaNode
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+
+	mouse := root.Properties["mouse"]
+	if mouse == nil {
+		t.Fatal("expected mouse property in schema")
+	}
+	if !strings.Contains(mouse.Description, "tmux") {
+		t.Fatalf("expected mouse description to mention tmux, got %q", mouse.Description)
+	}
+}
+
+func TestGeneratedSchemaIncludesPresetThemeEnum(t *testing.T) {
+	type schemaNode struct {
+		Enum       []string               `json:"enum"`
+		Properties map[string]*schemaNode `json:"properties"`
+		Items      *schemaNode            `json:"items"`
+	}
+
+	data, err := os.ReadFile("config.schema.json")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+
+	var root schemaNode
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+
+	presets := root.Properties["presets"]
+	if presets == nil || presets.Items == nil {
+		t.Fatal("expected presets items schema")
+	}
+	theme := presets.Items.Properties["theme"]
+	if theme == nil {
+		t.Fatal("expected preset theme schema")
+	}
+	if len(theme.Enum) == 0 {
+		t.Fatal("expected preset theme enum values")
+	}
+	if !contains(theme.Enum, "monochrome") {
+		t.Fatalf("expected monochrome preset theme suggestion, got %v", theme.Enum)
+	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestManagerPathNil(t *testing.T) {
 	var manager *Manager
 	if manager.Path() != "" {
@@ -175,8 +244,9 @@ func TestValidateConfigErrors(t *testing.T) {
 	if err := (Config{History: HistoryConfig{Level: "bogus"}}).Validate(); err == nil {
 		t.Fatalf("expected error for invalid history level")
 	}
+	notificationEnabled := true
 	if err := (Config{
-		Notifications: NotificationsConfig{Enabled: true},
+		Notification: &notificationEnabled,
 	}).Validate(); err != nil {
 		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)
 	}
@@ -184,14 +254,15 @@ func TestValidateConfigErrors(t *testing.T) {
 
 func TestDefaultConfigNotificationsDisabled(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.Notifications.Enabled {
+	if cfg.Notification != nil && *cfg.Notification {
 		t.Fatalf("expected notifications to be disabled by default")
 	}
 }
 
 func TestValidateNotificationsAllowsDisabled(t *testing.T) {
+	notificationEnabled := false
 	cfg := Config{
-		Notifications: NotificationsConfig{Enabled: false},
+		Notification: &notificationEnabled,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected disabled desktop notifications to validate, got %v", err)
@@ -199,8 +270,9 @@ func TestValidateNotificationsAllowsDisabled(t *testing.T) {
 }
 
 func TestValidateNotificationsAllowsEnabled(t *testing.T) {
+	notificationEnabled := true
 	cfg := Config{
-		Notifications: NotificationsConfig{Enabled: true},
+		Notification: &notificationEnabled,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected enabled desktop notifications to validate, got %v", err)

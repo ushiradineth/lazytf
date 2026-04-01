@@ -7,9 +7,9 @@ import (
 
 // ProjectConfig overrides config for a specific project path.
 type ProjectConfig struct {
-	Theme      string   `yaml:"theme,omitempty"`
-	Flags      []string `yaml:"flags,omitempty"`
-	PresetName string   `yaml:"preset_name,omitempty"`
+	Theme      string   `yaml:"theme,omitempty" description:"Built-in UI theme override for this project."`
+	Flags      []string `yaml:"flags,omitempty" description:"Additional Terraform flags for this project."`
+	PresetName string   `yaml:"preset_name,omitempty" description:"Preset name to apply for this project before project-specific overrides."`
 }
 
 // ProjectOverrideFor returns the project override matching a path.

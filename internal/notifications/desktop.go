@@ -46,7 +46,7 @@ func (n *DesktopNotifier) Notify(ctx context.Context, event OperationEvent) erro
 	}
 
 	title, message := formatDesktopNotification(event)
-	if err := n.notifyFn(title, message, nil); err != nil {
+	if err := n.notifyFn(title, message, ""); err != nil {
 		return fmt.Errorf("send desktop notification: %w", err)
 	}
 

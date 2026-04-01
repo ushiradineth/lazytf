@@ -1,61 +1,73 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "general": {
-      "properties": {
-        "default_environment": {
-          "type": "string"
-        },
-        "mouse_enabled": {
-          "type": "boolean"
-        }
-      },
-      "type": "object"
+    "default_environment": {
+      "description": "Default workspace or folder environment to select when lazytf starts.",
+      "type": "string"
     },
     "history": {
+      "description": "History storage and retention settings.",
       "properties": {
         "compression_threshold": {
+          "description": "Compress stored output larger than this many bytes.",
           "type": "integer"
         },
         "enabled": {
+          "description": "Enable persistent operation history.",
           "type": "boolean"
         },
         "level": {
+          "description": "History detail level. Supported values are minimal, standard, and full.",
           "type": "string"
         },
         "path": {
+          "description": "Path to the history database file.",
           "type": "string"
         }
       },
       "type": "object"
     },
-    "notifications": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        }
-      },
-      "type": "object"
+    "mouse": {
+      "description": "Enable mouse navigation in the UI. By default lazytf enables mouse outside tmux and disables it inside tmux to respect tmux mouse settings. Set this explicitly to override that behavior.",
+      "type": "boolean"
+    },
+    "notification": {
+      "description": "Enable user notifications for important UI events. Set this explicitly to override the default behavior.",
+      "type": "boolean"
     },
     "presets": {
+      "description": "Named presets that bundle environment selection, workdir, theme, and default Terraform flags.",
       "items": {
         "properties": {
           "environment": {
+            "description": "Workspace or folder environment selected when this preset is used.",
             "type": "string"
           },
           "flags": {
+            "description": "Additional Terraform flags appended when this preset is selected.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "name": {
+            "description": "Preset name used with --preset.",
             "type": "string"
           },
           "theme": {
+            "description": "Built-in UI theme to apply when this preset is selected.",
+            "enum": [
+              "default",
+              "terraform-cloud",
+              "monokai",
+              "monochrome",
+              "nord",
+              "github-dark"
+            ],
             "type": "string"
           },
           "workdir": {
+            "description": "Working directory to use when this preset is selected.",
             "type": "string"
           }
         },
@@ -67,48 +79,76 @@
       "additionalProperties": {
         "properties": {
           "flags": {
+            "description": "Additional Terraform flags for this project.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "preset_name": {
+            "description": "Preset name to apply for this project before project-specific overrides.",
             "type": "string"
           },
           "theme": {
+            "description": "Built-in UI theme override for this project.",
+            "enum": [
+              "default",
+              "terraform-cloud",
+              "monokai",
+              "monochrome",
+              "nord",
+              "github-dark"
+            ],
             "type": "string"
           }
         },
         "type": "object"
       },
+      "description": "Per-project overrides keyed by project path.",
       "type": "object"
     },
     "terraform": {
+      "description": "Terraform execution settings used by lazytf.",
       "properties": {
         "binary": {
+          "description": "Path to the Terraform binary to run.",
           "type": "string"
         },
         "default_flags": {
+          "description": "Default flags appended to Terraform commands run by lazytf.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "parallelism": {
+          "description": "Default Terraform parallelism value used when no explicit -parallelism flag is provided.",
           "type": "integer"
         },
         "timeout": {
+          "description": "Maximum time allowed for Terraform commands before lazytf cancels them.",
           "type": "string"
         },
         "working_dir": {
+          "description": "Default working directory used when no folder or preset overrides it.",
           "type": "string"
         }
       },
       "type": "object"
     },
     "theme": {
+      "description": "Theme settings for the lazytf UI.",
       "properties": {
         "name": {
+          "description": "Built-in UI theme name.",
+          "enum": [
+            "default",
+            "terraform-cloud",
+            "monokai",
+            "monochrome",
+            "nord",
+            "github-dark"
+          ],
           "type": "string"
         }
       },

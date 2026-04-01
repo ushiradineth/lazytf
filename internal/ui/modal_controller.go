@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -54,7 +55,7 @@ func (m *Model) updateSettingsModalContent() {
 
 		// General section
 		items = append(items, components.HelpItem{Key: "General", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "default env", Description: fallbackValue(cfg.General.DefaultEnvironment)})
+		items = append(items, components.HelpItem{Key: "default env", Description: fallbackValue(cfg.DefaultEnvironment)})
 
 		// Theme section
 		items = append(items, components.HelpItem{Key: "", IsHeader: true})
@@ -91,6 +92,8 @@ func (m *Model) updateSettingsModalContent() {
 // defaultThemeName is the name of the default theme.
 const defaultThemeName = "default"
 
+const themeNameMonochrome = "monochrome"
+
 func fallbackValue(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return defaultThemeName
@@ -101,13 +104,7 @@ func fallbackValue(value string) string {
 // Theme modal methods
 
 // availableThemes returns the list of available theme names.
-var availableThemes = []string{
-	defaultThemeName,
-	"terraform-cloud",
-	"monokai",
-	"nord",
-	"github-dark",
-}
+var availableThemes = styles.BuiltInThemeNames()
 
 // themeDisplayName returns a user-friendly display name for a theme.
 func themeDisplayName(name string) string {
@@ -118,6 +115,8 @@ func themeDisplayName(name string) string {
 		return "Terraform Cloud"
 	case "monokai":
 		return "Monokai"
+	case themeNameMonochrome:
+		return "Monochrome"
 	case "nord":
 		return "Nord"
 	case "github-dark":
@@ -206,6 +205,47 @@ func (m *Model) previewSelectedTheme() {
 	m.previewThemeName = themeName
 	newStyles := styles.NewStyles(theme)
 	m.applyStyles(newStyles)
+}
+
+func (m *Model) commitSelectedTheme() tea.Cmd {
+	if m.themeModal == nil {
+		return nil
+	}
+
+	selectedIdx := m.themeModal.GetSelectedIndex()
+	if selectedIdx < 0 || selectedIdx >= len(availableThemes) {
+		return nil
+	}
+
+	themeName := availableThemes[selectedIdx]
+	theme, err := styles.ResolveTheme(themeName)
+	if err != nil {
+		return m.toastError(fmt.Sprintf("Theme apply failed: %v", err))
+	}
+
+	m.applyStyles(styles.NewStyles(theme))
+	m.previewThemeName = themeName
+	if m.config != nil {
+		m.config.Theme.Name = themeName
+		if m.configView != nil {
+			m.configView.SetConfig(m.config)
+		}
+	}
+
+	if m.themeModal != nil {
+		m.themeModal.Hide()
+	}
+	m.modalState = ModalNone
+	m.originalStyles = nil
+	m.previewThemeName = ""
+
+	if m.config == nil || m.configManager == nil {
+		return m.toastInfo("Theme applied for this session only")
+	}
+	if err := m.configManager.Save(*m.config); err != nil {
+		return m.toastInfo(fmt.Sprintf("Theme applied for this session only: %v", err))
+	}
+	return m.toastSuccess("Theme saved: " + themeDisplayName(themeName))
 }
 
 // applyStyles updates all components with new styles.

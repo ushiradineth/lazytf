@@ -6,16 +6,14 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs =
-    {
-      self,
-      flake-utils,
-      nixpkgs,
-    }:
+  outputs = {
+    self,
+    flake-utils,
+    nixpkgs,
+  }:
     (flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs { inherit system; };
+      system: let
+        pkgs = import nixpkgs {inherit system;};
         appVersion = pkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
         lazytf = pkgs.buildGoModule {
           pname = "lazytf";
@@ -45,8 +43,7 @@
             mainProgram = "lazytf";
           };
         };
-      in
-      {
+      in {
         packages.default = lazytf;
         packages.lazytf = lazytf;
 

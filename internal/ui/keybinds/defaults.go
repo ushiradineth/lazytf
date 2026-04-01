@@ -595,6 +595,13 @@ func registerModalBindings(r *Registry) {
 		Hidden: true,
 	})
 	r.Register(Binding{
+		Keys:   []string{"enter"},
+		Action: ActionSelect,
+		Scope:  ScopeModal,
+		Modal:  ModalTheme,
+		Hidden: true,
+	})
+	r.Register(Binding{
 		Keys:   []string{"j", "down"},
 		Action: ActionScrollDown,
 		Scope:  ScopeModal,

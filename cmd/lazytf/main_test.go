@@ -25,35 +25,91 @@ var testMu sync.Mutex
 
 func TestRun_EmptyPlanFilePath(t *testing.T) {
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
 	})
 	useTempConfig(t)
 	planFile = ""
 
-	// Pass an empty string as plan file path - should fail to parse
+	// Positional args are no longer supported.
 	err := run(&cobra.Command{}, []string{""})
 	if err == nil {
-		t.Fatalf("expected error for empty plan file path")
+		t.Fatalf("expected positional-argument error")
 	}
-	if !strings.Contains(err.Error(), "failed to parse plan file") {
+	if !strings.Contains(err.Error(), "positional arguments are not supported") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestRun_ParseFileError(t *testing.T) {
+func TestRun_ReadOnlyRequiresPlan(t *testing.T) {
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
 	})
 	useTempConfig(t)
-	planFile = filepath.Join(t.TempDir(), "missing.json")
+	planFile = ""
+	readOnly = true
 
 	err := run(&cobra.Command{}, nil)
 	if err == nil {
-		t.Fatalf("expected error for missing plan file")
+		t.Fatalf("expected readonly/plan validation error")
 	}
-	if !strings.Contains(err.Error(), "failed to parse plan file") {
+	if !strings.Contains(err.Error(), "--readonly requires --plan") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_PlanStdinRequiresPipe(t *testing.T) {
+	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		readOnly = oldReadOnly
+	})
+	useTempConfig(t)
+
+	planFile = "-"
+	readOnly = true
+
+	err := run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatalf("expected stdin pipe requirement error")
+	}
+	if !strings.Contains(err.Error(), "requires piped input") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_PlanStdinEmptyInput(t *testing.T) {
+	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	oldStdin := os.Stdin
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		readOnly = oldReadOnly
+		os.Stdin = oldStdin
+	})
+	useTempConfig(t)
+
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	_ = writePipe.Close()
+	os.Stdin = readPipe
+
+	planFile = "-"
+	readOnly = true
+
+	err = run(&cobra.Command{}, nil)
+	if err == nil {
+		t.Fatalf("expected empty stdin error")
+	}
+	if !strings.Contains(err.Error(), "stdin plan input is empty") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -221,15 +277,18 @@ func useTempConfig(t *testing.T) {
 	oldConfigPath := configPath
 	oldThemeName := themeName
 	oldNoHistory := noHistory
+	oldReadOnly := readOnly
 	t.Cleanup(func() {
 		configPath = oldConfigPath
 		themeName = oldThemeName
 		noHistory = oldNoHistory
+		readOnly = oldReadOnly
 		testMu.Unlock()
 	})
 	configPath = filepath.Join(t.TempDir(), "config.yaml")
 	themeName = ""
 	noHistory = true
+	readOnly = false
 }
 
 func TestResolveFolderSelectionEmpty(t *testing.T) {
@@ -272,6 +331,77 @@ func TestResolveFolderSelectionAbsolute(t *testing.T) {
 	}
 	if manager.validated != absFolder {
 		t.Fatalf("expected validate to be called with abs folder")
+	}
+}
+
+func TestDetectCurrentWorkspaceForPlanInput(t *testing.T) {
+	oldManager := newWorkspaceManager
+	t.Cleanup(func() {
+		newWorkspaceManager = oldManager
+	})
+
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return &fakeWorkspaceManager{current: "prod"}, nil
+	}
+	if got := detectCurrentWorkspaceForPlanInput(t.TempDir()); got != "prod" {
+		t.Fatalf("expected workspace prod, got %q", got)
+	}
+}
+
+func TestDetectCurrentWorkspaceForPlanInputError(t *testing.T) {
+	oldManager := newWorkspaceManager
+	t.Cleanup(func() {
+		newWorkspaceManager = oldManager
+	})
+
+	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+		return &fakeWorkspaceManager{currentErr: errors.New("boom")}, nil
+	}
+	if got := detectCurrentWorkspaceForPlanInput(t.TempDir()); got != "" {
+		t.Fatalf("expected empty workspace on error, got %q", got)
+	}
+}
+
+func TestReadPlanWorkdirHintRelative(t *testing.T) {
+	plansDir := t.TempDir()
+	planPath := filepath.Join(plansDir, "sample.tfplan")
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+	if err := os.WriteFile(planPath+".workdir", []byte("../terraform/dummy\n"), 0o600); err != nil {
+		t.Fatalf("write workdir hint: %v", err)
+	}
+
+	got, err := readPlanWorkdirHint(planPath)
+	if err != nil {
+		t.Fatalf("readPlanWorkdirHint error: %v", err)
+	}
+	expected := filepath.Clean(filepath.Join(plansDir, "..", "terraform", "dummy"))
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestReadPlanWorkdirHintMissing(t *testing.T) {
+	_, err := readPlanWorkdirHint(filepath.Join(t.TempDir(), "missing.tfplan"))
+	if err == nil {
+		t.Fatal("expected error for missing workdir hint")
+	}
+}
+
+func TestReadPlanWorkdirHintAbsoluteRejected(t *testing.T) {
+	plansDir := t.TempDir()
+	planPath := filepath.Join(plansDir, "sample.tfplan")
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+	if err := os.WriteFile(planPath+".workdir", []byte("/tmp/anywhere\n"), 0o600); err != nil {
+		t.Fatalf("write workdir hint: %v", err)
+	}
+
+	_, err := readPlanWorkdirHint(planPath)
+	if err == nil || !strings.Contains(err.Error(), "absolute plan workdir hints are not allowed") {
+		t.Fatalf("expected absolute hint rejection, got %v", err)
 	}
 }
 
@@ -388,45 +518,143 @@ func TestRun_FolderSelectionError(t *testing.T) {
 
 func TestRun_InvalidTheme(t *testing.T) {
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	oldStdin := os.Stdin
 	oldTheme := themeName
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
+		os.Stdin = oldStdin
 		themeName = oldTheme
 	})
 	useTempConfig(t)
 
-	planFile = filepath.Join("..", "..", "testdata", "plans", "sample.txt")
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	if _, err := writePipe.WriteString("Terraform will perform the following actions:\n\n  # aws_instance.web will be created\n  + resource \"aws_instance\" \"web\" {\n      + id = (known after apply)\n    }\n\nPlan: 1 to add, 0 to change, 0 to destroy.\n"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	_ = writePipe.Close()
+	os.Stdin = readPipe
+
+	planFile = "-"
+	readOnly = true
 	themeName = "missing-theme"
 
-	err := run(&cobra.Command{}, nil)
+	err = run(&cobra.Command{}, nil)
 	if err == nil {
 		t.Fatalf("expected theme error")
 	}
 }
 
-func TestRun_PlanArgRunsReadOnly(t *testing.T) {
+func TestRun_PlanInputRunsExecutionModeByDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	t.Cleanup(func() {
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 	})
 	useTempConfig(t)
 
-	planFile = ""
+	planFile = filepath.Join(t.TempDir(), "plan.tfplan")
+	readOnly = false
 	called := false
-	programRunner = func(_ tea.Model) error {
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
 		called = true
 		return nil
 	}
+	programRunner = func(_ tea.Model) error {
+		t.Fatalf("program runner should not be called in execution mode")
+		return nil
+	}
 
-	// When a plan file arg is provided, it runs in read-only mode
-	err := run(&cobra.Command{}, []string{filepath.Join("..", "..", "testdata", "plans", "sample.txt")})
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\ncmd=\"$1\"\nshift\nif [ \"$cmd\" = \"show\" ]; then\necho \"No changes. Infrastructure is up-to-date.\"\nexit 0\nfi\nexit 0\n"
+	if err := os.WriteFile(tfPath, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
+		t.Fatalf("chmod terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	err := run(&cobra.Command{}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
-		t.Fatalf("expected program runner to be called")
+		t.Fatalf("expected execution mode runner to be called")
+	}
+}
+
+func TestRun_PlanStdinRunsExecutionModeByDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldPlanFile := planFile
+	oldReadOnly := readOnly
+	oldStdin := os.Stdin
+	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		readOnly = oldReadOnly
+		os.Stdin = oldStdin
+		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
+	})
+	useTempConfig(t)
+
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	if _, err := writePipe.WriteString("Terraform will perform the following actions:\n\n  # aws_instance.web will be created\n  + resource \"aws_instance\" \"web\" {\n      + id = (known after apply)\n    }\n\nPlan: 1 to add, 0 to change, 0 to destroy.\n"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	_ = writePipe.Close()
+	os.Stdin = readPipe
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	called := false
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		called = true
+		return nil
+	}
+	programRunner = func(_ tea.Model) error {
+		t.Fatalf("program runner should not be called in execution mode")
+		return nil
+	}
+
+	planFile = "-"
+	readOnly = false
+
+	err = run(&cobra.Command{}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatalf("expected execution mode runner to be called")
 	}
 }
 
@@ -461,24 +689,48 @@ func TestRunProgramError(t *testing.T) {
 }
 
 func TestRunMainSuccess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
 	oldArgs := os.Args
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
 	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
 		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
 	})
 	useTempConfig(t)
 
-	sample := filepath.Join("..", "..", "testdata", "plans", "sample.txt")
-	os.Args = []string{"lazytf", "--file", sample}
+	planPath := filepath.Join(t.TempDir(), "plan.tfplan")
+	os.Args = []string{"lazytf", "--plan", planPath, "--readonly"}
 	planFile = ""
+	readOnly = false
 	called := false
 	programRunner = func(_ tea.Model) error {
 		called = true
 		return nil
 	}
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		t.Fatalf("execution mode runner should not be called in readonly mode")
+		return nil
+	}
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\ncmd=\"$1\"\nshift\nif [ \"$cmd\" = \"show\" ]; then\necho \"No changes. Infrastructure is up-to-date.\"\nexit 0\nfi\nexit 0\n"
+	if err := os.WriteFile(tfPath, []byte(script), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
+		t.Fatalf("chmod terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
 
 	if err := runMain(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -491,17 +743,20 @@ func TestRunMainSuccess(t *testing.T) {
 func TestRunMainError(t *testing.T) {
 	oldArgs := os.Args
 	oldPlanFile := planFile
+	oldReadOnly := readOnly
 	oldRunner := programRunner
 	t.Cleanup(func() {
 		os.Args = oldArgs
 		planFile = oldPlanFile
+		readOnly = oldReadOnly
 		programRunner = oldRunner
 	})
 	useTempConfig(t)
 
 	// Pass a non-existent plan file to trigger an error
-	os.Args = []string{"lazytf", "--file", "/nonexistent/plan.txt"}
+	os.Args = []string{"lazytf", "--plan", "/nonexistent/plan.tfplan"}
 	planFile = ""
+	readOnly = false
 	programRunner = func(_ tea.Model) error {
 		t.Fatalf("program runner should not be called on error")
 		return nil
@@ -513,7 +768,17 @@ func TestRunMainError(t *testing.T) {
 }
 
 type fakeWorkspaceManager struct {
-	switchErr error
+	switchErr  error
+	current    string
+	currentErr error
+}
+
+func (f *fakeWorkspaceManager) Current(ctx context.Context) (string, error) {
+	_ = ctx
+	if f.currentErr != nil {
+		return "", f.currentErr
+	}
+	return f.current, nil
 }
 
 func (f *fakeWorkspaceManager) Switch(ctx context.Context, name string) error {
@@ -671,7 +936,8 @@ func TestShouldDisableHistoryForError(t *testing.T) {
 
 func TestOpenNotifierDisabled(t *testing.T) {
 	cfg := testConfig()
-	cfg.Notifications.Enabled = false
+	notificationEnabled := false
+	cfg.Notification = &notificationEnabled
 
 	notifier, err := openNotifier(&cfg)
 	if err != nil {
@@ -684,7 +950,8 @@ func TestOpenNotifierDisabled(t *testing.T) {
 
 func TestOpenNotifierEnabledDesktop(t *testing.T) {
 	cfg := testConfig()
-	cfg.Notifications.Enabled = true
+	notificationEnabled := true
+	cfg.Notification = &notificationEnabled
 
 	notifier, err := openNotifier(&cfg)
 	if err != nil {
@@ -1151,96 +1418,55 @@ func TestRunProgramWithMouse(t *testing.T) {
 	}
 }
 
-func TestNewRootCommandMouseDefaultOutsideTmux(t *testing.T) {
-	t.Setenv("TMUX", "")
-	oldMouse := mouseEnabled
-	t.Cleanup(func() {
-		mouseEnabled = oldMouse
-	})
-
-	_ = newRootCommand()
-	if !mouseEnabled {
-		t.Fatal("expected mouse enabled by default outside tmux")
+func TestRun_UsesConfigMouseWhenFlagNotSet(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
 	}
-}
 
-func TestNewRootCommandMouseDefaultInsideTmux(t *testing.T) {
-	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldRunner := programRunner
+	oldExecRunner := executionModeRunner
+	oldTheme := themeName
 	oldMouse := mouseEnabled
 	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		programRunner = oldRunner
+		executionModeRunner = oldExecRunner
+		themeName = oldTheme
 		mouseEnabled = oldMouse
 	})
+	useTempConfig(t)
 
-	_ = newRootCommand()
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	configContent := "mouse: false\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	planFile = ""
+	workDir = "."
+	themeName = ""
+	mouseEnabled = true
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	cmd := &cobra.Command{}
+	if err := run(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if mouseEnabled {
-		t.Fatal("expected mouse disabled by default inside tmux")
-	}
-}
-
-func TestNewRootCommandMouseFlagOverrideInsideTmux(t *testing.T) {
-	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
-	oldMouse := mouseEnabled
-	t.Cleanup(func() {
-		mouseEnabled = oldMouse
-	})
-
-	cmd := newRootCommand()
-	if err := cmd.ParseFlags([]string{"--mouse=true"}); err != nil {
-		t.Fatalf("parse flags: %v", err)
-	}
-	if !mouseEnabled {
-		t.Fatal("expected --mouse flag to override tmux default")
-	}
-}
-
-func TestApplyMouseConfigUsesConfigWhenFlagNotSet(t *testing.T) {
-	t.Setenv("TMUX", "/tmp/tmux-123/default,1,0")
-	oldMouse := mouseEnabled
-	t.Cleanup(func() {
-		mouseEnabled = oldMouse
-	})
-
-	cmd := newRootCommand()
-	enabled := true
-	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &enabled}})
-
-	if !mouseEnabled {
-		t.Fatal("expected config mouse_enabled to apply when --mouse is not set")
-	}
-}
-
-func TestApplyMouseConfigDoesNotOverrideExplicitFlag(t *testing.T) {
-	t.Setenv("TMUX", "")
-	oldMouse := mouseEnabled
-	t.Cleanup(func() {
-		mouseEnabled = oldMouse
-	})
-
-	cmd := newRootCommand()
-	if err := cmd.ParseFlags([]string{"--mouse=false"}); err != nil {
-		t.Fatalf("parse flags: %v", err)
-	}
-	enabled := true
-	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &enabled}})
-
-	if mouseEnabled {
-		t.Fatal("expected explicit --mouse flag to take precedence over config")
-	}
-}
-
-func TestApplyMouseConfigCanDisableMouseFromConfig(t *testing.T) {
-	t.Setenv("TMUX", "")
-	oldMouse := mouseEnabled
-	t.Cleanup(func() {
-		mouseEnabled = oldMouse
-	})
-
-	cmd := newRootCommand()
-	disabled := false
-	applyMouseConfig(cmd, config.Config{General: config.GeneralConfig{MouseEnabled: &disabled}})
-
-	if mouseEnabled {
-		t.Fatal("expected config mouse_enabled=false to disable mouse when --mouse is not set")
+		t.Fatalf("expected mouse to be disabled from config")
 	}
 }
 

@@ -48,28 +48,27 @@ type Model struct {
 	filterReplace bool
 
 	// Execution mode
-	executionMode    bool
-	executor         terraform.ExecutorInterface
-	applyView        *views.ApplyView
-	planView         *views.PlanView
-	planFlags        []string
-	applyFlags       []string
-	planRunFlags     []string
-	applyRunFlags    []string
-	planRunning      bool
-	applyRunning     bool
-	refreshRunning   bool
-	operationRunning bool
-	outputChan       <-chan string
-	cancelFunc       context.CancelFunc
-	execView         executionView
-	planStartedAt    time.Time
-	applyStartedAt   time.Time
-	refreshStartedAt time.Time
-	planFilePath     string
-	operationState   *terraform.OperationState
-	diagnosticsPanel *components.DiagnosticsPanel
-
+	executionMode      bool
+	executor           terraform.ExecutorInterface
+	applyView          *views.ApplyView
+	planView           *views.PlanView
+	planFlags          []string
+	applyFlags         []string
+	planRunFlags       []string
+	applyRunFlags      []string
+	planRunning        bool
+	applyRunning       bool
+	refreshRunning     bool
+	operationRunning   bool
+	outputChan         <-chan string
+	cancelFunc         context.CancelFunc
+	execView           executionView
+	planStartedAt      time.Time
+	applyStartedAt     time.Time
+	refreshStartedAt   time.Time
+	planFilePath       string
+	operationState     *terraform.OperationState
+	diagnosticsPanel   *components.DiagnosticsPanel
 	historyStore       *history.Store
 	historyPanel       *components.HistoryPanel
 	historyEntries     []history.Entry
@@ -94,6 +93,7 @@ type Model struct {
 	planEnvironment    string
 	planWorkDir        string
 	config             *config.Config
+	configManager      *config.Manager
 	configView         *views.ConfigView
 	envWorkDir         string
 	envCurrent         string
@@ -184,16 +184,20 @@ var newWorkspaceManager = func(workDir string) (workspaceManager, error) {
 
 // ExecutionConfig configures execution mode behavior.
 type ExecutionConfig struct {
-	Executor       *terraform.Executor
-	Flags          []string
-	WorkDir        string
-	EnvName        string
-	HistoryStore   *history.Store
-	HistoryLogger  *history.Logger
-	HistoryEnabled bool
-	Notifier       notifications.Notifier
-	Config         *config.Config
-	ConfigManager  *config.Manager
+	Executor               *terraform.Executor
+	Flags                  []string
+	WorkDir                string
+	EnvName                string
+	PreloadedPlanPath      string
+	PreloadedPlanEnv       string
+	PreloadedPlanDir       string
+	PreloadedPlanFromStdin bool
+	HistoryStore           *history.Store
+	HistoryLogger          *history.Logger
+	HistoryEnabled         bool
+	Notifier               notifications.Notifier
+	Config                 *config.Config
+	ConfigManager          *config.Manager
 }
 
 // NewModel creates a new application model.
@@ -296,6 +300,8 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 }
 
 // NewExecutionModelWithStyles creates a model configured for terraform execution with styles.
+//
+//nolint:funlen // Constructor wires execution dependencies and startup state in one place.
 func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appStyles *styles.Styles) *Model {
 	m := NewModelWithStyles(plan, appStyles)
 	m.executionMode = true
@@ -320,6 +326,18 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	}
 	m.envWorkDir = cfg.WorkDir
 	m.envCurrent = cfg.EnvName
+	if strings.TrimSpace(cfg.PreloadedPlanPath) != "" {
+		m.planFilePath = cfg.PreloadedPlanPath
+		m.planEnvironment = cfg.PreloadedPlanEnv
+		m.planWorkDir = cfg.PreloadedPlanDir
+	}
+	m.resourcesActiveTab = 0
+	if m.resourcesController != nil {
+		m.resourcesController.SetActiveTab(0)
+	}
+	if m.panelManager != nil {
+		m.panelManager.SetFocus(PanelResources)
+	}
 	m.envStrategy = environment.StrategyUnknown
 	m.planView = views.NewPlanView("", m.styles)
 	m.applyView = views.NewApplyView(m.styles)
@@ -337,7 +355,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 	if plan == nil {
 		m.mainArea.SetMode(ModeAbout)
 		if m.panelManager != nil {
-			m.panelManager.SetFocus(PanelMain)
+			m.panelManager.SetFocus(PanelResources)
 		}
 	}
 
@@ -361,6 +379,7 @@ func NewExecutionModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appS
 		m.panelManager.RegisterPanel(PanelHistory, m.historyPanel)
 	}
 	m.config = cfg.Config
+	m.configManager = cfg.ConfigManager
 	m.configView = views.NewConfigView(m.styles)
 	if m.configView != nil {
 		m.configView.SetConfig(m.config)
@@ -608,6 +627,10 @@ func (m *Model) updateEnvironmentPanel(_ []string) {
 }
 
 func (m *Model) applyCurrentEnvironment() {
+	if m.plan != nil {
+		// Preserve preloaded plans during startup environment reconciliation.
+		return
+	}
 	if m.envCurrent == "" {
 		return
 	}
@@ -1160,7 +1183,20 @@ func (m *Model) showConfirmApplyModal() {
 	// Build the confirmation message with plan summary
 	summary := m.planSummaryVerbose()
 	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
-	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.beginApply())
+	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.deferConfirmCommand(m.beginApply))
+}
+
+func (m *Model) deferConfirmCommand(factory func() tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		if factory == nil {
+			return nil
+		}
+		cmd := factory()
+		if cmd == nil {
+			return nil
+		}
+		return cmd()
+	}
 }
 
 func (m *Model) showConfirmModal(title, message, yesLabel string, yesCmd tea.Cmd) {
