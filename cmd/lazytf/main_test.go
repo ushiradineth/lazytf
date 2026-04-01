@@ -599,6 +599,10 @@ func TestRun_PlanInputRunsExecutionModeByDefault(t *testing.T) {
 }
 
 func TestRun_PlanStdinRunsExecutionModeByDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
 	oldPlanFile := planFile
 	oldReadOnly := readOnly
 	oldStdin := os.Stdin
@@ -622,6 +626,15 @@ func TestRun_PlanStdinRunsExecutionModeByDefault(t *testing.T) {
 	}
 	_ = writePipe.Close()
 	os.Stdin = readPipe
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	script := "#!/bin/sh\nexit 0\n"
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
 
 	called := false
 	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
@@ -1449,6 +1462,9 @@ func TestRun_UsesConfigMouseWhenFlagNotSet(t *testing.T) {
 	}
 
 	cmd := newRootCommand()
+	if flag := cmd.Flags().Lookup("mouse"); flag != nil {
+		flag.Changed = false
+	}
 	if err := run(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
