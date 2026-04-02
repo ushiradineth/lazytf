@@ -2838,6 +2838,62 @@ func TestBeginApplyReplacesExistingPlanFileArg(t *testing.T) {
 	}
 }
 
+func TestBeginApplyRemovesMultipleExistingPlanFileArgs(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+
+	oldPlanPathOne := filepath.Join(t.TempDir(), "old-one.tfplan")
+	if err := os.WriteFile(oldPlanPathOne, []byte("old-one"), 0o600); err != nil {
+		t.Fatalf("write old plan file one: %v", err)
+	}
+	oldPlanPathTwo := filepath.Join(t.TempDir(), "old-two.tfplan")
+	if err := os.WriteFile(oldPlanPathTwo, []byte("old-two"), 0o600); err != nil {
+		t.Fatalf("write old plan file two: %v", err)
+	}
+	newPlanPath := filepath.Join(t.TempDir(), "new.tfplan")
+	if err := os.WriteFile(newPlanPath, []byte("new"), 0o600); err != nil {
+		t.Fatalf("write new plan file: %v", err)
+	}
+
+	m.applyFlags = []string{"-parallelism=5", oldPlanPathOne, oldPlanPathTwo}
+	m.planFilePath = newPlanPath
+
+	cmd := m.beginApply()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	_ = cmd()
+
+	if mock.ApplyCalls != 1 {
+		t.Fatalf("expected one apply call, got %d", mock.ApplyCalls)
+	}
+
+	gotFlags := mock.LastApplyOpts.Flags
+	if len(gotFlags) != 2 {
+		t.Fatalf("expected apply flags and one plan path, got %v", gotFlags)
+	}
+	if gotFlags[1] != newPlanPath {
+		t.Fatalf("expected updated plan path in apply args, got %v", gotFlags)
+	}
+
+	planArgCount := 0
+	for _, flag := range gotFlags {
+		if strings.HasSuffix(strings.TrimSpace(flag), ".tfplan") {
+			planArgCount++
+		}
+	}
+	if planArgCount != 1 {
+		t.Fatalf("expected exactly one .tfplan arg, got %d in %v", planArgCount, gotFlags)
+	}
+}
+
 func TestBeginApplyFailsWhenSavedPlanMissing(t *testing.T) {
 	mock := setupMockExecutor(t)
 
@@ -4006,6 +4062,222 @@ func TestHandlePlanStartErrorClearsSavedPlanMetadata(t *testing.T) {
 	}
 	if m.plan != nil {
 		t.Fatal("expected plan to be cleared")
+	}
+}
+
+func TestHandlePlanStartSuccessClearsStalePlanResultPreservesPlanMetadata(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	planPath := filepath.Join(t.TempDir(), "plan.tfplan")
+	m.planFilePath = planPath
+	m.planRunFlags = []string{"-out=" + planPath}
+	m.lastPlanOutput = "stale output"
+	m.setPlan(&terraform.Plan{FormatVersion: "1.0"})
+
+	output := make(chan string)
+	close(output)
+	result := testutil.NewMockResult("plan output", 0)
+
+	_, cmd := m.handlePlanStart(PlanStartMsg{Result: result, Output: output})
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+
+	if m.planFilePath != planPath {
+		t.Fatalf("expected plan file path preserved, got %q", m.planFilePath)
+	}
+	if len(m.planRunFlags) != 1 || m.planRunFlags[0] != "-out="+planPath {
+		t.Fatalf("expected plan flags preserved, got %v", m.planRunFlags)
+	}
+	if m.lastPlanOutput != "" {
+		t.Fatalf("expected stale plan output to be cleared, got %q", m.lastPlanOutput)
+	}
+	if m.plan != nil {
+		t.Fatal("expected stale plan to be cleared")
+	}
+}
+
+func TestPlanLifecycleApplyUsesSavedPlanFromCurrentRun(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.PlanOutput = testutil.NewMockOutputChannel("Planning...", "Done")
+	mock.ApplyOutput = testutil.NewMockOutputChannel("Applying...", "Done")
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	m.envCurrent = "dev"
+
+	stalePlanPath := filepath.Join(t.TempDir(), "stale.tfplan")
+	m.applyFlags = []string{"-parallelism=5", stalePlanPath}
+
+	planCmd := m.beginPlan()
+	if planCmd == nil {
+		t.Fatal("expected non-nil plan command")
+	}
+
+	planPath := m.planFilePath
+	planRunFlags := append([]string{}, m.planRunFlags...)
+	if !strings.HasSuffix(planPath, ".tfplan") {
+		t.Fatalf("expected .tfplan output path, got %q", planPath)
+	}
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+
+	msg := planCmd()
+	startMsg, ok := msg.(PlanStartMsg)
+	if !ok {
+		t.Fatalf("expected PlanStartMsg, got %T", msg)
+	}
+	if startMsg.Error != nil {
+		t.Fatalf("unexpected plan start error: %v", startMsg.Error)
+	}
+
+	_, startCmd := m.handlePlanStart(startMsg)
+	if startCmd == nil {
+		t.Fatal("expected plan-start continuation command")
+	}
+
+	if m.planFilePath != planPath {
+		t.Fatalf("expected plan path preserved after plan start, got %q", m.planFilePath)
+	}
+	if strings.Join(m.planRunFlags, "|") != strings.Join(planRunFlags, "|") {
+		t.Fatalf("expected plan flags preserved after plan start, got %v", m.planRunFlags)
+	}
+
+	_, _ = m.handlePlanComplete(PlanCompleteMsg{
+		Plan:   &terraform.Plan{FormatVersion: "1.0"},
+		Result: startMsg.Result,
+		Output: "Plan: 1 to add, 0 to change, 0 to destroy.",
+	})
+
+	if m.planEnvironment != m.envCurrent {
+		t.Fatalf("expected plan environment %q, got %q", m.envCurrent, m.planEnvironment)
+	}
+	if filepath.Clean(m.planWorkDir) != filepath.Clean(mock.MockWorkDir) {
+		t.Fatalf("expected plan workdir %q, got %q", mock.MockWorkDir, m.planWorkDir)
+	}
+
+	applyCmd := m.beginApply()
+	if applyCmd == nil {
+		t.Fatal("expected non-nil apply command")
+	}
+	_ = applyCmd()
+
+	if mock.ApplyCalls != 1 {
+		t.Fatalf("expected one apply call, got %d", mock.ApplyCalls)
+	}
+
+	gotFlags := mock.LastApplyOpts.Flags
+	if len(gotFlags) != 2 {
+		t.Fatalf("expected apply flags and one plan path, got %v", gotFlags)
+	}
+	if gotFlags[1] != planPath {
+		t.Fatalf("expected saved plan path in apply args, got %v", gotFlags)
+	}
+	if strings.Contains(strings.Join(gotFlags, "|"), stalePlanPath) {
+		t.Fatalf("expected stale plan path to be removed, got %v", gotFlags)
+	}
+
+	planArgCount := 0
+	for _, flag := range gotFlags {
+		if strings.HasSuffix(strings.TrimSpace(flag), ".tfplan") {
+			planArgCount++
+		}
+	}
+	if planArgCount != 1 {
+		t.Fatalf("expected exactly one plan file arg, got %d in %v", planArgCount, gotFlags)
+	}
+}
+
+func TestPlanCompleteErrorClearsSavedPlanMetadataAfterSuccessfulPlanStart(t *testing.T) {
+	mock := setupMockExecutor(t)
+	mock.PlanOutput = testutil.NewMockOutputChannel("Planning...", "Done")
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.progressIndicator = nil
+	m.applyRunFlags = []string{"stale.tfplan"}
+
+	planCmd := m.beginPlan()
+	if planCmd == nil {
+		t.Fatal("expected non-nil plan command")
+	}
+
+	planPath := m.planFilePath
+	if err := os.WriteFile(planPath, []byte("plan"), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+
+	msg := planCmd()
+	startMsg, ok := msg.(PlanStartMsg)
+	if !ok {
+		t.Fatalf("expected PlanStartMsg, got %T", msg)
+	}
+
+	_, _ = m.handlePlanStart(startMsg)
+	if m.planFilePath == "" {
+		t.Fatal("expected plan metadata to exist before completion")
+	}
+
+	_, _ = m.handlePlanComplete(PlanCompleteMsg{
+		Error:  errors.New("plan failed"),
+		Result: startMsg.Result,
+		Output: "plan failed",
+	})
+
+	if m.planFilePath != "" {
+		t.Fatalf("expected plan file path cleared, got %q", m.planFilePath)
+	}
+	if m.planRunFlags != nil {
+		t.Fatalf("expected plan run flags cleared, got %v", m.planRunFlags)
+	}
+	if m.applyRunFlags != nil {
+		t.Fatalf("expected apply run flags cleared, got %v", m.applyRunFlags)
+	}
+	if m.planEnvironment != "" {
+		t.Fatalf("expected plan environment cleared, got %q", m.planEnvironment)
+	}
+	if m.planWorkDir != "" {
+		t.Fatalf("expected plan workdir cleared, got %q", m.planWorkDir)
+	}
+}
+
+func TestHandlePlanCompleteSuccessBindsScopeWhenPlanIsNil(t *testing.T) {
+	mock := setupMockExecutor(t)
+
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.executor = mock
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.envCurrent = "dev"
+	m.planRunning = true
+
+	_, _ = m.handlePlanComplete(PlanCompleteMsg{
+		Plan:   nil,
+		Result: testutil.NewMockResult("plan output", 0),
+		Output: "No changes.",
+	})
+
+	if m.planEnvironment != m.envCurrent {
+		t.Fatalf("expected plan environment %q, got %q", m.envCurrent, m.planEnvironment)
+	}
+	if filepath.Clean(m.planWorkDir) != filepath.Clean(mock.MockWorkDir) {
+		t.Fatalf("expected plan workdir %q, got %q", mock.MockWorkDir, m.planWorkDir)
 	}
 }
 
