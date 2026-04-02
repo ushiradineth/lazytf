@@ -5375,19 +5375,6 @@ func TestApplyViewOverlaysThemeModal(t *testing.T) {
 	_ = result
 }
 
-func TestApplyViewOverlaysSettingsModal(t *testing.T) {
-	m := NewExecutionModel(nil, ExecutionConfig{})
-	m.ready = true
-	m.width = 100
-	m.height = 30
-	m.updateLayout()
-	m.modalState = ModalSettings
-
-	result := m.applyViewOverlays("base view")
-	// Should apply settings modal overlay
-	_ = result
-}
-
 func TestApplyViewOverlaysNoModal(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

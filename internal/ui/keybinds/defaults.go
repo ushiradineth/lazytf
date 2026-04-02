@@ -41,15 +41,6 @@ func registerGlobalBindings(r *Registry) {
 		Category:    "General",
 	})
 
-	// Settings
-	r.Register(Binding{
-		Keys:        []string{","},
-		Action:      ActionToggleConfig,
-		Scope:       ScopeGlobal,
-		Description: "open settings",
-		Category:    "General",
-	})
-
 	// Theme
 	r.Register(Binding{
 		Keys:        []string{"T"},
@@ -577,29 +568,6 @@ func registerModalBindings(r *Registry) {
 		Action: ActionScrollUp,
 		Scope:  ScopeModal,
 		Modal:  ModalHelp,
-		Hidden: true,
-	})
-
-	// Settings modal
-	r.Register(Binding{
-		Keys:   []string{",", "esc"},
-		Action: ActionToggleConfig,
-		Scope:  ScopeModal,
-		Modal:  ModalSettings,
-		Hidden: true,
-	})
-	r.Register(Binding{
-		Keys:   []string{"j", "down"},
-		Action: ActionScrollDown,
-		Scope:  ScopeModal,
-		Modal:  ModalSettings,
-		Hidden: true,
-	})
-	r.Register(Binding{
-		Keys:   []string{"k", "up"},
-		Action: ActionScrollUp,
-		Scope:  ScopeModal,
-		Modal:  ModalSettings,
 		Hidden: true,
 	})
 

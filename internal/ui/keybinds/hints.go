@@ -112,8 +112,6 @@ func formatHint(b Binding) string {
 	switch desc {
 	case "toggle keybinds", "toggle keybinds help":
 		desc = "keybinds"
-	case "open settings", "toggle settings":
-		desc = "settings"
 	}
 
 	return key + ": " + desc

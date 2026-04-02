@@ -51,7 +51,6 @@ type ModalID int
 const (
 	ModalNone ModalID = iota
 	ModalHelp
-	ModalSettings
 	ModalConfirmApply
 	ModalTheme
 )

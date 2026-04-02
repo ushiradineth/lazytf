@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -38,66 +36,8 @@ func (m *Model) updateHelpModalContent() {
 	m.helpModal.Show()
 }
 
-func (m *Model) updateSettingsModalContent() {
-	if m.settingsModal == nil {
-		return
-	}
-
-	var items []components.HelpItem
-
-	if m.config == nil {
-		items = make([]components.HelpItem, 0, 2)
-		items = append(items, components.HelpItem{Key: "No configuration loaded.", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-	} else {
-		cfg := m.config
-		items = make([]components.HelpItem, 0, 20)
-
-		// General section
-		items = append(items, components.HelpItem{Key: "General", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "default env", Description: fallbackValue(cfg.DefaultEnvironment)})
-
-		// Theme section
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "Theme", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "name", Description: cfg.Theme.Name})
-
-		// Terraform section
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "Terraform", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "binary", Description: fallbackValue(cfg.Terraform.Binary)})
-		items = append(items, components.HelpItem{Key: "working dir", Description: fallbackValue(cfg.Terraform.WorkingDir)})
-		items = append(items, components.HelpItem{Key: "timeout", Description: cfg.Terraform.Timeout.String()})
-		items = append(items, components.HelpItem{Key: "parallelism", Description: strconv.Itoa(cfg.Terraform.Parallelism)})
-		items = append(items, components.HelpItem{Key: "default flags", Description: strings.Join(cfg.Terraform.DefaultFlags, " ")})
-
-		// History section
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "History", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "enabled", Description: strconv.FormatBool(cfg.History.Enabled)})
-		items = append(items, components.HelpItem{Key: "level", Description: cfg.History.Level})
-		items = append(items, components.HelpItem{Key: "path", Description: fallbackValue(cfg.History.Path)})
-
-		// Footer
-		items = append(items, components.HelpItem{Key: "", IsHeader: true})
-		items = append(items, components.HelpItem{Key: "esc: back", IsHeader: true})
-	}
-
-	m.settingsModal.SetTitle("Settings")
-	m.settingsModal.SetItems(items)
-	m.settingsModal.SetSize(m.width, m.height)
-	m.settingsModal.Show()
-}
-
 // defaultThemeName is the name of the default theme.
 const defaultThemeName = "default"
-
-func fallbackValue(value string) string {
-	if strings.TrimSpace(value) == "" {
-		return defaultThemeName
-	}
-	return value
-}
 
 // Theme modal methods
 
@@ -227,9 +167,6 @@ func (m *Model) commitSelectedTheme() tea.Cmd {
 	m.previewThemeName = themeName
 	if m.config != nil {
 		m.config.Theme.Name = themeName
-		if m.configView != nil {
-			m.configView.SetConfig(m.config)
-		}
 	}
 
 	if m.themeModal != nil {
@@ -271,9 +208,6 @@ func (m *Model) applyStyles(newStyles *styles.Styles) {
 	if m.themeModal != nil {
 		m.themeModal.SetStyles(newStyles)
 	}
-	if m.settingsModal != nil {
-		m.settingsModal.SetStyles(newStyles)
-	}
 	if m.toast != nil {
 		m.toast.SetStyles(newStyles)
 	}
@@ -297,9 +231,6 @@ func (m *Model) applyStyles(newStyles *styles.Styles) {
 	}
 	if m.planView != nil {
 		m.planView.SetStyles(newStyles)
-	}
-	if m.configView != nil {
-		m.configView.SetStyles(newStyles)
 	}
 	if m.stateListView != nil {
 		m.stateListView.SetStyles(newStyles)

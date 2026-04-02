@@ -210,7 +210,6 @@ func TestConvertModalState(t *testing.T) {
 		want keybinds.ModalID
 	}{
 		{"help", ModalHelp, keybinds.ModalHelp},
-		{"settings", ModalSettings, keybinds.ModalSettings},
 		{"confirm apply", ModalConfirmApply, keybinds.ModalConfirmApply},
 		{"theme", ModalTheme, keybinds.ModalTheme},
 		{"none", ModalNone, keybinds.ModalNone},
@@ -642,12 +641,10 @@ func TestHandleActionStateMoveShowsDestinationInput(t *testing.T) {
 func TestHandleActionScrollUpNilModals(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.helpModal = nil
-	m.settingsModal = nil
 	m.themeModal = nil
 
 	tests := []keybinds.ModalID{
 		keybinds.ModalHelp,
-		keybinds.ModalSettings,
 		keybinds.ModalTheme,
 		keybinds.ModalNone,
 	}
@@ -665,12 +662,10 @@ func TestHandleActionScrollUpNilModals(t *testing.T) {
 func TestHandleActionScrollDownNilModals(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.helpModal = nil
-	m.settingsModal = nil
 	m.themeModal = nil
 
 	tests := []keybinds.ModalID{
 		keybinds.ModalHelp,
-		keybinds.ModalSettings,
 		keybinds.ModalTheme,
 		keybinds.ModalNone,
 	}
@@ -972,38 +967,6 @@ func TestHandleActionScrollDownWithInitializedHelpModal(t *testing.T) {
 		cmd := m.handleActionScrollDown(ctx)
 		if cmd != nil {
 			t.Error("expected nil cmd for help modal scroll")
-		}
-	}
-}
-
-func TestHandleActionScrollUpWithInitializedSettingsModal(t *testing.T) {
-	m := NewExecutionModel(nil, ExecutionConfig{})
-	m.ready = true
-	m.width = 100
-	m.height = 30
-	m.updateLayout()
-
-	if m.settingsModal != nil {
-		ctx := &keybinds.Context{ActiveModal: keybinds.ModalSettings}
-		cmd := m.handleActionScrollUp(ctx)
-		if cmd != nil {
-			t.Error("expected nil cmd for settings modal scroll")
-		}
-	}
-}
-
-func TestHandleActionScrollDownWithInitializedSettingsModal(t *testing.T) {
-	m := NewExecutionModel(nil, ExecutionConfig{})
-	m.ready = true
-	m.width = 100
-	m.height = 30
-	m.updateLayout()
-
-	if m.settingsModal != nil {
-		ctx := &keybinds.Context{ActiveModal: keybinds.ModalSettings}
-		cmd := m.handleActionScrollDown(ctx)
-		if cmd != nil {
-			t.Error("expected nil cmd for settings modal scroll")
 		}
 	}
 }
@@ -1729,7 +1692,7 @@ func TestHandleActionQuitKeybind(t *testing.T) {
 }
 
 // ============================================================================
-// handleActionToggleHelp/Config/Theme tests (keybind specific)
+// handleActionToggleHelp/Theme tests (keybind specific)
 // ============================================================================
 
 func TestHandleActionToggleHelpKeybind(t *testing.T) {
@@ -1741,20 +1704,6 @@ func TestHandleActionToggleHelpKeybind(t *testing.T) {
 
 	ctx := &keybinds.Context{}
 	cmd := m.handleActionToggleHelp(ctx)
-	if cmd != nil {
-		t.Error("expected nil cmd")
-	}
-}
-
-func TestHandleActionToggleConfigKeybind(t *testing.T) {
-	m := NewExecutionModel(nil, ExecutionConfig{})
-	m.ready = true
-	m.width = 100
-	m.height = 30
-	m.updateLayout()
-
-	ctx := &keybinds.Context{}
-	cmd := m.handleActionToggleConfig(ctx)
 	if cmd != nil {
 		t.Error("expected nil cmd")
 	}
