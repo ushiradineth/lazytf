@@ -1611,8 +1611,8 @@ func TestTargetSelectionMarkersRenderInTargetMode(t *testing.T) {
 	}
 
 	view := r.View()
-	if !strings.Contains(view, "[x]") {
-		t.Fatalf("expected selected marker in view, got %q", view)
+	if strings.Contains(view, "[x]") || strings.Contains(view, "[-]") || strings.Contains(view, "[ ]") {
+		t.Fatalf("expected no checkbox markers in target mode view, got %q", view)
 	}
 }
 

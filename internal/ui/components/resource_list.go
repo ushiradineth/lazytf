@@ -660,9 +660,6 @@ func (r *ResourceList) renderResource(
 	if indent > 0 {
 		prefix = GetPadding(indent)
 	}
-	if targetMarker != "" {
-		prefix += targetMarker + " "
-	}
 	address := resource.Address
 	if indent > 0 {
 		address = trimModulePrefix(resource.Address, indent)
@@ -1199,9 +1196,6 @@ func (r *ResourceList) renderGroup(
 	prefix := ""
 	if indent > 0 {
 		prefix = GetPadding(indent)
-	}
-	if targetMarker != "" {
-		prefix += targetMarker + " "
 	}
 	line := fmt.Sprintf("%s%s %s (%d)", prefix, indicator, group, count)
 	if contentWidth > 0 {
