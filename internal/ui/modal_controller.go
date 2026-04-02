@@ -19,7 +19,7 @@ func (m *Model) updateHelpModalContent() {
 	}
 
 	// Get help items from the keybind registry
-	kbItems := m.keybindRegistry.ForHelpModal(m.executionMode)
+	kbItems := m.keybindRegistry.ForHelpModal(m.buildKeybindContext())
 
 	// Convert keybinds.HelpItem to components.HelpItem
 	items := make([]components.HelpItem, len(kbItems)+1)

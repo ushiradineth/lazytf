@@ -1181,6 +1181,38 @@ func TestFocusModeBindingsResolveOnlyInExecutionMode(t *testing.T) {
 	}
 }
 
+func TestRegistry_Resolve_ToggleStatusBinding(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, false)
+
+	ctx := &Context{
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+	}
+	binding := r.Resolve("s", ctx)
+	if binding == nil {
+		t.Fatal("expected 's' binding to resolve")
+	}
+	if binding.Action != ActionToggleStatus {
+		t.Fatalf("expected ActionToggleStatus, got %v", binding.Action)
+	}
+	if binding.Scope != ScopePanelTab {
+		t.Fatalf("expected panel-tab binding precedence for resources tab, got scope %v", binding.Scope)
+	}
+
+	nonResourcesCtx := &Context{
+		FocusedPanel:       PanelWorkspace,
+		ResourcesActiveTab: 0,
+	}
+	nonResourcesBinding := r.Resolve("s", nonResourcesCtx)
+	if nonResourcesBinding == nil {
+		t.Fatal("expected 's' binding to resolve outside resources panel too")
+	}
+	if nonResourcesBinding.Scope != ScopeGlobal {
+		t.Fatalf("expected global binding outside resources panel, got scope %v", nonResourcesBinding.Scope)
+	}
+}
+
 func TestBinding_Matches_GlobalWithCondition(t *testing.T) {
 	// Test global binding with condition that passes
 	conditionCalled := false

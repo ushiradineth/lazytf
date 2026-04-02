@@ -8,6 +8,15 @@ import (
 // categoryExecution is the name of the Execution category.
 const categoryExecution = "Execution"
 
+var helpCategoryOrder = []string{
+	"Panel Navigation",
+	"Navigation",
+	"Resources Panel",
+	categoryExecution,
+	"Search",
+	"General",
+}
+
 // HintOptions configures hint generation.
 type HintOptions struct {
 	// MaxPrimary is the maximum number of primary hints to show.
@@ -40,9 +49,6 @@ func (r *Registry) ForStatusBar(ctx *Context, opts HintOptions) string {
 		return ""
 	}
 
-	// Deduplicate by key
-	bindings = deduplicateByKey(bindings)
-
 	// Filter out hidden bindings and those without descriptions
 	var visible []Binding
 	for _, b := range bindings {
@@ -53,6 +59,10 @@ func (r *Registry) ForStatusBar(ctx *Context, opts HintOptions) string {
 			visible = append(visible, b)
 		}
 	}
+
+	// Deduplicate by key after filtering so hidden high-priority duplicates
+	// do not mask visible hints.
+	visible = deduplicateByKey(visible)
 
 	// Sort by priority (higher first), then by key
 	sort.Slice(visible, func(i, j int) bool {
@@ -117,61 +127,32 @@ type HelpItem struct {
 }
 
 // ForHelpModal returns all bindings formatted for the help modal.
-func (r *Registry) ForHelpModal(executionMode bool) []HelpItem {
-	items := make([]HelpItem, 0, 32) // Pre-allocate with reasonable capacity
-
-	// Define category order
-	categoryOrder := []string{
-		"Panel Navigation",
-		"Navigation",
-		"Resources Panel",
-		categoryExecution,
-		"Search",
-		"General",
+func (r *Registry) ForHelpModal(ctx *Context) []HelpItem {
+	if ctx == nil {
+		ctx = NewContext()
 	}
+	items := make([]HelpItem, 0, 32) // Pre-allocate with reasonable capacity
 
 	byCategory := r.GetBindingsByCategory()
 
-	for _, category := range categoryOrder {
+	for _, category := range helpCategoryOrder {
 		bindings, ok := byCategory[category]
 		if !ok || len(bindings) == 0 {
 			continue
 		}
 
 		// Filter execution bindings when not in execution mode
-		if !executionMode && category == categoryExecution {
+		if !ctx.ExecutionMode && category == categoryExecution {
 			continue
 		}
 
-		// Add header
-		items = append(items, HelpItem{
-			Key:      category,
-			IsHeader: true,
-		})
+		sectionItems := helpSectionItems(bindings, ctx)
 
-		// Deduplicate and sort bindings
-		bindings = deduplicateByKey(bindings)
-		sort.Slice(bindings, func(i, j int) bool {
-			return bindings[i].KeyString() < bindings[j].KeyString()
-		})
-
-		// Add bindings
-		for _, b := range bindings {
-			if b.Hidden {
-				continue
-			}
-			items = append(items, HelpItem{
-				Key:         b.AllKeysString(),
-				Description: b.Description,
-				IsHeader:    false,
-			})
+		if len(sectionItems) == 0 {
+			continue
 		}
 
-		// Add empty line after section
-		items = append(items, HelpItem{
-			Key:      "",
-			IsHeader: true,
-		})
+		items = appendHelpSection(items, category, sectionItems)
 	}
 
 	// Remove trailing empty line
@@ -179,5 +160,36 @@ func (r *Registry) ForHelpModal(executionMode bool) []HelpItem {
 		items = items[:len(items)-1]
 	}
 
+	return items
+}
+
+func helpSectionItems(bindings []Binding, ctx *Context) []HelpItem {
+	bindings = deduplicateByKey(bindings)
+	sort.Slice(bindings, func(i, j int) bool {
+		return bindings[i].KeyString() < bindings[j].KeyString()
+	})
+
+	sectionItems := make([]HelpItem, 0, len(bindings))
+	for _, b := range bindings {
+		if b.Hidden {
+			continue
+		}
+		if b.Condition != nil && !b.Condition(ctx) {
+			continue
+		}
+		sectionItems = append(sectionItems, HelpItem{
+			Key:         b.AllKeysString(),
+			Description: b.Description,
+			IsHeader:    false,
+		})
+	}
+
+	return sectionItems
+}
+
+func appendHelpSection(items []HelpItem, category string, sectionItems []HelpItem) []HelpItem {
+	items = append(items, HelpItem{Key: category, IsHeader: true})
+	items = append(items, sectionItems...)
+	items = append(items, HelpItem{Key: "", IsHeader: true})
 	return items
 }

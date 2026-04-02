@@ -4,11 +4,46 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 )
+
+func TestUpdateHelpModalContent_HidesExecutionConditionedBindingsInReadOnly(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateLayout()
+
+	m.updateHelpModalContent()
+	if m.helpModal == nil {
+		t.Fatal("expected help modal")
+	}
+	view := m.helpModal.View()
+	if strings.Contains(view, "toggle command log") {
+		t.Fatalf("expected read-only help menu to hide execution-conditioned binding, got %q", view)
+	}
+}
+
+func TestUpdateHelpModalContent_ShowsExecutionConditionedBindingsInExecutionMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateLayout()
+
+	m.updateHelpModalContent()
+	if m.helpModal == nil {
+		t.Fatal("expected help modal")
+	}
+	view := m.helpModal.View()
+	if !strings.Contains(view, "toggle command log") {
+		t.Fatalf("expected execution help menu to show execution-conditioned binding, got %q", view)
+	}
+}
 
 func TestHandleActionSelectThemeModalSavesTheme(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
