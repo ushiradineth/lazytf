@@ -34,11 +34,8 @@ func NewHistoryView(s *styles.Styles) *HistoryView {
 // SetSize updates the layout size.
 func (v *HistoryView) SetSize(width, height int) {
 	v.width = width
-	headerHeight := 1
-	footerHeight := 1
-	bodyHeight := max(1, height-headerHeight-footerHeight)
 	v.viewport.Width = width
-	v.viewport.Height = bodyHeight
+	v.viewport.Height = max(1, height)
 }
 
 // SetTitle updates the header title.

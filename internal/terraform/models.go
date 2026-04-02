@@ -20,6 +20,14 @@ const (
 	ActionRead    ActionType = "read"
 )
 
+// ParseStatus indicates parser confidence for a text-parsed resource block.
+type ParseStatus string
+
+const (
+	ParseStatusComplete ParseStatus = "complete"
+	ParseStatusPartial  ParseStatus = "partial"
+)
+
 // Plan represents a parsed Terraform plan.
 type Plan struct {
 	FormatVersion string           `json:"format_version"`
@@ -68,6 +76,8 @@ type ResourceChange struct {
 	Action       ActionType    `json:"-"` // Computed from change.actions
 	ActionReason string        `json:"action_reason,omitempty"`
 	Change       *Change       `json:"change"`
+	ParseStatus  ParseStatus   `json:"-"`
+	RawBlock     string        `json:"-"`
 }
 
 // Change represents the before/after state of a resource.

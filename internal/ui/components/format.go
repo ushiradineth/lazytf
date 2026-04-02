@@ -87,11 +87,27 @@ func formatPathForDisplay(path []string) string {
 	}
 	parts := make([]string, 0, len(path))
 	for _, segment := range path {
+		if strings.HasPrefix(segment, "__item_") {
+			index := strings.TrimPrefix(segment, "__item_")
+			if index == "" {
+				index = "?"
+			}
+			itemToken := "[" + index + "]"
+			if len(parts) > 0 {
+				parts[len(parts)-1] += itemToken
+			} else {
+				parts = append(parts, itemToken)
+			}
+			continue
+		}
 		if strings.Contains(segment, ".") || strings.Contains(segment, " ") || strings.Contains(segment, "\"") || strings.Contains(segment, "\\") {
 			parts = append(parts, fmt.Sprintf("%q", segment))
 		} else {
 			parts = append(parts, segment)
 		}
+	}
+	if len(parts) == 0 {
+		return "(list item)"
 	}
 	return strings.Join(parts, ".")
 }
