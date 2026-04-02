@@ -243,7 +243,8 @@ func (e *Executor) Init(ctx context.Context, opts InitOptions) (*ExecutionResult
 
 // Plan runs terraform plan and streams output.
 func (e *Executor) Plan(ctx context.Context, opts PlanOptions) (*ExecutionResult, <-chan string, error) {
-	args := []string{"plan"}
+	args := make([]string, 0, 1+len(e.defaultFlags)+len(opts.Flags))
+	args = append(args, "plan")
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})
@@ -277,7 +278,8 @@ func insertAutoApproveBeforePlanFile(args []string) []string {
 
 // Refresh runs terraform apply -refresh-only and streams output.
 func (e *Executor) Refresh(ctx context.Context, opts RefreshOptions) (*ExecutionResult, <-chan string, error) {
-	args := []string{"apply", "-refresh-only", "-auto-approve"}
+	args := make([]string, 0, 3+len(e.defaultFlags)+len(opts.Flags))
+	args = append(args, "apply", "-refresh-only", "-auto-approve")
 	args = append(args, e.defaultFlags...)
 	args = append(args, opts.Flags...)
 	return e.run(ctx, args, execOptions{timeout: opts.Timeout, env: opts.Env, streamOutput: true})

@@ -385,7 +385,7 @@ func (m *Modal) renderConfirmBox(maxWidth int) string {
 
 	// Add action buttons
 	if len(m.confirmActions) > 0 {
-		var actions []string
+		actions := make([]string, 0, len(m.confirmActions))
 		for _, action := range m.confirmActions {
 			actionStr := fmt.Sprintf("[%s] %s", m.styles.HelpKey.Render(action.Key), action.Label)
 			actions = append(actions, actionStr)

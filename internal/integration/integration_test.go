@@ -186,7 +186,22 @@ func copyDummyConfig(dir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "main.tf"), data, 0o600)
+	tmp, err := os.CreateTemp(dir, "main-*.tf")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, filepath.Join(dir, "main.tf"))
 }
 
 func writeFakeTerraform(t *testing.T, dir string) string {

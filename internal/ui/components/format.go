@@ -60,7 +60,7 @@ func formatMultilineStringDiff(path, before, after string) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  ~ %s:", path))
+	_, _ = fmt.Fprintf(&b, "  ~ %s:", path)
 	for _, idx := range diffIndexes {
 		oldLine := stripListMarker(strings.TrimSpace(beforeLines[idx]))
 		newLine := stripListMarker(strings.TrimSpace(afterLines[idx]))

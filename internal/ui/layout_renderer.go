@@ -278,7 +278,7 @@ func (m *Model) renderResourcesPanelWithTabs(width, height int) string {
 	scrollPos, thumbSize, hasScrollbar := m.stateListContent.GetScrollInfo(contentHeight)
 
 	// Build tab title for the frame
-	var tabParts []string
+	tabParts := make([]string, 0, 2)
 	tabParts = append(tabParts, "Resources")
 	tabParts = append(tabParts, "State")
 
