@@ -276,7 +276,7 @@ func prepareExecutionFlags(cfg *config.Config, overrideFlags []string) ([]string
 	if cfg.Terraform.Parallelism > 0 && !hasFlag(flags, "-parallelism") {
 		flags = append(flags, fmt.Sprintf("-parallelism=%d", cfg.Terraform.Parallelism))
 	}
-	return stripFlag(flags, "-json"), nil
+	return stripJSONFlag(flags), nil
 }
 
 func resolveAppStyles(cfg *config.Config) (*styles.Styles, error) {
@@ -679,14 +679,13 @@ func hasFlag(flags []string, name string) bool {
 	return false
 }
 
-//nolint:unparam // target kept as parameter for flexibility
-func stripFlag(flags []string, target string) []string {
+func stripJSONFlag(flags []string) []string {
 	if len(flags) == 0 {
 		return flags
 	}
 	filtered := make([]string, 0, len(flags))
 	for _, flag := range flags {
-		if flag == target {
+		if flag == "-json" {
 			continue
 		}
 		filtered = append(filtered, flag)

@@ -310,10 +310,7 @@ func (c Config) Validate() error {
 	if c.Terraform.Parallelism < 0 {
 		return errors.New("terraform parallelism cannot be negative")
 	}
-	if err := validateHistoryLevel(c.History.Level); err != nil {
-		return err
-	}
-	return nil
+	return validateHistoryLevel(c.History.Level)
 }
 
 func validateHistoryLevel(level string) error {

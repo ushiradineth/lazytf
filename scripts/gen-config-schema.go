@@ -107,9 +107,7 @@ func repoRoot() (string, error) {
 }
 
 func schemaForType(t reflect.Type) map[string]any {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
+	t = dereferenceType(t)
 	if t == reflect.TypeOf(time.Duration(0)) {
 		return map[string]any{"type": "string"}
 	}
@@ -134,39 +132,59 @@ func schemaForType(t reflect.Type) map[string]any {
 			"additionalProperties": schemaForType(t.Elem()),
 		}
 	case reflect.Struct:
-		properties := map[string]any{}
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
-			if field.PkgPath != "" {
-				continue
-			}
-			if field.Tag.Get("schema") == "-" {
-				continue
-			}
-			tag := field.Tag.Get("yaml")
-			if tag == "-" {
-				continue
-			}
-			name := strings.Split(tag, ",")[0]
-			if name == "" {
-				name = strings.ToLower(field.Name)
-			}
-			fieldSchema := schemaForType(field.Type)
-			if description := strings.TrimSpace(field.Tag.Get("description")); description != "" {
-				fieldSchema["description"] = description
-			}
-			if isThemeField(t, field, name) {
-				fieldSchema["enum"] = styles.BuiltInThemeNames()
-			}
-			properties[name] = fieldSchema
-		}
-		return map[string]any{
-			"type":       "object",
-			"properties": properties,
-		}
+		return schemaForStruct(t)
 	default:
 		return map[string]any{"type": "string"}
 	}
+}
+
+func dereferenceType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t
+}
+
+func schemaForStruct(t reflect.Type) map[string]any {
+	properties := map[string]any{}
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		name, include := schemaFieldName(field)
+		if !include {
+			continue
+		}
+
+		fieldSchema := schemaForType(field.Type)
+		if description := strings.TrimSpace(field.Tag.Get("description")); description != "" {
+			fieldSchema["description"] = description
+		}
+		if isThemeField(t, field, name) {
+			fieldSchema["enum"] = styles.BuiltInThemeNames()
+		}
+		properties[name] = fieldSchema
+	}
+
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+}
+
+func schemaFieldName(field reflect.StructField) (string, bool) {
+	if field.PkgPath != "" || field.Tag.Get("schema") == "-" {
+		return "", false
+	}
+
+	tag := field.Tag.Get("yaml")
+	if tag == "-" {
+		return "", false
+	}
+
+	name := strings.Split(tag, ",")[0]
+	if name == "" {
+		name = strings.ToLower(field.Name)
+	}
+	return name, true
 }
 
 func isThemeField(parent reflect.Type, field reflect.StructField, name string) bool {
