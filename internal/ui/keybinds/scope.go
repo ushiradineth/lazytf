@@ -113,6 +113,11 @@ var ConditionNotTargetMode Condition = func(ctx *Context) bool {
 	return !ctx.TargetMode
 }
 
+// ConditionTargetAvailable checks if targetable resources are available.
+var ConditionTargetAvailable Condition = func(ctx *Context) bool {
+	return ctx.TargetAvailable
+}
+
 // Context represents the current UI state for keybind resolution.
 type Context struct {
 	// Focus state
@@ -121,10 +126,11 @@ type Context struct {
 	CurrentView  ViewID
 
 	// Mode state
-	ExecutionMode  bool
-	SelectorActive bool
-	HistoryEnabled bool
-	TargetMode     bool
+	ExecutionMode   bool
+	SelectorActive  bool
+	HistoryEnabled  bool
+	TargetMode      bool
+	TargetAvailable bool
 
 	// Tab state
 	ResourcesActiveTab int // 0 = Resources, 1 = State

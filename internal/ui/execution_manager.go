@@ -1712,6 +1712,8 @@ func (m *Model) setPlan(plan *terraform.Plan) {
 	}
 	if plan == nil {
 		m.resourceList.SetResources(nil)
+		m.targetModeEnabled = false
+		m.resourceList.SetTargetModeEnabled(false)
 		m.invalidateTargetPlanPin()
 		return
 	}

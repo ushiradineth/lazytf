@@ -706,20 +706,20 @@ func TestRegistry_ForStatusBar_MaxSecondaryLimit(t *testing.T) {
 	}
 }
 
-func TestRegistry_ForHelpModal_SortsByKey(t *testing.T) {
+func TestRegistry_ForHelpModal_FallsBackToKeyOrder(t *testing.T) {
 	r := NewRegistry()
 
 	// Add bindings out of order
 	r.Register(Binding{
 		Keys:        []string{"z"},
-		Action:      ActionQuit,
+		Action:      ActionMoveDown,
 		Scope:       ScopeGlobal,
 		Description: "z action",
 		Category:    "General",
 	})
 	r.Register(Binding{
 		Keys:        []string{"a"},
-		Action:      ActionMoveUp,
+		Action:      ActionMoveDown,
 		Scope:       ScopeGlobal,
 		Description: "a action",
 		Category:    "General",
@@ -740,6 +740,38 @@ func TestRegistry_ForHelpModal_SortsByKey(t *testing.T) {
 
 	if aIdx >= zIdx {
 		t.Error("expected 'a' to come before 'z' in sorted list")
+	}
+}
+
+func TestRegistry_ForHelpModal_PanelNavigationUsesHumanOrder(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{ExecutionMode: true}
+	items := r.ForHelpModal(ctx)
+
+	plusIdx, minusIdx, tabIdx, logIdx := -1, -1, -1, -1
+	for i, item := range items {
+		if item.IsHeader {
+			continue
+		}
+		switch item.Key {
+		case "+":
+			plusIdx = i
+		case "_":
+			minusIdx = i
+		case "tab":
+			tabIdx = i
+		case "L":
+			logIdx = i
+		}
+	}
+
+	if plusIdx == -1 || minusIdx == -1 || tabIdx == -1 || logIdx == -1 {
+		t.Fatalf("expected +, _, tab, and L in help modal, got %+v", items)
+	}
+	if plusIdx >= minusIdx || minusIdx >= tabIdx || tabIdx >= logIdx {
+		t.Fatalf("expected order +, _, tab, L; got indexes +:%d _:%d tab:%d L:%d", plusIdx, minusIdx, tabIdx, logIdx)
 	}
 }
 

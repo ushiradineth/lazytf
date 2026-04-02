@@ -15,6 +15,7 @@ func (m *Model) buildKeybindContext() *keybinds.Context {
 	ctx.ExecutionMode = m.executionMode
 	ctx.HistoryEnabled = m.historyEnabled
 	ctx.TargetMode = m.targetModeEnabled
+	ctx.TargetAvailable = m.resourceList != nil && m.resourceList.HasResources()
 	ctx.OperationRunning = m.isOperationRunning()
 	ctx.PlanRunning = m.planRunning
 	ctx.ApplyRunning = m.applyRunning

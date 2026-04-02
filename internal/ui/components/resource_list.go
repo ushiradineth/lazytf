@@ -143,6 +143,11 @@ func (r *ResourceList) SetFocused(focused bool) {
 	r.focused = focused
 }
 
+// HasResources reports whether the list currently has resources.
+func (r *ResourceList) HasResources() bool {
+	return len(r.resources) > 0
+}
+
 // SetTargetModeEnabled toggles target selection mode.
 func (r *ResourceList) SetTargetModeEnabled(enabled bool) {
 	r.targetMode = enabled

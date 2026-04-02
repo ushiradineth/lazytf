@@ -9,7 +9,6 @@ import (
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	"github.com/ushiradineth/lazytf/internal/ui/components"
-	"github.com/ushiradineth/lazytf/internal/ui/keybinds"
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
@@ -94,12 +93,55 @@ func (m *Model) resourceSummaryText() string {
 }
 
 func (m *Model) statusHelpText() string {
-	if m.keybindRegistry == nil {
-		return "?: keybinds | q: quit"
+	hints := m.staticStatusHints()
+	if len(hints) == 0 {
+		return "?: kbd"
 	}
-	ctx := m.buildKeybindContext()
-	opts := keybinds.DefaultHintOptions()
-	return m.keybindRegistry.ForStatusBar(ctx, opts)
+	return strings.Join(hints, " | ")
+}
+
+func (m *Model) staticStatusHints() []string {
+	hints := make([]string, 0, 6)
+
+	switch m.focusedPanelID() {
+	case PanelWorkspace:
+		hints = append(hints, "enter: select")
+	case PanelResources:
+		hints = append(hints, m.staticResourcesPanelHints()...)
+	case PanelHistory:
+		hints = append(hints, "enter: select")
+	case PanelCommandLog:
+		hints = append(hints, "L: toggle")
+	case PanelMain:
+		// No panel-specific hint.
+	}
+
+	hints = append(hints, "?: kbd")
+	return hints
+}
+
+func (m *Model) staticResourcesPanelHints() []string {
+	if m.resourcesActiveTab != 0 {
+		return []string{"enter: select"}
+	}
+	if !m.executionMode {
+		return nil
+	}
+	hasResources := m.resourceList != nil && m.resourceList.HasResources()
+	if !hasResources {
+		return []string{"p: plan", "f: format", "v: validate", "i: init"}
+	}
+	if m.targetModeEnabled {
+		return []string{"A: apply", "t: exit target mode", "a: toggle all"}
+	}
+	return []string{"a: apply", "t: enter target mode", "x: reset plan"}
+}
+
+func (m *Model) focusedPanelID() PanelID {
+	if m.panelManager == nil {
+		return PanelMain
+	}
+	return m.panelManager.GetFocusedPanel()
 }
 
 // countResourcesByAction counts resources of a specific action type.

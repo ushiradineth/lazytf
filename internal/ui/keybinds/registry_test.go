@@ -381,6 +381,7 @@ func TestRegistry_Resolve_TargetModeBindingsOnResourcesTab(t *testing.T) {
 		FocusedPanel:       PanelResources,
 		ResourcesActiveTab: 0,
 		TargetMode:         true,
+		TargetAvailable:    true,
 	}
 
 	if binding := r.Resolve("t", ctx); binding == nil || binding.Action != ActionToggleTargetMode {
@@ -397,6 +398,22 @@ func TestRegistry_Resolve_TargetModeBindingsOnResourcesTab(t *testing.T) {
 	}
 	if binding := r.Resolve(" ", ctx); binding == nil || binding.Action != ActionToggleTarget {
 		t.Fatalf("expected space -> ActionToggleTarget in target mode, got %#v", binding)
+	}
+}
+
+func TestRegistry_Resolve_TargetModeToggleHiddenWhenNoTargetableResources(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{
+		ExecutionMode:      true,
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+		TargetAvailable:    false,
+	}
+
+	if binding := r.Resolve("t", ctx); binding != nil {
+		t.Fatalf("expected no target mode binding without targetable resources, got %#v", binding)
 	}
 }
 

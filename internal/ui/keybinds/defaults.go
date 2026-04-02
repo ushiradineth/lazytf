@@ -332,7 +332,9 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopeGlobal,
 		Description: "toggle target mode",
 		Category:    "Resources Panel",
-		Condition:   ConditionExecutionMode,
+		Condition: func(ctx *Context) bool {
+			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
+		},
 	})
 
 	// Panel-scoped filter bindings (higher priority, for execution mode on Resources tab)
@@ -394,7 +396,9 @@ func registerResourcesPanelBindings(r *Registry) {
 		Tab:         0,
 		Description: "toggle target mode",
 		Category:    "Resources Panel",
-		Condition:   ConditionExecutionMode,
+		Condition: func(ctx *Context) bool {
+			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
+		},
 	})
 	r.Register(Binding{
 		Keys:        []string{"enter", " "},
