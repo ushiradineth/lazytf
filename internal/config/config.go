@@ -257,7 +257,7 @@ func (m *Manager) backupLocked() error {
 	if err != nil {
 		return fmt.Errorf("read config for backup: %w", err)
 	}
-	if err := os.WriteFile(backupPath, data, 0o600); err != nil {
+	if err := writeFileAtomic(backupPath, data); err != nil {
 		return fmt.Errorf("write backup: %w", err)
 	}
 	return nil

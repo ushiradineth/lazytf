@@ -56,7 +56,7 @@ func (m *Model) handleToggleTargetMode() {
 
 func (m *Model) handleToggleTargetSelection() (tea.Model, tea.Cmd, bool) {
 	if !m.targetModeEnabled {
-		cmd := m.toastInfo("Enable target mode first with 'Z'")
+		cmd := m.toastInfo("Enable target mode first with 't'")
 		return m, cmd, true
 	}
 	if m.resourceList == nil {
