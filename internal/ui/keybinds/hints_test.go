@@ -269,7 +269,7 @@ func TestRegistry_ForStatusBar_IncludesToggleStatusHint(t *testing.T) {
 	opts := HintOptions{MaxPrimary: 16, MaxSecondary: 16, Separator: " | "}
 
 	result := r.ForStatusBar(ctx, opts)
-	if !strings.Contains(result, "s: toggle status column") {
+	if !strings.Contains(result, "s: status") {
 		t.Fatalf("expected status hint in status bar output, got %q", result)
 	}
 }
@@ -288,10 +288,10 @@ func TestRegistry_ForStatusBar_IncludesTargetModeHints(t *testing.T) {
 	opts := HintOptions{MaxPrimary: 16, MaxSecondary: 16, Separator: " | "}
 
 	result := r.ForStatusBar(ctx, opts)
-	if !strings.Contains(result, "enter: toggle target selection") {
+	if !strings.Contains(result, "enter: target select") {
 		t.Fatalf("expected target-selection hint in status bar output, got %q", result)
 	}
-	if !strings.Contains(result, "s: toggle all targets") {
+	if !strings.Contains(result, "s: target all") {
 		t.Fatalf("expected toggle-all-targets hint in status bar output, got %q", result)
 	}
 	if !strings.Contains(result, "a: apply") {
@@ -855,7 +855,7 @@ func TestRegistry_ForHelpModal_RespectsHistoryEnabledCondition(t *testing.T) {
 
 	withoutHistory := r.ForHelpModal(helpCtxWithHistory(true, false))
 	for _, item := range withoutHistory {
-		if !item.IsHeader && item.Description == "toggle history panel" {
+		if !item.IsHeader && item.Description == "history panel" {
 			t.Fatalf("expected history toggle to be hidden when history is disabled")
 		}
 	}
@@ -863,7 +863,7 @@ func TestRegistry_ForHelpModal_RespectsHistoryEnabledCondition(t *testing.T) {
 	withHistory := r.ForHelpModal(helpCtxWithHistory(true, true))
 	found := false
 	for _, item := range withHistory {
-		if !item.IsHeader && item.Description == "toggle history panel" {
+		if !item.IsHeader && item.Description == "history panel" {
 			found = true
 			break
 		}

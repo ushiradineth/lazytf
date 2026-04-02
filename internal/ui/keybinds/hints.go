@@ -22,7 +22,6 @@ var helpSectionOrder = []helpSectionSpec{
 			ActionCycleFocus,
 			ActionCycleFocusBack,
 			ActionToggleLog,
-			ActionToggleHistory,
 			ActionFocusWorkspace,
 			ActionFocusResources,
 			ActionFocusHistory,
@@ -71,10 +70,8 @@ var helpSectionOrder = []helpSectionSpec{
 			ActionInit,
 			ActionInitUpgrade,
 			ActionRefresh,
+			ActionToggleHistory,
 		},
-	},
-	{
-		Category: "Search",
 	},
 	{
 		Category: "General",

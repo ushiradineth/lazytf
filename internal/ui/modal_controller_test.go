@@ -23,7 +23,7 @@ func TestUpdateHelpModalContent_HidesExecutionConditionedBindingsInReadOnly(t *t
 		t.Fatal("expected help modal")
 	}
 	view := m.helpModal.View()
-	if strings.Contains(view, "toggle command log") {
+	if strings.Contains(view, "command log") {
 		t.Fatalf("expected read-only help menu to hide execution-conditioned binding, got %q", view)
 	}
 }
@@ -40,7 +40,7 @@ func TestUpdateHelpModalContent_ShowsExecutionConditionedBindingsInExecutionMode
 		t.Fatal("expected help modal")
 	}
 	view := m.helpModal.View()
-	if !strings.Contains(view, "toggle command log") {
+	if !strings.Contains(view, "command log") {
 		t.Fatalf("expected execution help menu to show execution-conditioned binding, got %q", view)
 	}
 }

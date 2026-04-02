@@ -35,7 +35,7 @@ func TestStatusHelpTextResourcesTabNoPlan(t *testing.T) {
 	m.resourceList.SetResources(nil)
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"plan: p", "format: f", "validate: v", "init: i", "init upgrade: I", "keybinds: ?"} {
+	for _, hint := range []string{"plan: p", "format: f", "validate: v", "init: i", "init+: I", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
@@ -48,7 +48,7 @@ func TestStatusHelpTextResourcesStateTabIncludesInitHints(t *testing.T) {
 	m.resourcesActiveTab = 1
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"select: enter", "yank: y", "init: i", "init upgrade: I", "keybinds: ?"} {
+	for _, hint := range []string{"select: enter", "yank: y", "init: i", "init+: I", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
@@ -63,7 +63,7 @@ func TestStatusHelpTextResourcesTabWithPlanNotTargetMode(t *testing.T) {
 	m.targetModeEnabled = false
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"apply: a", "toggle target mode: t", "yank: y", "keybinds: ?"} {
+	for _, hint := range []string{"apply: a", "target mode: t", "yank: y", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
@@ -78,13 +78,13 @@ func TestStatusHelpTextResourcesTabWithPlanTargetMode(t *testing.T) {
 	m.targetModeEnabled = true
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"toggle target selection: space", "apply: a", "toggle all targets: s", "yank: y", "toggle target mode: t", "keybinds: ?"} {
+	for _, hint := range []string{"target select: space", "apply: a", "target all: s", "yank: y", "target mode: t", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
 	}
 
-	ordered := []string{"toggle target selection: space", "apply: a", "toggle all targets: s", "yank: y", "toggle target mode: t", "keybinds: ?"}
+	ordered := []string{"target select: space", "apply: a", "target all: s", "yank: y", "target mode: t", "keybinds: ?"}
 	last := -1
 	for _, hint := range ordered {
 		idx := strings.Index(got, hint)
@@ -109,7 +109,7 @@ func TestStatusHelpTextMainAndCommandLogPanels(t *testing.T) {
 
 	m.panelManager.SetFocus(PanelCommandLog)
 	logHints := m.statusHelpText()
-	for _, hint := range []string{"toggle command log: L", "keybinds: ?"} {
+	for _, hint := range []string{"command log: L", "keybinds: ?"} {
 		if !strings.Contains(logHints, hint) {
 			t.Fatalf("expected hint %q in %q", hint, logHints)
 		}

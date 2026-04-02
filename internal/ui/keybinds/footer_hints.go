@@ -12,6 +12,8 @@ type footerHintSpec struct {
 	PreferredKey string
 }
 
+const footerSpaceKey = "space"
+
 // FooterHints returns ordered footer hints for the active context.
 func (r *Registry) FooterHints(ctx *Context) []string {
 	if ctx == nil {
@@ -20,11 +22,7 @@ func (r *Registry) FooterHints(ctx *Context) []string {
 
 	active := r.GetBindingsForContext(ctx)
 	spec := footerSpecsForContext(ctx)
-	if len(spec) == 0 {
-		spec = append(spec, footerHintSpec{Action: ActionToggleHelp})
-	} else {
-		spec = append(spec, footerHintSpec{Action: ActionToggleHelp})
-	}
+	spec = append(spec, footerHintSpec{Action: ActionToggleHelp})
 
 	hints := make([]string, 0, len(spec))
 	for _, hintSpec := range spec {
@@ -82,7 +80,7 @@ func resourcesFooterSpecs(ctx *Context) []footerHintSpec {
 	}
 	if ctx.TargetMode {
 		return []footerHintSpec{
-			{Action: ActionToggleTarget, PreferredKey: "space"},
+			{Action: ActionToggleTarget, PreferredKey: footerSpaceKey},
 			{Action: ActionApply},
 			{Action: ActionToggleAllTargets},
 			{Action: ActionCopyAddress},
@@ -121,27 +119,23 @@ func selectBindingForAction(bindings []Binding, spec footerHintSpec) *Binding {
 }
 
 func hasDisplayKey(b Binding, key string) bool {
-	if key == "space" {
+	if key == footerSpaceKey {
 		return slices.Contains(b.Keys, " ")
 	}
 	return slices.Contains(b.Keys, key)
 }
 
 func footerKey(b Binding, preferred string) string {
-	if preferred == "space" && slices.Contains(b.Keys, " ") {
-		return "space"
+	if preferred == footerSpaceKey && slices.Contains(b.Keys, " ") {
+		return footerSpaceKey
 	}
 	key := b.KeyString()
 	if key == " " {
-		return "space"
+		return footerSpaceKey
 	}
 	return key
 }
 
 func footerDescription(b Binding) string {
-	desc := strings.TrimSpace(b.Description)
-	if desc == "toggle keybinds" || desc == "toggle keybinds help" {
-		return "keybinds"
-	}
-	return desc
+	return strings.TrimSpace(b.Description)
 }
