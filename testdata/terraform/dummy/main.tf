@@ -10,6 +10,6 @@ terraform {
 
 resource "null_resource" "example" {
   triggers = {
-    seed = "dumma"
+    seed = "dummy"
   }
 }

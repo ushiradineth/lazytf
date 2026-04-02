@@ -100,8 +100,6 @@ Example:
 
 ```yaml
 version: 1
-general:
-  mouse_enabled: true
 theme:
   name: default
 terraform:
@@ -111,6 +109,8 @@ terraform:
 history:
   enabled: true
   level: standard
+mouse: true
+notification: true
 ```
 
 ## Usage

@@ -382,7 +382,7 @@ func TestHandleActionSelectPanelNone(t *testing.T) {
 	}
 }
 
-func TestHandleActionSelectResourceKeepsResourcesFocus(t *testing.T) {
+func TestHandleActionSelectResourceFocusesMainPanel(t *testing.T) {
 	m := NewExecutionModel(&terraform.Plan{Resources: []terraform.ResourceChange{{
 		Address: "aws_instance.example",
 		Action:  terraform.ActionUpdate,
@@ -405,8 +405,8 @@ func TestHandleActionSelectResourceKeepsResourcesFocus(t *testing.T) {
 	if m.panelManager == nil {
 		t.Fatal("expected panel manager")
 	}
-	if got := m.panelManager.GetFocusedPanel(); got != PanelResources {
-		t.Fatalf("expected focus to remain on resources panel, got %v", got)
+	if got := m.panelManager.GetFocusedPanel(); got != PanelMain {
+		t.Fatalf("expected focus on main panel, got %v", got)
 	}
 }
 

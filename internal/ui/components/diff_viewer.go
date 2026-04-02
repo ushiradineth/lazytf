@@ -243,6 +243,33 @@ func (d *DiffViewer) ToggleCurrentHunk() bool {
 	return true
 }
 
+// SelectOrToggleAtVisibleRow selects or toggles a tree section by clicked row.
+// A click on an inactive section selects it. A click on the active section toggles it.
+func (d *DiffViewer) SelectOrToggleAtVisibleRow(row int) bool {
+	if row < 0 || len(d.hunks) == 0 || len(d.hunkLineStarts) == 0 {
+		return false
+	}
+
+	line := d.scrollOffset + row
+	clicked := -1
+	for i, start := range d.hunkLineStarts {
+		if start == line {
+			clicked = i
+			break
+		}
+	}
+	if clicked < 0 {
+		return false
+	}
+
+	if clicked != d.activeHunk {
+		d.activeHunk = clicked
+		return true
+	}
+
+	return d.ToggleCurrentHunk()
+}
+
 // GetHunkInfo returns 1-based selected hunk index and total hunk count.
 func (d *DiffViewer) GetHunkInfo() (current, total int) {
 	total = len(d.hunks)
@@ -301,6 +328,12 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 		body = d.renderTreeBody(tree, resource.Change)
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
+	if len(d.hunkLineStarts) > 0 {
+		bodyStart := len(strings.Split(content, "\n")) - len(strings.Split(body, "\n"))
+		for i := range d.hunkLineStarts {
+			d.hunkLineStarts[i] += max(bodyStart, 0)
+		}
+	}
 	return d.renderScrollableContent(content)
 }
 

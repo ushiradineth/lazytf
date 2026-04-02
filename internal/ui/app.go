@@ -854,6 +854,12 @@ func (m *Model) handleMousePanelSelection(panelID PanelID, spec PanelSpec, event
 		return func() tea.Msg {
 			return components.EnvironmentChangedMsg{Environment: *selected}
 		}
+	case PanelMain:
+		if m.mainArea == nil {
+			return nil
+		}
+		m.mainArea.SelectOrToggleDiffTreeAtRow(row)
+		return nil
 	default:
 		return nil
 	}

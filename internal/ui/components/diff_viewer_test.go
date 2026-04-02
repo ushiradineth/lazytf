@@ -1390,6 +1390,76 @@ func TestDiffViewerHunkNavigationAndToggle(t *testing.T) {
 	}
 }
 
+func TestDiffViewerSelectOrToggleAtVisibleRowSelectsThenToggles(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.hunks = []diffHunk{{key: "name"}, {key: "tags"}}
+	viewer.hunkLineStarts = []int{2, 5}
+	viewer.activeHunk = 0
+	viewer.scrollOffset = 2
+
+	if acted := viewer.SelectOrToggleAtVisibleRow(3); !acted {
+		t.Fatal("expected click on inactive hunk row to select")
+	}
+	if viewer.activeHunk != 1 {
+		t.Fatalf("expected active hunk 1 after select, got %d", viewer.activeHunk)
+	}
+	if viewer.foldedHunks["tags"] {
+		t.Fatal("expected selected hunk to remain expanded after first click")
+	}
+
+	if acted := viewer.SelectOrToggleAtVisibleRow(3); !acted {
+		t.Fatal("expected click on active hunk row to toggle")
+	}
+	if !viewer.foldedHunks["tags"] {
+		t.Fatal("expected active hunk to be folded after second click")
+	}
+}
+
+func TestDiffViewerSelectOrToggleAtVisibleRowWithRenderedTree(t *testing.T) {
+	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
+	viewer.SetSize(120, 30)
+
+	resource := &terraform.ResourceChange{
+		Address: "aws_instance.example",
+		Action:  terraform.ActionUpdate,
+		Change: &terraform.Change{
+			Before: map[string]any{
+				"name": "old",
+				"tags": map[string]any{"env": "dev"},
+			},
+			After: map[string]any{
+				"name": "new",
+				"tags": map[string]any{"env": "prod"},
+			},
+		},
+	}
+
+	_ = viewer.View(resource)
+	if len(viewer.hunkLineStarts) < 2 {
+		t.Fatalf("expected at least two tree hunks, got %d", len(viewer.hunkLineStarts))
+	}
+
+	secondHunkRow := viewer.hunkLineStarts[1] - viewer.scrollOffset
+	if secondHunkRow < 0 {
+		t.Fatalf("expected visible row for second hunk, got %d", secondHunkRow)
+	}
+
+	if acted := viewer.SelectOrToggleAtVisibleRow(secondHunkRow); !acted {
+		t.Fatal("expected click on rendered second hunk to select")
+	}
+	current, _ := viewer.GetHunkInfo()
+	if current != 2 {
+		t.Fatalf("expected active hunk 2 after click, got %d", current)
+	}
+
+	if acted := viewer.SelectOrToggleAtVisibleRow(secondHunkRow); !acted {
+		t.Fatal("expected second click on rendered hunk to toggle")
+	}
+	if !viewer.foldedHunks[viewer.hunks[1].key] {
+		t.Fatal("expected rendered second hunk to be folded after second click")
+	}
+}
+
 func TestRenderInlineChangeWithTrimRemovesParentPrefix(t *testing.T) {
 	viewer := NewDiffViewer(styles.DefaultStyles(), diff.NewEngine())
 	item := diff.MinimalDiff{

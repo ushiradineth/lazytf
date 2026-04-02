@@ -232,6 +232,15 @@ func (m *MainArea) DiffTreeChild() bool {
 	return m.diffViewer.TreeChild()
 }
 
+// SelectOrToggleDiffTreeAtRow selects or toggles a tree node by visible row.
+// A click on an inactive node selects it. A click on the active node toggles it.
+func (m *MainArea) SelectOrToggleDiffTreeAtRow(row int) bool {
+	if m.mode != ModeDiff || m.diffViewer == nil {
+		return false
+	}
+	return m.diffViewer.SelectOrToggleAtVisibleRow(row)
+}
+
 // Update handles Bubble Tea messages (implements Panel interface).
 func (m *MainArea) Update(msg tea.Msg) (any, tea.Cmd) {
 	var cmd tea.Cmd
