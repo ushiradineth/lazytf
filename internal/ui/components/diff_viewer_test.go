@@ -262,7 +262,7 @@ func TestMultilineBlockSpacingSingleBlank(t *testing.T) {
 		{Path: []string{"values[0]"}, Action: diff.DiffChange, OldValue: "a\n", NewValue: "b\n"},
 		{Path: []string{"set[0]"}, Action: diff.DiffChange, OldValue: "x", NewValue: "y"},
 	}
-	out := viewer.renderBlocks(diffs, nil)
+	out := viewer.renderBlocks(diffs)
 	if strings.Contains(out, "\n\n\n") {
 		t.Fatalf("unexpected double blank lines: %q", out)
 	}
@@ -674,7 +674,7 @@ func TestRenderBlocksNoTrailingBlankLine(t *testing.T) {
 	diffs := []diff.MinimalDiff{
 		{Path: []string{"values[0]"}, Action: diff.DiffChange, OldValue: "a\n", NewValue: "b\n"},
 	}
-	out := viewer.renderBlocks(diffs, nil)
+	out := viewer.renderBlocks(diffs)
 	if strings.HasSuffix(out, "\n") {
 		t.Fatalf("unexpected trailing newline: %q", out)
 	}
@@ -686,7 +686,7 @@ func TestRenderBlocksSingleBlankBetweenRoots(t *testing.T) {
 		{Path: []string{"values[0]"}, Action: diff.DiffChange, OldValue: "a\n", NewValue: "b\n"},
 		{Path: []string{"set[0]"}, Action: diff.DiffChange, OldValue: "x", NewValue: "y"},
 	}
-	out := viewer.renderBlocks(diffs, nil)
+	out := viewer.renderBlocks(diffs)
 	if !strings.Contains(out, "\n\n") {
 		t.Fatalf("expected single blank line between blocks: %q", out)
 	}
@@ -1104,7 +1104,7 @@ func TestRenderBlocksWithEmptyPath(t *testing.T) {
 	diffs := []diff.MinimalDiff{
 		{Path: []string{}, OldValue: "a", NewValue: "b", Action: diff.DiffChange},
 	}
-	out := viewer.renderBlocks(diffs, nil)
+	out := viewer.renderBlocks(diffs)
 	if out == "" {
 		t.Error("expected non-empty output for empty path")
 	}

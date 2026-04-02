@@ -1139,21 +1139,21 @@ func TestResolveSelectedEnvEnvName(t *testing.T) {
 	}
 }
 
-func TestStripFlagEmpty(t *testing.T) {
-	result := stripFlag(nil, "-json")
+func TestStripJSONFlagEmpty(t *testing.T) {
+	result := stripJSONFlag(nil)
 	if result != nil {
 		t.Fatalf("expected nil for nil input")
 	}
 
-	result = stripFlag([]string{}, "-json")
+	result = stripJSONFlag([]string{})
 	if len(result) != 0 {
 		t.Fatalf("expected empty slice for empty input")
 	}
 }
 
-func TestStripFlagWithTarget(t *testing.T) {
+func TestStripJSONFlag(t *testing.T) {
 	flags := []string{"-var-file=dev.tfvars", "-json", "-lock=false"}
-	result := stripFlag(flags, "-json")
+	result := stripJSONFlag(flags)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 flags, got %d", len(result))
 	}

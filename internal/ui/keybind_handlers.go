@@ -96,14 +96,23 @@ func (m *Model) registerKeybindHandlers() {
 	}
 
 	r := m.keybindRegistry
+	m.registerGlobalActionHandlers(r)
+	m.registerPanelActionHandlers(r)
+	m.registerExecutionActionHandlers(r)
+	m.registerFilterActionHandlers(r)
+	m.registerTabActionHandlers(r)
+	m.registerNavigationActionHandlers(r)
+	m.registerMiscActionHandlers(r)
+}
 
-	// Global actions
+func (m *Model) registerGlobalActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionQuit, m.handleActionQuit)
 	r.RegisterHandler(keybinds.ActionCancelOp, m.handleActionCancelOp)
 	r.RegisterHandler(keybinds.ActionToggleHelp, m.handleActionToggleHelp)
 	r.RegisterHandler(keybinds.ActionToggleTheme, m.handleActionToggleTheme)
+}
 
-	// Panel navigation
+func (m *Model) registerPanelActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionFocusWorkspace, m.handleActionFocusWorkspace)
 	r.RegisterHandler(keybinds.ActionFocusResources, m.handleActionFocusResources)
 	r.RegisterHandler(keybinds.ActionFocusHistory, m.handleActionFocusHistory)
@@ -116,8 +125,9 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionFocusModePrev, m.handleActionFocusModePrev)
 	r.RegisterHandler(keybinds.ActionEscapeBack, m.handleActionEscapeBack)
 	r.RegisterHandler(keybinds.ActionToggleHistory, m.handleActionToggleHistory)
+}
 
-	// Execution actions
+func (m *Model) registerExecutionActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionInit, m.handleActionInit)
 	r.RegisterHandler(keybinds.ActionInitUpgrade, m.handleActionInitUpgrade)
 	r.RegisterHandler(keybinds.ActionPlan, m.handleActionPlan)
@@ -125,8 +135,9 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionRefresh, m.handleActionRefresh)
 	r.RegisterHandler(keybinds.ActionValidate, m.handleActionValidate)
 	r.RegisterHandler(keybinds.ActionFormat, m.handleActionFormat)
+}
 
-	// Filter actions
+func (m *Model) registerFilterActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionToggleCreate, m.handleActionToggleCreate)
 	r.RegisterHandler(keybinds.ActionToggleUpdate, m.handleActionToggleUpdate)
 	r.RegisterHandler(keybinds.ActionToggleDelete, m.handleActionToggleDelete)
@@ -136,12 +147,14 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
 	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
 	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
+}
 
-	// Tab actions
+func (m *Model) registerTabActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionSwitchTabPrev, m.handleActionSwitchTabPrev)
 	r.RegisterHandler(keybinds.ActionSwitchTabNext, m.handleActionSwitchTabNext)
+}
 
-	// Navigation actions
+func (m *Model) registerNavigationActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionMoveUp, m.handleActionMoveUp)
 	r.RegisterHandler(keybinds.ActionMoveDown, m.handleActionMoveDown)
 	r.RegisterHandler(keybinds.ActionPageUp, m.handleActionPageUp)
@@ -156,11 +169,10 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionSelect, m.handleActionSelect)
 	r.RegisterHandler(keybinds.ActionScrollUp, m.handleActionScrollUp)
 	r.RegisterHandler(keybinds.ActionScrollDown, m.handleActionScrollDown)
+}
 
-	// Environment actions
+func (m *Model) registerMiscActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionSelectEnv, m.handleActionSelectEnv)
-
-	// Modal actions
 	r.RegisterHandler(keybinds.ActionConfirmYes, m.handleActionConfirmYes)
 	r.RegisterHandler(keybinds.ActionConfirmNo, m.handleActionConfirmNo)
 }

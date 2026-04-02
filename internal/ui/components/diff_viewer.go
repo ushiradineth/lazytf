@@ -316,8 +316,8 @@ func (d *DiffViewer) View(resource *terraform.ResourceChange) string {
 
 	header := d.renderHeader(resource, diffs)
 	var body string
-	switch {
-	case resource.Action == terraform.ActionDelete:
+	switch resource.Action {
+	case terraform.ActionDelete:
 		d.syncHunks(resource.Address, nil)
 		body = d.renderDestroyReason(resource)
 	default:
@@ -977,8 +977,8 @@ func (d *DiffViewer) renderTable(diffs []diff.MinimalDiff, change *terraform.Cha
 	return strings.Join(rows, "\n")
 }
 
-func (d *DiffViewer) renderBlocks(diffs []diff.MinimalDiff, change *terraform.Change) string {
-	return d.renderBlocksWithTrim(diffs, change, 0)
+func (d *DiffViewer) renderBlocks(diffs []diff.MinimalDiff) string {
+	return d.renderBlocksWithTrim(diffs, nil, 0)
 }
 
 func (d *DiffViewer) renderBlocksWithTrim(diffs []diff.MinimalDiff, change *terraform.Change, trimSegments int) string {

@@ -152,7 +152,13 @@ func registerPanelNavigationBindings(r *Registry) {
 }
 
 func registerNavigationBindings(r *Registry) {
-	// Up/Down
+	registerDirectionalBindings(r)
+	registerPagingBindings(r)
+	registerSelectionBindings(r)
+	registerMainTreeNavigationBindings(r)
+}
+
+func registerDirectionalBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:        []string{"up", "k"},
 		Action:      ActionMoveUp,
@@ -167,8 +173,9 @@ func registerNavigationBindings(r *Registry) {
 		Description: "move selection down",
 		Category:    "Navigation",
 	})
+}
 
-	// Page Up/Down
+func registerPagingBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:        []string{"pgup"},
 		Action:      ActionPageUp,
@@ -203,8 +210,9 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 		Hidden:      true,
 	})
+}
 
-	// Select/Toggle
+func registerSelectionBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:        []string{"enter", " "},
 		Action:      ActionSelect,
@@ -231,8 +239,9 @@ func registerNavigationBindings(r *Registry) {
 		Category:    "Navigation",
 		Condition:   ConditionExecutionMode,
 	})
+}
 
-	// Main panel tree navigation
+func registerMainTreeNavigationBindings(r *Registry) {
 	r.Register(Binding{
 		Keys:        []string{"up", "k"},
 		Action:      ActionPrevHunk,
@@ -546,7 +555,6 @@ func registerExecutionBindings(r *Registry) {
 	})
 }
 
-//nolint:funlen // Keybind registration is naturally verbose
 func registerModalBindings(r *Registry) {
 	// Help modal
 	r.Register(Binding{
