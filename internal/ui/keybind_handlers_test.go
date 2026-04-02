@@ -164,7 +164,7 @@ func TestHandleActionInitUpgradeOnStateTabRunsTerraformInitUpgrade(t *testing.T)
 	}
 }
 
-func TestHandleActionInitOutsideStateTabNoop(t *testing.T) {
+func TestHandleActionInitOnResourcesTabRunsTerraformInit(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
 	m.width = 100
@@ -172,10 +172,37 @@ func TestHandleActionInitOutsideStateTabNoop(t *testing.T) {
 	m.updateLayout()
 	m.resourcesActiveTab = 0
 
+	mock := setupMockExecutor(t)
+	mock.InitResult = testutil.NewMockResult("Terraform has been successfully initialized!", 0)
+	m.executor = mock
+
 	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
 	cmd := m.handleActionInit(ctx)
-	if cmd != nil {
-		t.Fatal("expected nil command outside state tab")
+	if cmd == nil {
+		t.Fatal("expected non-nil init command on resources tab")
+	}
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	foundInitComplete := false
+	for _, batchCmd := range batch {
+		if batchCmd == nil {
+			continue
+		}
+		if _, ok := batchCmd().(InitCompleteMsg); ok {
+			foundInitComplete = true
+			break
+		}
+	}
+	if !foundInitComplete {
+		t.Fatal("expected batch to include InitCompleteMsg command")
+	}
+	if mock.InitCalls != 1 {
+		t.Fatalf("expected one init call, got %d", mock.InitCalls)
 	}
 }
 

@@ -400,14 +400,14 @@ func (m *Model) handleActionPlan(_ *keybinds.Context) tea.Cmd {
 }
 
 func (m *Model) handleActionInit(ctx *keybinds.Context) tea.Cmd {
-	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 1 {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources {
 		return nil
 	}
 	return m.beginInit(false)
 }
 
 func (m *Model) handleActionInitUpgrade(ctx *keybinds.Context) tea.Cmd {
-	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 1 {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources {
 		return nil
 	}
 	return m.beginInit(true)
