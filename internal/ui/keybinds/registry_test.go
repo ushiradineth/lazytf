@@ -417,11 +417,11 @@ func TestRegistry_Resolve_TargetModeBindingsOnResourcesTab(t *testing.T) {
 	if binding := r.Resolve("t", ctx); binding == nil || binding.Action != ActionToggleTargetMode {
 		t.Fatalf("expected t -> ActionToggleTargetMode, got %#v", binding)
 	}
-	if binding := r.Resolve("a", ctx); binding == nil || binding.Action != ActionToggleAllTargets {
-		t.Fatalf("expected a -> ActionToggleAllTargets in target mode, got %#v", binding)
+	if binding := r.Resolve("s", ctx); binding == nil || binding.Action != ActionToggleAllTargets {
+		t.Fatalf("expected s -> ActionToggleAllTargets in target mode, got %#v", binding)
 	}
-	if binding := r.Resolve("A", ctx); binding == nil || binding.Action != ActionApply {
-		t.Fatalf("expected A -> ActionApply in target mode, got %#v", binding)
+	if binding := r.Resolve("a", ctx); binding == nil || binding.Action != ActionApply {
+		t.Fatalf("expected a -> ActionApply in target mode, got %#v", binding)
 	}
 	if binding := r.Resolve("enter", ctx); binding == nil || binding.Action != ActionToggleTarget {
 		t.Fatalf("expected enter -> ActionToggleTarget in target mode, got %#v", binding)
