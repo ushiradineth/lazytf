@@ -8,82 +8,83 @@ import (
 // categoryExecution is the name of the Execution category.
 const categoryExecution = "Execution"
 
-var helpCategoryOrder = []string{
-	"Panel Navigation",
-	"Navigation",
-	"Resources Panel",
-	categoryExecution,
-	"Search",
-	"General",
+type helpSectionSpec struct {
+	Category string
+	Actions  []Action
 }
 
-var helpActionOrder = map[string]map[Action]int{
-	"Panel Navigation": {
-		ActionFocusModeNext:   10,
-		ActionFocusModePrev:   11,
-		ActionCycleFocus:      20,
-		ActionCycleFocusBack:  21,
-		ActionToggleLog:       30,
-		ActionToggleHistory:   31,
-		ActionFocusWorkspace:  40,
-		ActionFocusResources:  41,
-		ActionFocusHistory:    42,
-		ActionFocusMain:       43,
-		ActionFocusCommandLog: 44,
-		ActionEscapeBack:      50,
+var helpSectionOrder = []helpSectionSpec{
+	{
+		Category: "Panel Navigation",
+		Actions: []Action{
+			ActionFocusModeNext,
+			ActionFocusModePrev,
+			ActionCycleFocus,
+			ActionCycleFocusBack,
+			ActionToggleLog,
+			ActionToggleHistory,
+			ActionFocusWorkspace,
+			ActionFocusResources,
+			ActionFocusHistory,
+			ActionFocusMain,
+			ActionFocusCommandLog,
+			ActionEscapeBack,
+		},
 	},
-	"Navigation": {
-		ActionMoveUp:     10,
-		ActionMoveDown:   11,
-		ActionPageUp:     20,
-		ActionPageDown:   21,
-		ActionScrollTop:  30,
-		ActionScrollEnd:  31,
-		ActionTreeParent: 40,
-		ActionTreeChild:  41,
-		ActionSelect:     50,
+	{
+		Category: "Navigation",
+		Actions: []Action{
+			ActionMoveUp,
+			ActionMoveDown,
+			ActionPageUp,
+			ActionPageDown,
+			ActionScrollTop,
+			ActionScrollEnd,
+			ActionTreeParent,
+			ActionTreeChild,
+			ActionSelect,
+		},
 	},
-	"Resources Panel": {
-		ActionToggleTargetMode: 10,
-		ActionToggleTarget:     11,
-		ActionToggleAllTargets: 12,
-		ActionToggleStatus:     13,
-		ActionToggleCreate:     14,
-		ActionToggleUpdate:     15,
-		ActionToggleDelete:     16,
-		ActionToggleReplace:    17,
-		ActionCopyAddress:      18,
-		ActionSwitchTabPrev:    19,
-		ActionSwitchTabNext:    20,
+	{
+		Category: "Resources Panel",
+		Actions: []Action{
+			ActionToggleTargetMode,
+			ActionToggleTarget,
+			ActionToggleAllTargets,
+			ActionToggleStatus,
+			ActionToggleCreate,
+			ActionToggleUpdate,
+			ActionToggleDelete,
+			ActionToggleReplace,
+			ActionCopyAddress,
+			ActionSwitchTabPrev,
+			ActionSwitchTabNext,
+		},
 	},
-	categoryExecution: {
-		ActionPlan:        10,
-		ActionApply:       11,
-		ActionValidate:    12,
-		ActionFormat:      13,
-		ActionInit:        14,
-		ActionInitUpgrade: 15,
-		ActionRefresh:     16,
+	{
+		Category: categoryExecution,
+		Actions: []Action{
+			ActionPlan,
+			ActionApply,
+			ActionValidate,
+			ActionFormat,
+			ActionInit,
+			ActionInitUpgrade,
+			ActionRefresh,
+		},
 	},
-	"General": {
-		ActionToggleHelp:  10,
-		ActionQuit:        20,
-		ActionCancelOp:    21,
-		ActionToggleTheme: 30,
+	{
+		Category: "Search",
 	},
-}
-
-var helpKeyOrder = map[string]int{
-	"+":         10,
-	"_":         11,
-	"tab":       20,
-	"shift+tab": 21,
-	"L":         30,
-	"T":         31,
-	"?":         40,
-	"esc":       41,
-	"enter":     42,
-	" ":         43,
+	{
+		Category: "General",
+		Actions: []Action{
+			ActionToggleHelp,
+			ActionQuit,
+			ActionCancelOp,
+			ActionToggleTheme,
+		},
+	},
 }
 
 // HintOptions configures hint generation.
@@ -198,28 +199,31 @@ func (r *Registry) ForHelpModal(ctx *Context) []HelpItem {
 	if ctx == nil {
 		ctx = NewContext()
 	}
+
+	bindings := visibleHelpBindings(r.GetBindingsForContext(ctx))
+	if len(bindings) == 0 {
+		return nil
+	}
+	byCategory := groupHelpBindingsByCategory(bindings)
+
 	items := make([]HelpItem, 0, 32) // Pre-allocate with reasonable capacity
 
-	byCategory := r.GetBindingsByCategory()
-
-	for _, category := range helpCategoryOrder {
-		bindings, ok := byCategory[category]
-		if !ok || len(bindings) == 0 {
+	for _, section := range helpSectionOrder {
+		if !ctx.ExecutionMode && section.Category == categoryExecution {
 			continue
 		}
 
-		// Filter execution bindings when not in execution mode
-		if !ctx.ExecutionMode && category == categoryExecution {
+		categoryBindings, ok := byCategory[section.Category]
+		if !ok || len(categoryBindings) == 0 {
 			continue
 		}
-
-		sectionItems := helpSectionItems(category, bindings, ctx)
+		sectionItems := helpSectionItems(categoryBindings, section.Actions)
 
 		if len(sectionItems) == 0 {
 			continue
 		}
 
-		items = appendHelpSection(items, category, sectionItems)
+		items = appendHelpSection(items, section.Category, sectionItems)
 	}
 
 	// Remove trailing empty line
@@ -230,32 +234,63 @@ func (r *Registry) ForHelpModal(ctx *Context) []HelpItem {
 	return items
 }
 
-func helpSectionItems(category string, bindings []Binding, ctx *Context) []HelpItem {
-	bindings = deduplicateByKey(bindings)
-	sort.Slice(bindings, func(i, j int) bool {
-		ri := helpActionRank(category, bindings[i])
-		rj := helpActionRank(category, bindings[j])
-		if ri != rj {
-			return ri < rj
-		}
-		ki := helpKeyRank(bindings[i].KeyString())
-		kj := helpKeyRank(bindings[j].KeyString())
-		if ki != kj {
-			return ki < kj
-		}
-		return bindings[i].AllKeysString() < bindings[j].AllKeysString()
-	})
-
-	sectionItems := make([]HelpItem, 0, len(bindings))
+func visibleHelpBindings(bindings []Binding) []Binding {
+	visible := make([]Binding, 0, len(bindings))
 	for _, b := range bindings {
 		if b.Hidden {
 			continue
 		}
-		if b.Condition != nil && !b.Condition(ctx) {
+		visible = append(visible, b)
+	}
+	return visible
+}
+
+func groupHelpBindingsByCategory(bindings []Binding) map[string][]Binding {
+	grouped := make(map[string][]Binding)
+	for _, b := range bindings {
+		category := b.Category
+		if category == "" {
+			category = "Other"
+		}
+		grouped[category] = append(grouped[category], b)
+	}
+	return grouped
+}
+
+func helpSectionItems(bindings []Binding, orderedActions []Action) []HelpItem {
+	bindings = deduplicateByKey(bindings)
+
+	sectionItems := make([]HelpItem, 0, len(bindings))
+	used := make([]bool, len(bindings))
+
+	for _, action := range orderedActions {
+		for i, b := range bindings {
+			if used[i] || b.Action != action {
+				continue
+			}
+			sectionItems = append(sectionItems, HelpItem{
+				Key:         formatHelpKeys(b.Keys),
+				Description: b.Description,
+				IsHeader:    false,
+			})
+			used[i] = true
+		}
+	}
+
+	remaining := make([]Binding, 0, len(bindings))
+	for i, b := range bindings {
+		if used[i] {
 			continue
 		}
+		remaining = append(remaining, b)
+	}
+	sort.Slice(remaining, func(i, j int) bool {
+		return formatHelpKeys(remaining[i].Keys) < formatHelpKeys(remaining[j].Keys)
+	})
+
+	for _, b := range remaining {
 		sectionItems = append(sectionItems, HelpItem{
-			Key:         b.AllKeysString(),
+			Key:         formatHelpKeys(b.Keys),
 			Description: b.Description,
 			IsHeader:    false,
 		})
@@ -264,20 +299,19 @@ func helpSectionItems(category string, bindings []Binding, ctx *Context) []HelpI
 	return sectionItems
 }
 
-func helpActionRank(category string, b Binding) int {
-	if categoryRanks, ok := helpActionOrder[category]; ok {
-		if rank, ok := categoryRanks[b.Action]; ok {
-			return rank
+func formatHelpKeys(keys []string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if key == " " {
+			parts = append(parts, "space")
+			continue
 		}
+		parts = append(parts, key)
 	}
-	return 1000
-}
-
-func helpKeyRank(key string) int {
-	if rank, ok := helpKeyOrder[key]; ok {
-		return rank
-	}
-	return 1000
+	return strings.Join(parts, "/")
 }
 
 func appendHelpSection(items []HelpItem, category string, sectionItems []HelpItem) []HelpItem {

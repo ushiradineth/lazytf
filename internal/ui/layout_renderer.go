@@ -95,7 +95,7 @@ func (m *Model) resourceSummaryText() string {
 func (m *Model) statusHelpText() string {
 	hints := m.staticStatusHints()
 	if len(hints) == 0 {
-		return "?: kbd"
+		return "?: keybinds"
 	}
 	return strings.Join(hints, " | ")
 }
@@ -116,7 +116,7 @@ func (m *Model) staticStatusHints() []string {
 		// No panel-specific hint.
 	}
 
-	hints = append(hints, "?: kbd")
+	hints = append(hints, "?: keybinds")
 	return hints
 }
 
