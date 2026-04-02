@@ -1157,6 +1157,14 @@ func (m *Model) clearSavedPlanState() {
 	m.planWorkDir = ""
 }
 
+func (m *Model) clearPlanResultState() {
+	m.setPlan(nil)
+	m.lastPlanOutput = ""
+	if m.planView != nil {
+		m.planView.SetSummary(m.planSummary())
+	}
+}
+
 func (m *Model) cancelExecution() {
 	if m.cancelFunc != nil {
 		m.cancelFunc()
@@ -1189,13 +1197,9 @@ func (m *Model) finishTrackedOperation() {
 }
 
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
+	m.clearPlanResultState()
 	if msg.Error != nil {
 		m.clearSavedPlanState()
-		m.setPlan(nil)
-		m.lastPlanOutput = ""
-		if m.planView != nil {
-			m.planView.SetSummary(m.planSummary())
-		}
 	}
 	return m.handleOperationStart(
 		msg.Error,
