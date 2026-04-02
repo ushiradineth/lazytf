@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func helpCtx(executionMode bool) *Context {
+	return &Context{ExecutionMode: executionMode}
+}
+
+func helpCtxWithHistory(executionMode, historyEnabled bool) *Context {
+	return &Context{ExecutionMode: executionMode, HistoryEnabled: historyEnabled}
+}
+
 func TestDefaultHintOptions(t *testing.T) {
 	opts := DefaultHintOptions()
 
@@ -241,10 +249,26 @@ func TestRegistry_ForStatusBar_ExcludesFocusModeHints(t *testing.T) {
 	}
 }
 
+func TestRegistry_ForStatusBar_IncludesToggleStatusHint(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, false)
+
+	ctx := &Context{
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+	}
+	opts := HintOptions{MaxPrimary: 16, MaxSecondary: 16, Separator: " | "}
+
+	result := r.ForStatusBar(ctx, opts)
+	if !strings.Contains(result, "s: toggle status column") {
+		t.Fatalf("expected status hint in status bar output, got %q", result)
+	}
+}
+
 func TestRegistry_ForHelpModal_Empty(t *testing.T) {
 	r := NewRegistry()
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	if len(items) != 0 {
 		t.Errorf("expected 0 items for empty registry, got %d", len(items))
@@ -269,7 +293,7 @@ func TestRegistry_ForHelpModal_Categories(t *testing.T) {
 		Category:    "Navigation",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	// Should have headers and items
 	hasNavHeader := false
@@ -310,7 +334,7 @@ func TestRegistry_ForHelpModal_ExecutionModeFilter(t *testing.T) {
 	})
 
 	// When not in execution mode, Execution category should be filtered
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	hasExecutionHeader := false
 	for _, item := range items {
@@ -324,7 +348,7 @@ func TestRegistry_ForHelpModal_ExecutionModeFilter(t *testing.T) {
 	}
 
 	// When in execution mode, Execution category should appear
-	items = r.ForHelpModal(true)
+	items = r.ForHelpModal(helpCtx(true))
 
 	hasExecutionHeader = false
 	for _, item := range items {
@@ -357,7 +381,7 @@ func TestRegistry_ForHelpModal_HiddenFiltered(t *testing.T) {
 		Hidden:      true,
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	for _, item := range items {
 		if !item.IsHeader && item.Key == "x" {
@@ -377,7 +401,7 @@ func TestRegistry_ForHelpModal_TrailingEmptyLineRemoved(t *testing.T) {
 		Category:    "General",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	if len(items) > 0 {
 		last := items[len(items)-1]
@@ -529,7 +553,7 @@ func TestRegistry_ForHelpModal_UnknownCategory(t *testing.T) {
 		Category:    "UnknownCategory",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	hasUnknownCategory := false
 	for _, item := range items {
@@ -555,7 +579,7 @@ func TestRegistry_ForHelpModal_EmptyDescription(t *testing.T) {
 		Category:    "General",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	// Should have General header and the binding
 	hasGeneral := false
@@ -588,7 +612,7 @@ func TestRegistry_ForHelpModal_AllKeysString(t *testing.T) {
 		Category:    "Navigation",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	found := false
 	for _, item := range items {
@@ -680,7 +704,7 @@ func TestRegistry_ForHelpModal_SortsByKey(t *testing.T) {
 		Category:    "General",
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	// Find the two bindings and verify order
 	var aIdx, zIdx int
@@ -718,7 +742,7 @@ func TestRegistry_ForHelpModal_HiddenInCategory(t *testing.T) {
 		Hidden:      true,
 	})
 
-	items := r.ForHelpModal(false)
+	items := r.ForHelpModal(helpCtx(false))
 
 	// Should have Navigation header and only visible binding
 	hasA := false
@@ -737,5 +761,61 @@ func TestRegistry_ForHelpModal_HiddenInCategory(t *testing.T) {
 	}
 	if hasB {
 		t.Error("expected hidden binding 'b' to be filtered")
+	}
+}
+
+func TestRegistry_ForHelpModal_RespectsExecutionConditionOutsideExecutionCategory(t *testing.T) {
+	r := NewRegistry()
+
+	r.Register(Binding{
+		Keys:        []string{"L"},
+		Action:      ActionToggleLog,
+		Scope:       ScopeGlobal,
+		Description: "toggle command log",
+		Category:    "Panel Navigation",
+		Condition:   ConditionExecutionMode,
+	})
+
+	nonExecItems := r.ForHelpModal(helpCtx(false))
+	for _, item := range nonExecItems {
+		if !item.IsHeader && item.Key == "L" {
+			t.Fatalf("expected L binding to be hidden when not in execution mode")
+		}
+	}
+
+	execItems := r.ForHelpModal(helpCtx(true))
+	found := false
+	for _, item := range execItems {
+		if !item.IsHeader && item.Key == "L" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected L binding to appear in execution mode")
+	}
+}
+
+func TestRegistry_ForHelpModal_RespectsHistoryEnabledCondition(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	withoutHistory := r.ForHelpModal(helpCtxWithHistory(true, false))
+	for _, item := range withoutHistory {
+		if !item.IsHeader && item.Description == "toggle history panel" {
+			t.Fatalf("expected history toggle to be hidden when history is disabled")
+		}
+	}
+
+	withHistory := r.ForHelpModal(helpCtxWithHistory(true, true))
+	found := false
+	for _, item := range withHistory {
+		if !item.IsHeader && item.Description == "toggle history panel" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected history toggle to appear when history is enabled")
 	}
 }

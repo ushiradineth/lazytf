@@ -326,6 +326,13 @@ func registerResourcesPanelBindings(r *Registry) {
 		Description: "toggle all groups",
 		Category:    "Resources Panel",
 	})
+	r.Register(Binding{
+		Keys:        []string{"s"},
+		Action:      ActionToggleStatus,
+		Scope:       ScopeGlobal,
+		Description: "toggle status column",
+		Category:    "Resources Panel",
+	})
 
 	// Panel-scoped filter bindings (higher priority, for execution mode on Resources tab)
 	r.Register(Binding{
@@ -375,6 +382,16 @@ func registerResourcesPanelBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         0,
 		Description: "toggle all groups",
+		Category:    "Resources Panel",
+		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"s"},
+		Action:      ActionToggleStatus,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "toggle status column",
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})
