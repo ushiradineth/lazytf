@@ -228,6 +228,13 @@ func TestRegistry_ForStatusBar_ExcludesFocusModeHints(t *testing.T) {
 		Category:    "Panel Navigation",
 	})
 	r.Register(Binding{
+		Keys:        []string{"T"},
+		Action:      ActionToggleTheme,
+		Scope:       ScopeGlobal,
+		Description: "change theme",
+		Category:    "General",
+	})
+	r.Register(Binding{
 		Keys:        []string{"q"},
 		Action:      ActionQuit,
 		Scope:       ScopeGlobal,
@@ -242,6 +249,9 @@ func TestRegistry_ForStatusBar_ExcludesFocusModeHints(t *testing.T) {
 	}
 	if strings.Contains(result, "command log") {
 		t.Fatalf("expected command log hint to be excluded, got %q", result)
+	}
+	if strings.Contains(result, "theme") {
+		t.Fatalf("expected theme hint to be excluded, got %q", result)
 	}
 	if !strings.Contains(result, "q: quit") {
 		t.Fatalf("expected normal global hint to remain, got %q", result)
