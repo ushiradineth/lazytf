@@ -122,14 +122,14 @@ func (m *Model) staticStatusHints() []string {
 
 func (m *Model) staticResourcesPanelHints() []string {
 	if m.resourcesActiveTab != 0 {
-		return []string{"enter: select"}
+		return []string{"enter: select", "i: init", "I: init upgrade"}
 	}
 	if !m.executionMode {
 		return nil
 	}
 	hasResources := m.resourceList != nil && m.resourceList.HasResources()
 	if !hasResources {
-		return []string{"p: plan", "f: format", "v: validate", "i: init"}
+		return []string{"p: plan", "f: format", "v: validate", "i: init", "I: init upgrade"}
 	}
 	if m.targetModeEnabled {
 		return []string{"A: apply", "t: exit target mode", "a: toggle all"}

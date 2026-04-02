@@ -334,6 +334,36 @@ func TestRegistry_Resolve_ApplyInExecutionMode(t *testing.T) {
 	}
 }
 
+func TestRegistry_Resolve_InitBindingsOnResourcesAndStateTabs(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+	RegisterWorkspacePanelBindings(r)
+
+	resourcesCtx := &Context{
+		ExecutionMode:      true,
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+	}
+	if binding := r.Resolve("i", resourcesCtx); binding == nil || binding.Action != ActionInit {
+		t.Fatalf("expected i -> ActionInit on resources tab, got %#v", binding)
+	}
+	if binding := r.Resolve("I", resourcesCtx); binding == nil || binding.Action != ActionInitUpgrade {
+		t.Fatalf("expected I -> ActionInitUpgrade on resources tab, got %#v", binding)
+	}
+
+	stateCtx := &Context{
+		ExecutionMode:      true,
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 1,
+	}
+	if binding := r.Resolve("i", stateCtx); binding == nil || binding.Action != ActionInit {
+		t.Fatalf("expected i -> ActionInit on state tab, got %#v", binding)
+	}
+	if binding := r.Resolve("I", stateCtx); binding == nil || binding.Action != ActionInitUpgrade {
+		t.Fatalf("expected I -> ActionInitUpgrade on state tab, got %#v", binding)
+	}
+}
+
 func TestRegistry_Resolve_MainPanelToggleHunkOverridesSelect(t *testing.T) {
 	r := NewRegistry()
 	RegisterDefaults(r, true)
