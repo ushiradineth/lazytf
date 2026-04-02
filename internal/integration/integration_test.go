@@ -201,6 +201,7 @@ func copyDummyConfig(dir string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
+	// #nosec G703 -- dir originates from t.TempDir in this test flow.
 	return os.Rename(tmpPath, filepath.Join(dir, "main.tf"))
 }
 
