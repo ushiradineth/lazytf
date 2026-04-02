@@ -17,6 +17,75 @@ var helpCategoryOrder = []string{
 	"General",
 }
 
+var helpActionOrder = map[string]map[Action]int{
+	"Panel Navigation": {
+		ActionFocusModeNext:   10,
+		ActionFocusModePrev:   11,
+		ActionCycleFocus:      20,
+		ActionCycleFocusBack:  21,
+		ActionToggleLog:       30,
+		ActionToggleHistory:   31,
+		ActionFocusWorkspace:  40,
+		ActionFocusResources:  41,
+		ActionFocusHistory:    42,
+		ActionFocusMain:       43,
+		ActionFocusCommandLog: 44,
+		ActionEscapeBack:      50,
+	},
+	"Navigation": {
+		ActionMoveUp:     10,
+		ActionMoveDown:   11,
+		ActionPageUp:     20,
+		ActionPageDown:   21,
+		ActionScrollTop:  30,
+		ActionScrollEnd:  31,
+		ActionTreeParent: 40,
+		ActionTreeChild:  41,
+		ActionSelect:     50,
+	},
+	"Resources Panel": {
+		ActionToggleTargetMode: 10,
+		ActionToggleTarget:     11,
+		ActionToggleAllTargets: 12,
+		ActionToggleStatus:     13,
+		ActionToggleCreate:     14,
+		ActionToggleUpdate:     15,
+		ActionToggleDelete:     16,
+		ActionToggleReplace:    17,
+		ActionCopyAddress:      18,
+		ActionSwitchTabPrev:    19,
+		ActionSwitchTabNext:    20,
+	},
+	categoryExecution: {
+		ActionPlan:        10,
+		ActionApply:       11,
+		ActionValidate:    12,
+		ActionFormat:      13,
+		ActionInit:        14,
+		ActionInitUpgrade: 15,
+		ActionRefresh:     16,
+	},
+	"General": {
+		ActionToggleHelp:  10,
+		ActionQuit:        20,
+		ActionCancelOp:    21,
+		ActionToggleTheme: 30,
+	},
+}
+
+var helpKeyOrder = map[string]int{
+	"+":         10,
+	"_":         11,
+	"tab":       20,
+	"shift+tab": 21,
+	"L":         30,
+	"T":         31,
+	"?":         40,
+	"esc":       41,
+	"enter":     42,
+	" ":         43,
+}
+
 // HintOptions configures hint generation.
 type HintOptions struct {
 	// MaxPrimary is the maximum number of primary hints to show.
@@ -38,7 +107,7 @@ func DefaultHintOptions() HintOptions {
 
 // ForStatusBar generates a status bar hint string for the given context.
 //
-//nolint:gocognit // Prioritized filtering/sorting rules are clearer in one pass.
+//nolint:gocognit,gocyclo // Prioritized filtering/sorting rules are clearer in one pass.
 func (r *Registry) ForStatusBar(ctx *Context, opts HintOptions) string {
 	if opts.Separator == "" {
 		opts.Separator = " | "
@@ -144,7 +213,7 @@ func (r *Registry) ForHelpModal(ctx *Context) []HelpItem {
 			continue
 		}
 
-		sectionItems := helpSectionItems(bindings, ctx)
+		sectionItems := helpSectionItems(category, bindings, ctx)
 
 		if len(sectionItems) == 0 {
 			continue
@@ -161,10 +230,20 @@ func (r *Registry) ForHelpModal(ctx *Context) []HelpItem {
 	return items
 }
 
-func helpSectionItems(bindings []Binding, ctx *Context) []HelpItem {
+func helpSectionItems(category string, bindings []Binding, ctx *Context) []HelpItem {
 	bindings = deduplicateByKey(bindings)
 	sort.Slice(bindings, func(i, j int) bool {
-		return bindings[i].KeyString() < bindings[j].KeyString()
+		ri := helpActionRank(category, bindings[i])
+		rj := helpActionRank(category, bindings[j])
+		if ri != rj {
+			return ri < rj
+		}
+		ki := helpKeyRank(bindings[i].KeyString())
+		kj := helpKeyRank(bindings[j].KeyString())
+		if ki != kj {
+			return ki < kj
+		}
+		return bindings[i].AllKeysString() < bindings[j].AllKeysString()
 	})
 
 	sectionItems := make([]HelpItem, 0, len(bindings))
@@ -183,6 +262,22 @@ func helpSectionItems(bindings []Binding, ctx *Context) []HelpItem {
 	}
 
 	return sectionItems
+}
+
+func helpActionRank(category string, b Binding) int {
+	if categoryRanks, ok := helpActionOrder[category]; ok {
+		if rank, ok := categoryRanks[b.Action]; ok {
+			return rank
+		}
+	}
+	return 1000
+}
+
+func helpKeyRank(key string) int {
+	if rank, ok := helpKeyOrder[key]; ok {
+		return rank
+	}
+	return 1000
 }
 
 func appendHelpSection(items []HelpItem, category string, sectionItems []HelpItem) []HelpItem {
