@@ -108,11 +108,6 @@ var ConditionTargetMode Condition = func(ctx *Context) bool {
 	return ctx.TargetMode
 }
 
-// ConditionNotTargetMode checks if target mode is disabled.
-var ConditionNotTargetMode Condition = func(ctx *Context) bool {
-	return !ctx.TargetMode
-}
-
 // ConditionTargetAvailable checks if targetable resources are available.
 var ConditionTargetAvailable Condition = func(ctx *Context) bool {
 	return ctx.TargetAvailable

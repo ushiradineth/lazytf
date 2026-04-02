@@ -291,10 +291,10 @@ func TestRegistry_ForStatusBar_IncludesTargetModeHints(t *testing.T) {
 	if !strings.Contains(result, "enter: toggle target selection") {
 		t.Fatalf("expected target-selection hint in status bar output, got %q", result)
 	}
-	if !strings.Contains(result, "a: toggle all targets") {
+	if !strings.Contains(result, "s: toggle all targets") {
 		t.Fatalf("expected toggle-all-targets hint in status bar output, got %q", result)
 	}
-	if !strings.Contains(result, "A: apply") {
+	if !strings.Contains(result, "a: apply") {
 		t.Fatalf("expected target-mode apply hint in status bar output, got %q", result)
 	}
 }
