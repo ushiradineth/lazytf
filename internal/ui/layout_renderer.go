@@ -12,6 +12,8 @@ import (
 	"github.com/ushiradineth/lazytf/internal/utils"
 )
 
+const footerHelpHint = "keybinds: ?"
+
 // Layout-related methods for Model
 
 // renderStatusBar renders the bottom status bar.
@@ -94,12 +96,12 @@ func (m *Model) resourceSummaryText() string {
 
 func (m *Model) statusHelpText() string {
 	if m.keybindRegistry == nil {
-		return "keybinds: ?"
+		return footerHelpHint
 	}
 	ctx := m.buildKeybindContext()
 	hints := m.keybindRegistry.FooterHints(ctx)
 	if len(hints) == 0 {
-		return "keybinds: ?"
+		return footerHelpHint
 	}
 	return strings.Join(hints, " | ")
 }
