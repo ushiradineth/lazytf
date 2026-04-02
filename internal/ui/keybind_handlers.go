@@ -64,8 +64,6 @@ func convertModalState(s ModalState) keybinds.ModalID {
 	switch s {
 	case ModalHelp:
 		return keybinds.ModalHelp
-	case ModalSettings:
-		return keybinds.ModalSettings
 	case ModalConfirmApply:
 		return keybinds.ModalConfirmApply
 	case ModalTheme:
@@ -103,7 +101,6 @@ func (m *Model) registerKeybindHandlers() {
 	r.RegisterHandler(keybinds.ActionQuit, m.handleActionQuit)
 	r.RegisterHandler(keybinds.ActionCancelOp, m.handleActionCancelOp)
 	r.RegisterHandler(keybinds.ActionToggleHelp, m.handleActionToggleHelp)
-	r.RegisterHandler(keybinds.ActionToggleConfig, m.handleActionToggleConfig)
 	r.RegisterHandler(keybinds.ActionToggleTheme, m.handleActionToggleTheme)
 
 	// Panel navigation
@@ -189,11 +186,6 @@ func (m *Model) handleActionCancelOp(ctx *keybinds.Context) tea.Cmd {
 
 func (m *Model) handleActionToggleHelp(_ *keybinds.Context) tea.Cmd {
 	m.toggleHelpModal()
-	return nil
-}
-
-func (m *Model) handleActionToggleConfig(_ *keybinds.Context) tea.Cmd {
-	m.toggleSettingsModal()
 	return nil
 }
 
@@ -709,10 +701,6 @@ func (m *Model) handleActionScrollUp(ctx *keybinds.Context) tea.Cmd {
 		if m.helpModal != nil {
 			m.helpModal.ScrollUp()
 		}
-	case keybinds.ModalSettings:
-		if m.settingsModal != nil {
-			m.settingsModal.ScrollUp()
-		}
 	case keybinds.ModalTheme:
 		if m.themeModal != nil {
 			m.themeModal.ScrollUp()
@@ -729,10 +717,6 @@ func (m *Model) handleActionScrollDown(ctx *keybinds.Context) tea.Cmd {
 	case keybinds.ModalHelp:
 		if m.helpModal != nil {
 			m.helpModal.ScrollDown()
-		}
-	case keybinds.ModalSettings:
-		if m.settingsModal != nil {
-			m.settingsModal.ScrollDown()
 		}
 	case keybinds.ModalTheme:
 		if m.themeModal != nil {

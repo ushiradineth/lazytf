@@ -192,14 +192,6 @@ func TestRegistry_ForStatusBar_ShortenedDescriptions(t *testing.T) {
 		Description: "toggle keybinds",
 		Category:    "General",
 	})
-	r.Register(Binding{
-		Keys:        []string{","},
-		Action:      ActionToggleConfig,
-		Scope:       ScopeGlobal,
-		Description: "open settings",
-		Category:    "General",
-	})
-
 	ctx := NewContext()
 	opts := DefaultHintOptions()
 
@@ -208,9 +200,6 @@ func TestRegistry_ForStatusBar_ShortenedDescriptions(t *testing.T) {
 	// Check shortened descriptions
 	if !strings.Contains(result, "keybinds") {
 		t.Errorf("expected shortened 'keybinds', got %q", result)
-	}
-	if !strings.Contains(result, "settings") {
-		t.Errorf("expected shortened 'settings', got %q", result)
 	}
 }
 
@@ -475,19 +464,6 @@ func TestFormatHint_ToggleKeybindsHelp(t *testing.T) {
 
 	if result != "?: keybinds" {
 		t.Errorf("expected '?: keybinds', got %q", result)
-	}
-}
-
-func TestFormatHint_ToggleSettings(t *testing.T) {
-	b := Binding{
-		Keys:        []string{","},
-		Description: "toggle settings",
-	}
-
-	result := formatHint(b)
-
-	if result != ",: settings" {
-		t.Errorf("expected ',: settings', got %q", result)
 	}
 }
 

@@ -12,7 +12,6 @@ var tips = []string{
 	"Use number keys '1-4' to jump directly to panels.",
 	"Press 'L' to toggle the command log panel.",
 	"Press 'T' to change the theme.",
-	"Press ',' to open settings.",
 	"Use 'j/k' or arrow keys to navigate lists.",
 	"Press 'g' to jump to top, 'G' to jump to bottom.",
 	"Press 'Esc' to return to the resource list.",

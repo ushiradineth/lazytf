@@ -5,11 +5,10 @@ type Action string
 
 // Global actions (work everywhere).
 const (
-	ActionQuit         Action = "quit"
-	ActionCancelOp     Action = "cancel_operation"
-	ActionToggleHelp   Action = "toggle_help"
-	ActionToggleTheme  Action = "toggle_theme"
-	ActionToggleConfig Action = "toggle_config"
+	ActionQuit        Action = "quit"
+	ActionCancelOp    Action = "cancel_operation"
+	ActionToggleHelp  Action = "toggle_help"
+	ActionToggleTheme Action = "toggle_theme"
 )
 
 // Panel navigation actions.

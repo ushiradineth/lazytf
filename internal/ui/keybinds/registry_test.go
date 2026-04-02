@@ -372,6 +372,20 @@ func TestRegistry_Resolve_MainPanelTreeArrowKeys(t *testing.T) {
 	}
 }
 
+func TestRegistry_Resolve_NoSettingsBindingForComma(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	if binding := r.Resolve(",", NewContext()); binding != nil {
+		t.Fatalf("expected no binding for ',' after settings removal, got %v", binding.Action)
+	}
+
+	modalCtx := &Context{ActiveModal: ModalHelp}
+	if binding := r.Resolve(",", modalCtx); binding != nil {
+		t.Fatalf("expected no modal binding for ',' after settings removal, got %v", binding.Action)
+	}
+}
+
 func TestBinding_KeyString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -893,7 +907,7 @@ func TestBindingActiveInContext_AllScopes(t *testing.T) {
 				Scope: ScopeModal,
 				Modal: ModalHelp,
 			},
-			ctx:      &Context{ActiveModal: ModalSettings},
+			ctx:      &Context{ActiveModal: ModalTheme},
 			expected: false,
 		},
 		{
@@ -989,7 +1003,7 @@ func TestBinding_Matches_AllBranches(t *testing.T) {
 				Modal: ModalHelp,
 			},
 			key:      "q",
-			ctx:      &Context{ActiveModal: ModalSettings},
+			ctx:      &Context{ActiveModal: ModalTheme},
 			expected: false,
 		},
 		{

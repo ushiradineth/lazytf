@@ -75,9 +75,6 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) tea.Model {
 	if m.planView != nil {
 		m.planView.SetSize(m.width, m.height)
 	}
-	if m.configView != nil {
-		m.configView.SetSize(m.width, m.height)
-	}
 	return m
 }
 

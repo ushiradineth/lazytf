@@ -878,24 +878,6 @@ func TestWaitApplyCompleteCmdNilResult(t *testing.T) {
 	}
 }
 
-func TestSettingsModal(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.width = 80
-	m.height = 24
-
-	m.updateSettingsModalContent()
-	if m.settingsModal == nil {
-		t.Fatalf("expected settings modal to be initialized")
-	}
-	if !m.settingsModal.IsVisible() {
-		t.Fatalf("expected settings modal to be visible")
-	}
-	out := m.settingsModal.View()
-	if !strings.Contains(out, "No configuration loaded.") {
-		t.Fatalf("expected settings fallback text")
-	}
-}
-
 func TestRenderToast(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.width = 80
@@ -1546,12 +1528,6 @@ func TestViewModalStates(t *testing.T) {
 	m.height = 24
 	m.updateLayout() // Update layout to set overlay component sizes
 
-	m.modalState = ModalSettings
-	m.updateSettingsModalContent() // Populate settings modal content
-	if out := m.View(); !strings.Contains(out, "Settings") {
-		t.Fatalf("expected settings view")
-	}
-
 	m.modalState = ModalHelp
 	m.updateHelpModalContent() // Populate help modal content
 	if out := m.View(); !strings.Contains(out, "Keybinds") {
@@ -1694,16 +1670,6 @@ func TestHandlePlanCompleteSuccess(t *testing.T) {
 func TestUpdateModalDismissals(t *testing.T) {
 	m := NewModel(&terraform.Plan{})
 	m.ready = true
-
-	m.modalState = ModalSettings
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
-	if m.modalState != ModalSettings {
-		t.Fatalf("expected settings modal to ignore unrelated keys")
-	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.modalState != ModalNone {
-		t.Fatalf("expected settings modal to close on esc")
-	}
 
 	m.modalState = ModalHelp
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -2094,25 +2060,6 @@ func TestToggleHelpModal(t *testing.T) {
 
 	// Toggle help modal off
 	m.toggleHelpModal()
-	if m.modalState != ModalNone {
-		t.Errorf("expected modal state ModalNone, got %v", m.modalState)
-	}
-}
-
-func TestToggleSettingsModal(t *testing.T) {
-	m := NewModel(&terraform.Plan{})
-	m.ready = true
-	m.width = 80
-	m.height = 24
-
-	// Toggle settings modal on
-	m.toggleSettingsModal()
-	if m.modalState != ModalSettings {
-		t.Errorf("expected modal state ModalSettings, got %v", m.modalState)
-	}
-
-	// Toggle settings modal off
-	m.toggleSettingsModal()
 	if m.modalState != ModalNone {
 		t.Errorf("expected modal state ModalNone, got %v", m.modalState)
 	}
@@ -3601,20 +3548,6 @@ func TestHandleActionConfirmNo(t *testing.T) {
 	_ = cmd
 }
 
-func TestFallbackValue(t *testing.T) {
-	// Test with empty value
-	result := fallbackValue("")
-	if result != defaultThemeName {
-		t.Errorf("expected %q, got %q", defaultThemeName, result)
-	}
-
-	// Test with non-empty value
-	result = fallbackValue("custom")
-	if result != "custom" {
-		t.Errorf("expected 'custom', got %q", result)
-	}
-}
-
 func TestResourcesControllerStateTabHandling(t *testing.T) {
 	rl := components.NewResourceList(styles.DefaultStyles())
 	rc := NewResourcesPanelController(rl)
@@ -4708,11 +4641,6 @@ func TestApplyViewOverlays(t *testing.T) {
 	// With help modal
 	m.modalState = ModalHelp
 	result := m.applyViewOverlays(baseView)
-	_ = result
-
-	// With settings modal
-	m.modalState = ModalSettings
-	result = m.applyViewOverlays(baseView)
 	_ = result
 
 	// With confirm apply modal
