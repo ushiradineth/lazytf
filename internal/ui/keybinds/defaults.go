@@ -28,7 +28,7 @@ func registerGlobalBindings(r *Registry) {
 		Keys:        []string{KeyCtrlC},
 		Action:      ActionCancelOp,
 		Scope:       ScopeGlobal,
-		Description: "quit / cancel operation",
+		Description: "cancel/quit",
 		Category:    "General",
 	})
 
@@ -37,7 +37,7 @@ func registerGlobalBindings(r *Registry) {
 		Keys:        []string{"?"},
 		Action:      ActionToggleHelp,
 		Scope:       ScopeGlobal,
-		Description: "toggle keybinds",
+		Description: "keybinds",
 		Category:    "General",
 	})
 
@@ -46,7 +46,7 @@ func registerGlobalBindings(r *Registry) {
 		Keys:        []string{"T"},
 		Action:      ActionToggleTheme,
 		Scope:       ScopeGlobal,
-		Description: "change theme",
+		Description: "theme",
 		Category:    "General",
 	})
 }
@@ -100,14 +100,14 @@ func registerPanelNavigationBindings(r *Registry) {
 		Keys:        []string{"tab"},
 		Action:      ActionCycleFocus,
 		Scope:       ScopeGlobal,
-		Description: "cycle panels",
+		Description: "next panel",
 		Category:    "Panel Navigation",
 	})
 	r.Register(Binding{
 		Keys:        []string{"shift+tab"},
 		Action:      ActionCycleFocusBack,
 		Scope:       ScopeGlobal,
-		Description: "cycle panels (reverse)",
+		Description: "prev panel",
 		Category:    "Panel Navigation",
 	})
 
@@ -116,7 +116,7 @@ func registerPanelNavigationBindings(r *Registry) {
 		Keys:        []string{"L"},
 		Action:      ActionToggleLog,
 		Scope:       ScopeGlobal,
-		Description: "toggle command log",
+		Description: "command log",
 		Category:    "Panel Navigation",
 		Condition:   ConditionExecutionMode,
 	})
@@ -126,7 +126,7 @@ func registerPanelNavigationBindings(r *Registry) {
 		Keys:        []string{"+"},
 		Action:      ActionFocusModeNext,
 		Scope:       ScopeGlobal,
-		Description: "next focus mode",
+		Description: "focus mode +",
 		Category:    "Panel Navigation",
 		Condition:   ConditionExecutionMode,
 	})
@@ -134,7 +134,7 @@ func registerPanelNavigationBindings(r *Registry) {
 		Keys:        []string{"_"},
 		Action:      ActionFocusModePrev,
 		Scope:       ScopeGlobal,
-		Description: "previous focus mode",
+		Description: "focus mode -",
 		Category:    "Panel Navigation",
 		Condition:   ConditionExecutionMode,
 	})
@@ -144,7 +144,7 @@ func registerPanelNavigationBindings(r *Registry) {
 		Keys:        []string{KeyEsc},
 		Action:      ActionEscapeBack,
 		Scope:       ScopeGlobal,
-		Description: "return to resource list",
+		Description: "back to resources",
 		Category:    "Panel Navigation",
 		Hidden:      true,
 	})
@@ -162,14 +162,14 @@ func registerDirectionalBindings(r *Registry) {
 		Keys:        []string{"up", "k"},
 		Action:      ActionMoveUp,
 		Scope:       ScopeGlobal,
-		Description: "move selection up",
+		Description: "up",
 		Category:    "Navigation",
 	})
 	r.Register(Binding{
 		Keys:        []string{KeyDown, "j"},
 		Action:      ActionMoveDown,
 		Scope:       ScopeGlobal,
-		Description: "move selection down",
+		Description: "down",
 		Category:    "Navigation",
 	})
 }
@@ -197,7 +197,7 @@ func registerPagingBindings(r *Registry) {
 		Keys:        []string{"home", "g"},
 		Action:      ActionScrollTop,
 		Scope:       ScopeGlobal,
-		Description: "scroll to top",
+		Description: "top",
 		Category:    "Navigation",
 		Hidden:      true,
 	})
@@ -205,7 +205,7 @@ func registerPagingBindings(r *Registry) {
 		Keys:        []string{"end", "G"},
 		Action:      ActionScrollEnd,
 		Scope:       ScopeGlobal,
-		Description: "scroll to bottom",
+		Description: "bottom",
 		Category:    "Navigation",
 		Hidden:      true,
 	})
@@ -246,7 +246,7 @@ func registerMainTreeNavigationBindings(r *Registry) {
 		Action:      ActionPrevHunk,
 		Scope:       ScopePanel,
 		Panel:       PanelMain,
-		Description: "previous node",
+		Description: "prev node",
 		Category:    "Navigation",
 	})
 	r.Register(Binding{
@@ -294,42 +294,42 @@ func registerResourcesPanelBindings(r *Registry) {
 		Keys:        []string{"c"},
 		Action:      ActionToggleCreate,
 		Scope:       ScopeGlobal,
-		Description: "toggle create filter",
+		Description: "create filter",
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
 		Keys:        []string{"u"},
 		Action:      ActionToggleUpdate,
 		Scope:       ScopeGlobal,
-		Description: "toggle update filter",
+		Description: "update filter",
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
 		Keys:        []string{"d"},
 		Action:      ActionToggleDelete,
 		Scope:       ScopeGlobal,
-		Description: "toggle delete filter",
+		Description: "delete filter",
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
 		Keys:        []string{"r"},
 		Action:      ActionToggleReplace,
 		Scope:       ScopeGlobal,
-		Description: "toggle replace filter",
+		Description: "replace filter",
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
 		Keys:        []string{"s"},
 		Action:      ActionToggleStatus,
 		Scope:       ScopeGlobal,
-		Description: "toggle status column",
+		Description: "status",
 		Category:    "Resources Panel",
 	})
 	r.Register(Binding{
 		Keys:        []string{"t"},
 		Action:      ActionToggleTargetMode,
 		Scope:       ScopeGlobal,
-		Description: "toggle target mode",
+		Description: "target mode",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
@@ -343,7 +343,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle create filter",
+		Description: "create filter",
 		Category:    "Resources Panel",
 		Hidden:      true, // Don't show duplicate in help
 	})
@@ -353,7 +353,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle update filter",
+		Description: "update filter",
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})
@@ -363,7 +363,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle delete filter",
+		Description: "delete filter",
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})
@@ -373,7 +373,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle replace filter",
+		Description: "replace filter",
 		Category:    "Resources Panel",
 		Hidden:      true,
 	})
@@ -383,7 +383,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle status column",
+		Description: "status",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return !ctx.TargetMode
@@ -396,7 +396,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle target mode",
+		Description: "target mode",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
@@ -408,7 +408,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle target selection",
+		Description: "target select",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetMode(ctx)
@@ -420,7 +420,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "toggle all targets",
+		Description: "target all",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetMode(ctx)
@@ -452,7 +452,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Action:      ActionSwitchTabPrev,
 		Scope:       ScopePanel,
 		Panel:       PanelResources,
-		Description: "switch to previous tab",
+		Description: "prev tab",
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
 		Hidden:      true,
@@ -462,7 +462,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Action:      ActionSwitchTabNext,
 		Scope:       ScopePanel,
 		Panel:       PanelResources,
-		Description: "switch to next tab",
+		Description: "next tab",
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
 		Hidden:      true,
@@ -539,7 +539,7 @@ func registerExecutionBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         1,
 		Condition:   ConditionExecutionMode,
-		Description: "reload state list",
+		Description: "state reload",
 		Category:    "Execution",
 	})
 	r.Register(Binding{
@@ -569,7 +569,7 @@ func registerExecutionBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         1,
 		Condition:   ConditionExecutionMode,
-		Description: "remove selected state",
+		Description: "state rm",
 		Category:    "Execution",
 	})
 	r.Register(Binding{
@@ -579,7 +579,7 @@ func registerExecutionBindings(r *Registry) {
 		Panel:       PanelResources,
 		Tab:         1,
 		Condition:   ConditionExecutionMode,
-		Description: "move selected state",
+		Description: "state mv",
 		Category:    "Execution",
 	})
 	// History toggle (global in execution mode with history enabled)
@@ -590,7 +590,7 @@ func registerExecutionBindings(r *Registry) {
 		Condition: func(ctx *Context) bool {
 			return ctx.ExecutionMode && ctx.HistoryEnabled
 		},
-		Description: "toggle history panel",
+		Description: "history panel",
 		Category:    "Execution",
 	})
 
@@ -600,7 +600,7 @@ func registerExecutionBindings(r *Registry) {
 		Action:      ActionFocusCommandLog,
 		Scope:       ScopeGlobal,
 		Condition:   ConditionExecutionMode,
-		Description: "focus logs panel",
+		Description: "focus logs",
 		Category:    "Execution",
 		Hidden:      true,
 	})

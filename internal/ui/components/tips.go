@@ -23,12 +23,13 @@ var tips = []string{
 	"Press 'r' to filter only replace operations.",
 	"Press 't' to toggle target mode for scoped plans.",
 	"Press 'Space' in target mode to target selected path or module tree.",
-	"Press 'a' in target mode to toggle all visible targets.",
+	"Press 's' in target mode to toggle all visible targets.",
+	"Press 'y' to yank the selected resource address.",
 	"Use '[' and ']' to switch between tabs in the Resources panel.",
 
 	// Terraform Workflow
 	"Press 'p' to run terraform plan.",
-	"Press 'a' to run terraform apply (outside target mode).",
+	"Press 'a' to run terraform apply.",
 	"Press 'v' to validate your configuration.",
 	"Press 'f' to format your Terraform files.",
 	"Press 'h' to toggle the history panel (when enabled).",
