@@ -35,7 +35,7 @@ func TestStatusHelpTextResourcesTabNoPlan(t *testing.T) {
 	m.resourceList.SetResources(nil)
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"plan: p", "format: f", "validate: v", "init: i", "init+: I", "keybinds: ?"} {
+	for _, hint := range []string{"plan: p", "format: f", "validate: v", "init: i", "init upgrade: I", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
@@ -48,7 +48,7 @@ func TestStatusHelpTextResourcesStateTabIncludesInitHints(t *testing.T) {
 	m.resourcesActiveTab = 1
 
 	got := m.statusHelpText()
-	for _, hint := range []string{"select: enter", "yank: y", "init: i", "init+: I", "keybinds: ?"} {
+	for _, hint := range []string{"select: enter", "yank: y", "init: i", "init upgrade: I", "keybinds: ?"} {
 		if !strings.Contains(got, hint) {
 			t.Fatalf("expected hint %q in %q", hint, got)
 		}
