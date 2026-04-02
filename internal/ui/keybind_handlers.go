@@ -14,6 +14,7 @@ func (m *Model) buildKeybindContext() *keybinds.Context {
 	// Mode state
 	ctx.ExecutionMode = m.executionMode
 	ctx.HistoryEnabled = m.historyEnabled
+	ctx.TargetMode = m.targetModeEnabled
 	ctx.OperationRunning = m.isOperationRunning()
 	ctx.PlanRunning = m.planRunning
 	ctx.ApplyRunning = m.applyRunning
@@ -144,6 +145,10 @@ func (m *Model) registerFilterActionHandlers(r *keybinds.Registry) {
 	r.RegisterHandler(keybinds.ActionToggleReplace, m.handleActionToggleReplace)
 	r.RegisterHandler(keybinds.ActionToggleAllGroups, m.handleActionToggleAllGroups)
 	r.RegisterHandler(keybinds.ActionToggleStatus, m.handleActionToggleStatus)
+	r.RegisterHandler(keybinds.ActionToggleTargetMode, m.handleActionToggleTargetMode)
+	r.RegisterHandler(keybinds.ActionToggleTarget, m.handleActionToggleTarget)
+	r.RegisterHandler(keybinds.ActionToggleAllTargets, m.handleActionToggleAllTargets)
+	r.RegisterHandler(keybinds.ActionClearTargets, m.handleActionClearTargets)
 	r.RegisterHandler(keybinds.ActionCopyAddress, m.handleActionCopyAddress)
 	r.RegisterHandler(keybinds.ActionStateRemove, m.handleActionStateRemove)
 	r.RegisterHandler(keybinds.ActionStateMove, m.handleActionStateMove)
@@ -456,6 +461,31 @@ func (m *Model) handleActionToggleStatus(_ *keybinds.Context) tea.Cmd {
 	return nil
 }
 
+func (m *Model) handleActionToggleTargetMode(_ *keybinds.Context) tea.Cmd {
+	return func() tea.Msg { return ToggleTargetModeMsg{} }
+}
+
+func (m *Model) handleActionToggleTarget(_ *keybinds.Context) tea.Cmd {
+	return func() tea.Msg { return ToggleTargetSelectionMsg{} }
+}
+
+func (m *Model) handleActionToggleAllTargets(ctx *keybinds.Context) tea.Cmd {
+	if ctx == nil || ctx.FocusedPanel != keybinds.PanelResources || m.resourcesActiveTab != 0 {
+		return nil
+	}
+	if !m.targetModeEnabled || m.resourceList == nil {
+		return nil
+	}
+	if m.resourceList.ToggleAllTargetSelection() {
+		m.invalidateTargetPlanPin()
+	}
+	return nil
+}
+
+func (m *Model) handleActionClearTargets(_ *keybinds.Context) tea.Cmd {
+	return func() tea.Msg { return ClearTargetSelectionMsg{} }
+}
+
 func (m *Model) handleActionSwitchTabPrev(_ *keybinds.Context) tea.Cmd {
 	return switchResourcesTab(-1)
 }
@@ -664,6 +694,12 @@ func (m *Model) handleActionSelectResourceTab() tea.Cmd {
 	if m.resourceList == nil {
 		return nil
 	}
+	if m.targetModeEnabled {
+		if m.resourceList.ToggleTargetSelectionAtSelected() {
+			m.invalidateTargetPlanPin()
+		}
+		return nil
+	}
 	if m.resourceList.GetSelectedResource() == nil {
 		m.resourceList.ToggleGroup()
 		return nil
@@ -756,6 +792,7 @@ func (m *Model) handleActionConfirmYes(_ *keybinds.Context) tea.Cmd {
 func (m *Model) handleActionConfirmNo(_ *keybinds.Context) tea.Cmd {
 	m.modalState = ModalNone
 	m.pendingConfirmCmd = nil
+	m.clearPendingTargetPlanIntent()
 	return nil
 }
 

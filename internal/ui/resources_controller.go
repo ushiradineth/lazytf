@@ -84,7 +84,7 @@ func (c *ResourcesPanelController) handleResourcesTabKey(msg tea.KeyMsg) (bool, 
 	case "r":
 		return true, toggleFilter(terraform.ActionReplace)
 	case "t":
-		return true, toggleAllGroups()
+		return true, toggleTargetMode()
 	case "s":
 		return true, toggleStatus()
 	}
@@ -151,6 +151,12 @@ func toggleAllGroups() tea.Cmd {
 func toggleStatus() tea.Cmd {
 	return func() tea.Msg {
 		return ToggleStatusMsg{}
+	}
+}
+
+func toggleTargetMode() tea.Cmd {
+	return func() tea.Msg {
+		return ToggleTargetModeMsg{}
 	}
 }
 

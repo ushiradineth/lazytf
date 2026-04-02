@@ -37,6 +37,12 @@ func (m *Model) beginPlan() tea.Cmd {
 		return nil
 	}
 	m.err = nil
+	if m.targetModeEnabled {
+		targets := m.currentTargetSelection()
+		if len(targets) == 0 {
+			return m.toastError("Target mode enabled but no resources selected")
+		}
+	}
 	planEnv, err := m.prepareTerraformEnv()
 	if err != nil {
 		m.err = err
@@ -1155,6 +1161,9 @@ func (m *Model) clearSavedPlanState() {
 	m.applyRunFlags = nil
 	m.planEnvironment = ""
 	m.planWorkDir = ""
+	m.targetPlanPinned = ""
+	m.planTargetSnapshot = ""
+	m.clearPendingTargetPlanIntent()
 }
 
 func (m *Model) clearPlanResultState() {
@@ -1261,6 +1270,11 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	}
 	m.planEnvironment = m.envCurrent
 	m.planWorkDir = m.currentWorkDir()
+	if m.targetModeEnabled {
+		m.targetPlanPinned = m.planTargetSnapshot
+	} else {
+		m.targetPlanPinned = ""
+	}
 	m.setDiagnostics(nil)
 	if msg.Output != "" {
 		m.lastPlanOutput = msg.Output
@@ -1280,7 +1294,19 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	summary := m.flattenSummary(m.planSummary())
 	recordCmd := m.recordOperationCmd("plan", m.planFlagsForRecord(), false, m.planStartedAt, msg.Result, msg.Output, nil)
 	notifyCmd := m.notifyOperationCmd("plan", summary, m.planStartedAt, msg.Result, nil)
+	m.maybeQueueTargetApplyConfirm()
 	return m, tea.Batch(recordCmd, notifyCmd)
+}
+
+func (m *Model) maybeQueueTargetApplyConfirm() {
+	if !m.pendingTargetApply || m.pendingTargetSig == "" {
+		return
+	}
+	if m.pendingTargetSig != m.targetPlanPinned {
+		return
+	}
+	m.clearPendingTargetPlanIntent()
+	m.showConfirmApplyModal()
 }
 
 func (m *Model) handleApplyStart(msg ApplyStartMsg) (tea.Model, tea.Cmd) {
@@ -1686,9 +1712,11 @@ func (m *Model) setPlan(plan *terraform.Plan) {
 	}
 	if plan == nil {
 		m.resourceList.SetResources(nil)
+		m.invalidateTargetPlanPin()
 		return
 	}
 	m.resourceList.SetResources(plan.Resources)
+	m.resourceList.SetTargetModeEnabled(m.targetModeEnabled)
 	if m.operationState != nil {
 		m.operationState.InitializeFromPlan(plan)
 	}
@@ -1753,6 +1781,15 @@ func planOutputPath(flags []string) string {
 
 func (m *Model) planFlagsForRun() ([]string, string) {
 	planFlags := append([]string{}, m.planFlags...)
+	m.planTargetSnapshot = ""
+	if m.targetModeEnabled {
+		targets := m.currentTargetSelection()
+		m.planTargetSnapshot = targetSelectionSignature(targets)
+		planFlags = removeTargetArgs(planFlags)
+		for _, target := range targets {
+			planFlags = append(planFlags, "-target="+target)
+		}
+	}
 	planFilePath := planOutputPath(planFlags)
 	if planFilePath != "" {
 		return planFlags, planFilePath
@@ -1769,6 +1806,30 @@ func (m *Model) planFlagsForRun() ([]string, string) {
 	return planFlags, planFilePath
 }
 
+func removeTargetArgs(flags []string) []string {
+	if len(flags) == 0 {
+		return nil
+	}
+	filtered := make([]string, 0, len(flags))
+	skipNext := false
+	for _, flag := range flags {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		trimmed := strings.TrimSpace(flag)
+		if strings.HasPrefix(trimmed, "-target=") {
+			continue
+		}
+		if trimmed == "-target" {
+			skipNext = true
+			continue
+		}
+		filtered = append(filtered, flag)
+	}
+	return filtered
+}
+
 func (m *Model) planFlagsForRecord() []string {
 	if len(m.planRunFlags) > 0 {
 		return m.planRunFlags
@@ -1778,6 +1839,15 @@ func (m *Model) planFlagsForRecord() []string {
 
 func (m *Model) applyFlagsForRun() ([]string, error) {
 	flags := append([]string{}, m.applyFlags...)
+	if m.targetModeEnabled {
+		targetSig := targetSelectionSignature(m.currentTargetSelection())
+		if targetSig == "" {
+			return nil, errors.New("target mode enabled but no resources selected")
+		}
+		if m.targetPlanPinned == "" || m.targetPlanPinned != targetSig {
+			return nil, errors.New("target selection changed or not planned yet. Run targeted plan first")
+		}
+	}
 	if strings.TrimSpace(m.planFilePath) == "" {
 		return flags, nil
 	}

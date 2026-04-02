@@ -40,15 +40,19 @@ const (
 
 // Filter actions (resources tab only).
 const (
-	ActionToggleCreate    Action = "toggle_filter_create"
-	ActionToggleUpdate    Action = "toggle_filter_update"
-	ActionToggleDelete    Action = "toggle_filter_delete"
-	ActionToggleReplace   Action = "toggle_filter_replace"
-	ActionToggleAllGroups Action = "toggle_all_groups"
-	ActionToggleStatus    Action = "toggle_status"
-	ActionStateRemove     Action = "state_remove"
-	ActionStateMove       Action = "state_move"
-	ActionCopyAddress     Action = "copy_selected_address"
+	ActionToggleCreate     Action = "toggle_filter_create"
+	ActionToggleUpdate     Action = "toggle_filter_update"
+	ActionToggleDelete     Action = "toggle_filter_delete"
+	ActionToggleReplace    Action = "toggle_filter_replace"
+	ActionToggleAllGroups  Action = "toggle_all_groups"
+	ActionToggleStatus     Action = "toggle_status"
+	ActionToggleTargetMode Action = "toggle_target_mode"
+	ActionToggleTarget     Action = "toggle_target_selection"
+	ActionToggleAllTargets Action = "toggle_all_target_selection"
+	ActionClearTargets     Action = "clear_target_selection"
+	ActionStateRemove      Action = "state_remove"
+	ActionStateMove        Action = "state_move"
+	ActionCopyAddress      Action = "copy_selected_address"
 )
 
 // Tab actions.

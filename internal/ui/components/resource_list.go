@@ -39,6 +39,8 @@ type ResourceList struct {
 	operationState *terraform.OperationState
 	showStatus     bool
 	focused        bool
+	targetMode     bool
+	selectedTarget map[string]struct{}
 
 	// Summary counts for plan
 	summaryCreate  int
@@ -64,8 +66,9 @@ func NewResourceList(s *styles.Styles) *ResourceList {
 			terraform.ActionDelete:  true,
 			terraform.ActionReplace: true,
 		},
-		groupExpanded: make(map[string]bool),
-		allExpanded:   true,
+		groupExpanded:  make(map[string]bool),
+		allExpanded:    true,
+		selectedTarget: make(map[string]struct{}),
 	}
 }
 
@@ -96,6 +99,7 @@ func (r *ResourceList) contentWidth() int {
 func (r *ResourceList) SetResources(resources []terraform.ResourceChange) {
 	r.resources = resources
 	r.selectedIndex = 0
+	r.pruneSelectedTargetsToResources()
 	r.diffEngine.ResetCache()
 	r.updateViewport()
 }
@@ -137,6 +141,119 @@ func (r *ResourceList) SetSearchQuery(query string) {
 // SetFocused sets the focus state (implements Panel interface).
 func (r *ResourceList) SetFocused(focused bool) {
 	r.focused = focused
+}
+
+// SetTargetModeEnabled toggles target selection mode.
+func (r *ResourceList) SetTargetModeEnabled(enabled bool) {
+	r.targetMode = enabled
+	r.updateViewport()
+}
+
+// ClearTargetSelection clears all target selections.
+func (r *ResourceList) ClearTargetSelection() {
+	for addr := range r.selectedTarget {
+		delete(r.selectedTarget, addr)
+	}
+	r.updateViewport()
+}
+
+// SelectedTargets returns selected target addresses.
+func (r *ResourceList) SelectedTargets() []string {
+	if len(r.selectedTarget) == 0 {
+		return nil
+	}
+	targets := make([]string, 0, len(r.selectedTarget))
+	for address := range r.selectedTarget {
+		targets = append(targets, address)
+	}
+	sort.Strings(targets)
+	return targets
+}
+
+// ToggleTargetSelectionAtSelected toggles target selection at selected row.
+func (r *ResourceList) ToggleTargetSelectionAtSelected() bool {
+	if r.selectedIndex < 0 || r.selectedIndex >= len(r.visibleItems) {
+		return false
+	}
+	item := r.visibleItems[r.selectedIndex]
+	changed := false
+	if item.kind == itemResource && item.resource != nil {
+		changed = r.toggleTargetAddress(item.resource.Address)
+		r.updateViewport()
+		return changed
+	}
+	if item.kind != itemGroup {
+		return false
+	}
+	addresses := r.visibleDescendantResourceAddresses(r.selectedIndex, item.path, item.indent)
+	if len(addresses) == 0 {
+		return false
+	}
+	allSelected := true
+	for _, address := range addresses {
+		if _, ok := r.selectedTarget[address]; !ok {
+			allSelected = false
+			break
+		}
+	}
+	for _, address := range addresses {
+		if allSelected {
+			if _, ok := r.selectedTarget[address]; ok {
+				delete(r.selectedTarget, address)
+				changed = true
+			}
+			continue
+		}
+		if _, ok := r.selectedTarget[address]; ok {
+			continue
+		}
+		r.selectedTarget[address] = struct{}{}
+		changed = true
+	}
+	r.updateViewport()
+	return changed
+}
+
+// ToggleAllTargetSelection toggles target selection for all visible resources.
+func (r *ResourceList) ToggleAllTargetSelection() bool {
+	addresses := make([]string, 0, len(r.visibleItems))
+	for _, item := range r.visibleItems {
+		if item.kind != itemResource || item.resource == nil {
+			continue
+		}
+		addresses = append(addresses, item.resource.Address)
+	}
+	if len(addresses) == 0 {
+		return false
+	}
+
+	allSelected := true
+	for _, address := range addresses {
+		if _, ok := r.selectedTarget[address]; ok {
+			continue
+		}
+		allSelected = false
+		break
+	}
+
+	changed := false
+	for _, address := range addresses {
+		if allSelected {
+			if _, ok := r.selectedTarget[address]; ok {
+				delete(r.selectedTarget, address)
+				changed = true
+			}
+			continue
+		}
+		if _, ok := r.selectedTarget[address]; ok {
+			continue
+		}
+		r.selectedTarget[address] = struct{}{}
+		changed = true
+	}
+
+	r.updateViewport()
+	return changed
 }
 
 // IsFocused returns whether the panel is focused (implements Panel interface).
@@ -428,6 +545,7 @@ func (r *ResourceList) updateViewport() {
 	}
 
 	r.visibleItems = r.buildVisibleItems(filtered)
+	r.pruneSelectedTargetsToVisible()
 	if len(r.visibleItems) == 0 {
 		r.selectedIndex = 0
 		r.viewport.YOffset = 0
@@ -498,11 +616,12 @@ func (r *ResourceList) renderVisibleItems() string {
 		item := r.visibleItems[i]
 		// Only show selection highlight when panel is focused
 		isSelected := r.focused && i == r.selectedIndex
+		targetMarker := r.targetMarkerForItem(i)
 		switch item.kind {
 		case itemGroup:
-			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent, contentWidth))
+			content.WriteString(r.renderGroup(item.label, item.count, isSelected, item.expanded, item.indent, contentWidth, targetMarker))
 		case itemResource:
-			content.WriteString(r.renderResource(item.resource, isSelected, item.indent, contentWidth))
+			content.WriteString(r.renderResource(item.resource, isSelected, item.indent, contentWidth, targetMarker))
 		}
 		content.WriteString("\n")
 	}
@@ -517,7 +636,15 @@ func (r *ResourceList) renderVisibleItems() string {
 }
 
 // renderResource renders a single resource line.
-func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSelected bool, indent int, contentWidth int) string {
+//
+//nolint:funlen // Rendering assembles styled segments and width handling.
+func (r *ResourceList) renderResource(
+	resource *terraform.ResourceChange,
+	isSelected bool,
+	indent int,
+	contentWidth int,
+	targetMarker string,
+) string {
 	var output strings.Builder
 
 	// Get action style and icon
@@ -532,6 +659,9 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 	prefix := ""
 	if indent > 0 {
 		prefix = GetPadding(indent)
+	}
+	if targetMarker != "" {
+		prefix += targetMarker + " "
 	}
 	address := resource.Address
 	if indent > 0 {
@@ -550,6 +680,11 @@ func (r *ResourceList) renderResource(resource *terraform.ResourceChange, isSele
 	statusStyle := r.getStatusStyle(opStatus)
 	addressStyle := r.styles.LineItemText
 	suffixStyle := r.styles.LineItemText
+	targeted := targetMarker == targetMarkerSelected
+	if targeted {
+		addressStyle = r.styles.DiffAdd
+		suffixStyle = r.styles.DiffAdd
+	}
 	spaceStyle := lipgloss.NewStyle()
 	prefixText := prefix
 	if isSelected {
@@ -813,7 +948,7 @@ func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (stri
 	}
 	op := r.operationState.GetResourceStatus(resource.Address)
 	if op == nil {
-		return "[ ]", "", ""
+		return targetMarkerNone, "", ""
 	}
 
 	var badge string
@@ -825,9 +960,9 @@ func (r *ResourceList) getStatusDisplay(resource terraform.ResourceChange) (stri
 	case terraform.StatusComplete:
 		badge = "[*]"
 	case terraform.StatusErrored:
-		badge = "[x]"
+		badge = targetMarkerSelected
 	default:
-		badge = "[ ]"
+		badge = targetMarkerNone
 	}
 
 	elapsed := op.ElapsedTime
@@ -904,6 +1039,12 @@ type itemKind int
 const (
 	itemGroup itemKind = iota
 	itemResource
+)
+
+const (
+	targetMarkerNone     = "[ ]"
+	targetMarkerSelected = "[x]"
+	targetMarkerPartial  = "[-]"
 )
 
 type listItem struct {
@@ -1043,7 +1184,14 @@ func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 	return items
 }
 
-func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded bool, indent int, contentWidth int) string {
+func (r *ResourceList) renderGroup(
+	group string,
+	count int,
+	isSelected, expanded bool,
+	indent int,
+	contentWidth int,
+	targetMarker string,
+) string {
 	indicator := "▶"
 	if expanded {
 		indicator = "▼"
@@ -1052,21 +1200,32 @@ func (r *ResourceList) renderGroup(group string, count int, isSelected, expanded
 	if indent > 0 {
 		prefix = GetPadding(indent)
 	}
+	if targetMarker != "" {
+		prefix += targetMarker + " "
+	}
 	line := fmt.Sprintf("%s%s %s (%d)", prefix, indicator, group, count)
 	if contentWidth > 0 {
 		line = runewidth.Truncate(line, contentWidth, "...")
 	}
 
+	lineStyle := r.styles.Dimmed.Bold(true)
+	switch targetMarker {
+	case targetMarkerSelected:
+		lineStyle = r.styles.DiffAdd.Bold(true)
+	case targetMarkerPartial:
+		lineStyle = r.styles.DiffChange.Bold(true)
+	}
+
 	if isSelected {
 		selectedBg := r.styles.SelectedLineBackground
-		line = r.styles.LineItemText.Background(selectedBg).Bold(true).Render(line)
+		line = lineStyle.Background(selectedBg).Bold(true).Render(line)
 		if contentWidth > 0 {
 			line = PadLineWithBg(line, contentWidth, selectedBg)
 		}
 		return line
 	}
 
-	line = r.styles.Dimmed.Bold(true).Render(line)
+	line = lineStyle.Render(line)
 	if contentWidth > 0 {
 		line = PadLine(line, contentWidth)
 	}
@@ -1105,6 +1264,114 @@ func (r *ResourceList) computeAllExpanded() bool {
 		}
 	}
 	return len(r.groupExpanded) > 0
+}
+
+func (r *ResourceList) toggleTargetAddress(address string) bool {
+	if strings.TrimSpace(address) == "" {
+		return false
+	}
+	if _, ok := r.selectedTarget[address]; ok {
+		delete(r.selectedTarget, address)
+		return true
+	}
+	r.selectedTarget[address] = struct{}{}
+	return true
+}
+
+func (r *ResourceList) pruneSelectedTargetsToResources() {
+	if len(r.selectedTarget) == 0 {
+		return
+	}
+	valid := make(map[string]struct{}, len(r.resources))
+	for _, resource := range r.resources {
+		valid[resource.Address] = struct{}{}
+	}
+	for address := range r.selectedTarget {
+		if _, ok := valid[address]; ok {
+			continue
+		}
+		delete(r.selectedTarget, address)
+	}
+}
+
+func (r *ResourceList) pruneSelectedTargetsToVisible() {
+	if len(r.selectedTarget) == 0 {
+		return
+	}
+	visible := make(map[string]struct{})
+	for _, item := range r.visibleItems {
+		if item.kind != itemResource || item.resource == nil {
+			continue
+		}
+		visible[item.resource.Address] = struct{}{}
+	}
+	for address := range r.selectedTarget {
+		if _, ok := visible[address]; ok {
+			continue
+		}
+		delete(r.selectedTarget, address)
+	}
+}
+
+func (r *ResourceList) visibleDescendantResourceAddresses(index int, groupPath string, indent int) []string {
+	if index < 0 || index >= len(r.visibleItems) {
+		return nil
+	}
+	prefix := strings.TrimSpace(groupPath)
+	if prefix != "" && !strings.HasSuffix(prefix, ".") {
+		prefix += "."
+	}
+	addresses := make([]string, 0)
+	for i := index + 1; i < len(r.visibleItems); i++ {
+		item := r.visibleItems[i]
+		if item.kind == itemGroup && item.indent <= indent {
+			break
+		}
+		if item.kind == itemResource && item.indent > indent && item.resource != nil {
+			if prefix != "" && !strings.HasPrefix(item.resource.Address, prefix) {
+				continue
+			}
+			addresses = append(addresses, item.resource.Address)
+		}
+	}
+	return addresses
+}
+
+func (r *ResourceList) targetMarkerForItem(index int) string {
+	if !r.targetMode {
+		return ""
+	}
+	if index < 0 || index >= len(r.visibleItems) {
+		return targetMarkerNone
+	}
+	item := r.visibleItems[index]
+	if item.kind == itemResource && item.resource != nil {
+		if _, ok := r.selectedTarget[item.resource.Address]; ok {
+			return targetMarkerSelected
+		}
+		return targetMarkerNone
+	}
+	if item.kind != itemGroup {
+		return targetMarkerNone
+	}
+	addresses := r.visibleDescendantResourceAddresses(index, item.path, item.indent)
+	if len(addresses) == 0 {
+		return targetMarkerNone
+	}
+	selected := 0
+	for _, address := range addresses {
+		if _, ok := r.selectedTarget[address]; ok {
+			selected++
+		}
+	}
+	switch {
+	case selected == 0:
+		return targetMarkerNone
+	case selected == len(addresses):
+		return targetMarkerSelected
+	default:
+		return targetMarkerPartial
+	}
 }
 
 func (r *ResourceList) firstResourceIndex() int {

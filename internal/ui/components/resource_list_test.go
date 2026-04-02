@@ -179,7 +179,7 @@ func TestResourceListShowStatusToggle(t *testing.T) {
 func TestResourceListRenderGroupAndVisibleItems(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetSize(40, 5)
-	group := r.renderGroup(consts.ModuleAlpha, 2, true, true, 2, 38)
+	group := r.renderGroup(consts.ModuleAlpha, 2, true, true, 2, 38, "")
 	if !strings.Contains(group, consts.ModuleAlpha) {
 		t.Fatalf("expected group label")
 	}
@@ -232,7 +232,7 @@ func TestRenderResourceDoesNotExpandDiffs(t *testing.T) {
 		},
 	}
 
-	out := r.renderResource(&resource, false, 0, 80)
+	out := r.renderResource(&resource, false, 0, 80, "")
 	if !strings.Contains(out, "aws_vpc.main") || strings.Contains(out, "~ name") {
 		t.Fatalf("unexpected render output: %q", out)
 	}
@@ -246,7 +246,7 @@ func TestRenderResourceTrimsModulePrefix(t *testing.T) {
 		Change:  &terraform.Change{Before: map[string]any{"a": 1}, After: map[string]any{"a": 2}},
 	}
 
-	out := r.renderResource(&resource, false, 2, 80)
+	out := r.renderResource(&resource, false, 2, 80, "")
 	if !strings.Contains(out, "aws_instance.web") || strings.Contains(out, consts.ModuleAlpha) {
 		t.Fatalf("expected trimmed module prefix, got %q", out)
 	}
@@ -488,7 +488,7 @@ func TestRenderLongResourceAddressTruncates(t *testing.T) {
 		Action:  terraform.ActionCreate,
 		Change:  &terraform.Change{Actions: []string{"create"}, Before: nil, After: map[string]any{"x": "y"}},
 	}
-	out := stripANSI(r.renderResource(&resource, false, 0, 18))
+	out := stripANSI(r.renderResource(&resource, false, 0, 18, ""))
 	lines := strings.Split(out, "\n")
 	if len(lines) == 0 || len(lines[0]) > 20 {
 		t.Fatalf("expected truncated header line, got %q", out)
@@ -502,7 +502,7 @@ func TestExpandedResourceZeroDiffsNoExtraLine(t *testing.T) {
 		Action:  terraform.ActionUpdate,
 		Change:  &terraform.Change{Actions: []string{"update"}, Before: map[string]any{"a": 1}, After: map[string]any{"a": 1}},
 	}
-	out := r.renderResource(&resource, false, 0, 80)
+	out := r.renderResource(&resource, false, 0, 80, "")
 	if strings.Count(out, "\n") != 0 {
 		t.Fatalf("expected no extra diff lines, got %q", out)
 	}
@@ -1540,6 +1540,103 @@ func TestHandleKeyUnhandled(t *testing.T) {
 	handled, _ := r.HandleKey(msg)
 	if handled {
 		t.Error("expected unhandled key to return false")
+	}
+}
+
+func TestToggleTargetSelectionSingleResource(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	if ok := r.ToggleTargetSelectionAtSelected(); !ok {
+		t.Fatal("expected toggle to succeed")
+	}
+	targets := r.SelectedTargets()
+	if len(targets) != 1 || targets[0] != "aws_instance.web" {
+		t.Fatalf("unexpected targets: %#v", targets)
+	}
+
+	if ok := r.ToggleTargetSelectionAtSelected(); !ok {
+		t.Fatal("expected second toggle to succeed")
+	}
+	if got := r.SelectedTargets(); len(got) != 0 {
+		t.Fatalf("expected target list to be empty, got %#v", got)
+	}
+}
+
+func TestToggleTargetSelectionOnGroupTogglesVisibleDescendants(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.module.net.aws_instance.db", Action: terraform.ActionCreate},
+		{Address: "module.beta.aws_instance.cache", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 12)
+	r.SetTargetModeEnabled(true)
+
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
+	if groupIdx < 0 {
+		t.Fatal("expected module.alpha group")
+	}
+	r.selectedIndex = groupIdx
+
+	if ok := r.ToggleTargetSelectionAtSelected(); !ok {
+		t.Fatal("expected group toggle to succeed")
+	}
+	targets := r.SelectedTargets()
+	if len(targets) != 2 {
+		t.Fatalf("expected two descendants selected, got %#v", targets)
+	}
+	if targets[0] != "module.alpha.aws_instance.web" && targets[1] != "module.alpha.aws_instance.web" {
+		t.Fatalf("expected alpha web target, got %#v", targets)
+	}
+	if targets[0] != "module.alpha.module.net.aws_instance.db" && targets[1] != "module.alpha.module.net.aws_instance.db" {
+		t.Fatalf("expected nested target, got %#v", targets)
+	}
+}
+
+func TestTargetSelectionMarkersRenderInTargetMode(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	r.selectedIndex = 0
+	if ok := r.ToggleTargetSelectionAtSelected(); !ok {
+		t.Fatal("expected target toggle")
+	}
+
+	view := r.View()
+	if !strings.Contains(view, "[x]") {
+		t.Fatalf("expected selected marker in view, got %q", view)
+	}
+}
+
+func TestToggleAllTargetSelectionVisibleResources(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.db", Action: terraform.ActionCreate},
+	})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	if ok := r.ToggleAllTargetSelection(); !ok {
+		t.Fatal("expected toggle all to succeed")
+	}
+	if got := r.SelectedTargets(); len(got) != 2 {
+		t.Fatalf("expected two selected targets, got %#v", got)
+	}
+
+	if ok := r.ToggleAllTargetSelection(); !ok {
+		t.Fatal("expected second toggle all to succeed")
+	}
+	if got := r.SelectedTargets(); len(got) != 0 {
+		t.Fatalf("expected no selected targets after second toggle, got %#v", got)
 	}
 }
 

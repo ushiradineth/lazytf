@@ -179,6 +179,75 @@ func TestHandleActionInitOutsideStateTabNoop(t *testing.T) {
 	}
 }
 
+func TestHandleTargetSelectionActionsEmitMessages(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+
+	if msg := m.handleActionToggleTargetMode(nil)(); msg == nil {
+		t.Fatal("expected toggle target mode message")
+	} else if _, ok := msg.(ToggleTargetModeMsg); !ok {
+		t.Fatalf("expected ToggleTargetModeMsg, got %T", msg)
+	}
+
+	if msg := m.handleActionToggleTarget(nil)(); msg == nil {
+		t.Fatal("expected toggle target message")
+	} else if _, ok := msg.(ToggleTargetSelectionMsg); !ok {
+		t.Fatalf("expected ToggleTargetSelectionMsg, got %T", msg)
+	}
+
+	if msg := m.handleActionClearTargets(nil)(); msg == nil {
+		t.Fatal("expected clear targets message")
+	} else if _, ok := msg.(ClearTargetSelectionMsg); !ok {
+		t.Fatalf("expected ClearTargetSelectionMsg, got %T", msg)
+	}
+}
+
+func TestHandleActionToggleAllTargetsOnlyInTargetMode(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.resourcesActiveTab = 0
+	m.resourceList.SetResources([]terraform.ResourceChange{
+		{Address: "aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "aws_instance.db", Action: terraform.ActionCreate},
+	})
+
+	ctx := &keybinds.Context{FocusedPanel: keybinds.PanelResources}
+	_ = m.handleActionToggleAllTargets(ctx)
+	if len(m.resourceList.SelectedTargets()) != 0 {
+		t.Fatal("expected no selection when target mode is disabled")
+	}
+
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	_ = m.handleActionToggleAllTargets(ctx)
+	if len(m.resourceList.SelectedTargets()) != 2 {
+		t.Fatalf("expected all visible resources selected, got %#v", m.resourceList.SelectedTargets())
+	}
+}
+
+func TestHandleActionSelectResourceTabInTargetModeTogglesSelection(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+
+	cmd := m.handleActionSelectResourceTab()
+	if cmd != nil {
+		t.Fatal("expected nil command when selecting target")
+	}
+
+	targets := m.resourceList.SelectedTargets()
+	if len(targets) != 1 || targets[0] != "aws_instance.web" {
+		t.Fatalf("unexpected target selection: %#v", targets)
+	}
+}
+
 func TestConvertPanelID(t *testing.T) {
 	tests := []struct {
 		name string
@@ -256,6 +325,7 @@ func TestBuildKeybindContext(t *testing.T) {
 	m.width = 100
 	m.height = 30
 	m.updateLayout()
+	m.targetModeEnabled = true
 
 	ctx := m.buildKeybindContext()
 	if ctx == nil {
@@ -263,6 +333,9 @@ func TestBuildKeybindContext(t *testing.T) {
 	}
 	if !ctx.ExecutionMode {
 		t.Error("expected ExecutionMode to be true")
+	}
+	if !ctx.TargetMode {
+		t.Error("expected TargetMode to be true")
 	}
 }
 

@@ -103,6 +103,16 @@ var ConditionHistoryEnabled Condition = func(ctx *Context) bool {
 	return ctx.HistoryEnabled
 }
 
+// ConditionTargetMode checks if target mode is enabled.
+var ConditionTargetMode Condition = func(ctx *Context) bool {
+	return ctx.TargetMode
+}
+
+// ConditionNotTargetMode checks if target mode is disabled.
+var ConditionNotTargetMode Condition = func(ctx *Context) bool {
+	return !ctx.TargetMode
+}
+
 // Context represents the current UI state for keybind resolution.
 type Context struct {
 	// Focus state
@@ -114,6 +124,7 @@ type Context struct {
 	ExecutionMode  bool
 	SelectorActive bool
 	HistoryEnabled bool
+	TargetMode     bool
 
 	// Tab state
 	ResourcesActiveTab int // 0 = Resources, 1 = State

@@ -5880,6 +5880,73 @@ func TestHandleEscKeyDiffMode(t *testing.T) {
 	}
 }
 
+func TestPlanFlagsForRunIncludesSelectedTargets(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.planFlags = []string{"-refresh=true"}
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+	})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	flags, _ := m.planFlagsForRun()
+	joined := strings.Join(flags, " ")
+	if !strings.Contains(joined, "-target=module.alpha.aws_instance.web") {
+		t.Fatalf("expected target flag in %q", joined)
+	}
+}
+
+func TestApplyFlagsForRunRejectsUnpinnedTargetSelection(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	_, err := m.applyFlagsForRun()
+	if err == nil {
+		t.Fatal("expected error when target plan pin is missing")
+	}
+}
+
+func TestHandleRequestApplyInTargetModeRequiresSelectionAndPin(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+	m.plan = &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}}}
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources(m.plan.Resources)
+
+	_, _, handled := m.handleRequestApply()
+	if !handled {
+		t.Fatal("expected apply request to be handled")
+	}
+	if m.modalState == ModalConfirmApply {
+		t.Fatal("did not expect confirm modal without target selection")
+	}
+
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+	_, _, handled = m.handleRequestApply()
+	if !handled {
+		t.Fatal("expected apply request with target selection to be handled")
+	}
+	if !m.pendingTargetApply {
+		t.Fatal("expected pending target apply intent")
+	}
+}
+
 // ============================================================================
 // focusCommandLog tests
 // ============================================================================
