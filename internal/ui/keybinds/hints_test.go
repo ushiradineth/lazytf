@@ -254,6 +254,30 @@ func TestRegistry_ForStatusBar_IncludesToggleStatusHint(t *testing.T) {
 	}
 }
 
+func TestRegistry_ForStatusBar_IncludesTargetModeHints(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{
+		ExecutionMode:      true,
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+		TargetMode:         true,
+	}
+	opts := HintOptions{MaxPrimary: 16, MaxSecondary: 16, Separator: " | "}
+
+	result := r.ForStatusBar(ctx, opts)
+	if !strings.Contains(result, "enter: toggle target selection") {
+		t.Fatalf("expected target-selection hint in status bar output, got %q", result)
+	}
+	if !strings.Contains(result, "a: toggle all targets") {
+		t.Fatalf("expected toggle-all-targets hint in status bar output, got %q", result)
+	}
+	if !strings.Contains(result, "A: apply") {
+		t.Fatalf("expected target-mode apply hint in status bar output, got %q", result)
+	}
+}
+
 func TestRegistry_ForHelpModal_Empty(t *testing.T) {
 	r := NewRegistry()
 

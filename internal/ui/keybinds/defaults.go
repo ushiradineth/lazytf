@@ -395,7 +395,18 @@ func registerResourcesPanelBindings(r *Registry) {
 		Description: "toggle target mode",
 		Category:    "Resources Panel",
 		Condition:   ConditionExecutionMode,
-		Hidden:      true,
+	})
+	r.Register(Binding{
+		Keys:        []string{"enter", " "},
+		Action:      ActionToggleTarget,
+		Scope:       ScopePanelTab,
+		Panel:       PanelResources,
+		Tab:         0,
+		Description: "toggle target selection",
+		Category:    "Resources Panel",
+		Condition: func(ctx *Context) bool {
+			return ConditionExecutionMode(ctx) && ConditionTargetMode(ctx)
+		},
 	})
 	r.Register(Binding{
 		Keys:        []string{"a"},
@@ -408,7 +419,6 @@ func registerResourcesPanelBindings(r *Registry) {
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetMode(ctx)
 		},
-		Hidden: true,
 	})
 	r.Register(Binding{
 		Keys:        []string{"y"},
@@ -479,15 +489,16 @@ func registerExecutionBindings(r *Registry) {
 		Category:    "Execution",
 	})
 	r.Register(Binding{
-		Keys:        []string{"A"},
-		Action:      ActionApply,
-		Scope:       ScopePanelTab,
-		Panel:       PanelResources,
-		Tab:         0,
-		Condition:   ConditionExecutionMode,
+		Keys:   []string{"A"},
+		Action: ActionApply,
+		Scope:  ScopePanelTab,
+		Panel:  PanelResources,
+		Tab:    0,
+		Condition: func(ctx *Context) bool {
+			return ConditionExecutionMode(ctx) && ConditionTargetMode(ctx)
+		},
 		Description: "apply",
 		Category:    "Execution",
-		Hidden:      true,
 	})
 	r.Register(Binding{
 		Keys:        []string{"i"},
