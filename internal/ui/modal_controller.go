@@ -105,6 +105,8 @@ func fallbackValue(value string) string {
 var availableThemes = styles.BuiltInThemeNames()
 
 // themeDisplayName returns a user-friendly display name for a theme.
+//
+//nolint:goconst // Keep explicit theme literals in the display-name mapping.
 func themeDisplayName(name string) string {
 	switch name {
 	case defaultThemeName:
