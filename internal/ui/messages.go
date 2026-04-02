@@ -225,6 +225,15 @@ type ToggleStatusMsg struct{}
 // ToggleAllGroupsMsg toggles all groups expanded/collapsed.
 type ToggleAllGroupsMsg struct{}
 
+// ToggleTargetModeMsg toggles target mode for scoped plan/apply.
+type ToggleTargetModeMsg struct{}
+
+// ToggleTargetSelectionMsg toggles target selection at current row.
+type ToggleTargetSelectionMsg struct{}
+
+// ClearTargetSelectionMsg clears target selection.
+type ClearTargetSelectionMsg struct{}
+
 // SwitchResourcesTabMsg switches the Resources panel tab.
 type SwitchResourcesTabMsg struct {
 	Direction int // -1 for previous, +1 for next

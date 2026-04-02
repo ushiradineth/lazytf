@@ -92,6 +92,11 @@ type Model struct {
 	lastPlanOutput     string
 	planEnvironment    string
 	planWorkDir        string
+	targetModeEnabled  bool
+	targetPlanPinned   string
+	planTargetSnapshot string
+	pendingTargetApply bool
+	pendingTargetSig   string
 	config             *config.Config
 	configManager      *config.Manager
 	envWorkDir         string
@@ -533,6 +538,14 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	case ToggleAllGroupsMsg:
 		m.resourceList.ToggleAllGroups()
+		return m, nil, true
+	case ToggleTargetModeMsg:
+		m.handleToggleTargetMode()
+		return m, nil, true
+	case ToggleTargetSelectionMsg:
+		return m.handleToggleTargetSelection()
+	case ClearTargetSelectionMsg:
+		m.handleClearTargetSelection()
 		return m, nil, true
 	case StateListStartMsg:
 		cmd := m.beginStateList()
@@ -1118,11 +1131,13 @@ func (m *Model) handleModalConfirmApplyKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "n", "N", "esc":
 		m.modalState = ModalNone
 		m.pendingConfirmCmd = nil
+		m.clearPendingTargetPlanIntent()
 		return true, nil
 	case "ctrl+c":
 		m.cancelExecution()
 		m.modalState = ModalNone
 		m.pendingConfirmCmd = nil
+		m.clearPendingTargetPlanIntent()
 		return true, nil
 	default:
 		return true, nil
@@ -1168,7 +1183,11 @@ func (m *Model) showConfirmApplyModal() {
 
 	// Build the confirmation message with plan summary
 	summary := m.planSummaryVerbose()
-	message := "Plan summary:\n" + summary + "\n\nDo you want to apply these changes?"
+	message := "Plan summary:\n" + summary
+	if m.targetModeEnabled {
+		message += "\n\nWarning: -target can produce partial or inconsistent outcomes."
+	}
+	message += "\n\nDo you want to apply these changes?"
 	m.showConfirmModal("Confirm Apply", message, "Yes, apply", m.deferConfirmCommand(m.beginApply))
 }
 

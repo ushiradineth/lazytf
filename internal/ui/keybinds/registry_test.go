@@ -372,6 +372,28 @@ func TestRegistry_Resolve_MainPanelTreeArrowKeys(t *testing.T) {
 	}
 }
 
+func TestRegistry_Resolve_TargetModeBindingsOnResourcesTab(t *testing.T) {
+	r := NewRegistry()
+	RegisterDefaults(r, true)
+
+	ctx := &Context{
+		ExecutionMode:      true,
+		FocusedPanel:       PanelResources,
+		ResourcesActiveTab: 0,
+		TargetMode:         true,
+	}
+
+	if binding := r.Resolve("t", ctx); binding == nil || binding.Action != ActionToggleTargetMode {
+		t.Fatalf("expected t -> ActionToggleTargetMode, got %#v", binding)
+	}
+	if binding := r.Resolve("a", ctx); binding == nil || binding.Action != ActionToggleAllTargets {
+		t.Fatalf("expected a -> ActionToggleAllTargets in target mode, got %#v", binding)
+	}
+	if binding := r.Resolve("A", ctx); binding == nil || binding.Action != ActionApply {
+		t.Fatalf("expected A -> ActionApply in target mode, got %#v", binding)
+	}
+}
+
 func TestRegistry_Resolve_NoSettingsBindingForComma(t *testing.T) {
 	r := NewRegistry()
 	RegisterDefaults(r, true)

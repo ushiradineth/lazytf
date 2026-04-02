@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"sort"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
@@ -20,8 +23,89 @@ func (m *Model) handleRequestApply() (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	}
+	if m.targetModeEnabled {
+		targets := m.currentTargetSelection()
+		if len(targets) == 0 {
+			cmd := m.toastError("Target mode enabled but no resources selected")
+			return m, cmd, true
+		}
+		sig := targetSelectionSignature(targets)
+		if sig != m.targetPlanPinned {
+			m.pendingTargetApply = true
+			m.pendingTargetSig = sig
+			message := "Target mode requires a targeted plan for the current selection before apply.\n\n" +
+				"Run targeted plan now, then confirm apply?"
+			m.showConfirmModal("Target plan required", message, "Yes, run plan", m.deferConfirmCommand(requestPlan))
+			return m, nil, true
+		}
+	}
 	m.showConfirmApplyModal()
 	return m, nil, true
+}
+
+func (m *Model) handleToggleTargetMode() {
+	m.targetModeEnabled = !m.targetModeEnabled
+	if m.resourceList != nil {
+		m.resourceList.SetTargetModeEnabled(m.targetModeEnabled)
+	}
+	m.invalidateTargetPlanPin()
+	if !m.targetModeEnabled {
+		m.handleClearTargetSelection()
+	}
+}
+
+func (m *Model) handleToggleTargetSelection() (tea.Model, tea.Cmd, bool) {
+	if !m.targetModeEnabled {
+		cmd := m.toastInfo("Enable target mode first with 'Z'")
+		return m, cmd, true
+	}
+	if m.resourceList == nil {
+		return m, nil, true
+	}
+	if !m.resourceList.ToggleTargetSelectionAtSelected() {
+		return m, nil, true
+	}
+	m.invalidateTargetPlanPin()
+	return m, nil, true
+}
+
+func (m *Model) handleClearTargetSelection() {
+	if m.resourceList != nil {
+		m.resourceList.ClearTargetSelection()
+	}
+	m.invalidateTargetPlanPin()
+}
+
+func (m *Model) invalidateTargetPlanPin() {
+	m.targetPlanPinned = ""
+	m.planTargetSnapshot = ""
+	m.clearPendingTargetPlanIntent()
+}
+
+func (m *Model) clearPendingTargetPlanIntent() {
+	m.pendingTargetApply = false
+	m.pendingTargetSig = ""
+}
+
+func (m *Model) currentTargetSelection() []string {
+	if m.resourceList == nil {
+		return nil
+	}
+	targets := m.resourceList.SelectedTargets()
+	if len(targets) == 0 {
+		return nil
+	}
+	sort.Strings(targets)
+	return targets
+}
+
+func targetSelectionSignature(targets []string) string {
+	if len(targets) == 0 {
+		return ""
+	}
+	copyTargets := append([]string{}, targets...)
+	sort.Strings(copyTargets)
+	return strings.Join(copyTargets, "\n")
 }
 
 // handleSwitchResourcesTab handles switching the Resources panel tab.

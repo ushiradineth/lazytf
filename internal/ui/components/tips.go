@@ -21,12 +21,14 @@ var tips = []string{
 	"Press 'u' to filter only update operations.",
 	"Press 'd' to filter only delete operations.",
 	"Press 'r' to filter only replace operations.",
-	"Press 't' to expand/collapse all resource groups.",
+	"Press 't' to toggle target mode for scoped plans.",
+	"Press 'Space' in target mode to target selected path or module tree.",
+	"Press 'a' in target mode to toggle all visible targets.",
 	"Use '[' and ']' to switch between tabs in the Resources panel.",
 
 	// Terraform Workflow
 	"Press 'p' to run terraform plan.",
-	"Press 'a' to run terraform apply (requires confirmation).",
+	"Press 'a' to run terraform apply (outside target mode).",
 	"Press 'v' to validate your configuration.",
 	"Press 'f' to format your Terraform files.",
 	"Press 'h' to toggle the history panel (when enabled).",
@@ -39,6 +41,7 @@ var tips = []string{
 	"Review the diff viewer to understand exactly what will change.",
 	"State drift occurs when infrastructure changes outside Terraform.",
 	"Use '-target' flags carefully - they can leave state inconsistent.",
+	"In target mode, run a targeted plan before apply.",
 
 	// Best Practices
 	"Always review the plan output before applying changes.",
