@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -1193,5 +1194,67 @@ func TestLockFilePathValue(t *testing.T) {
 	expected := configPath + ".lock"
 	if lockPath != expected {
 		t.Errorf("expected %q, got %q", expected, lockPath)
+	}
+}
+
+func TestWithDefaultsSetsExactDefaults(t *testing.T) {
+	cfg := Config{}
+	got := cfg.WithDefaults()
+
+	if got.Theme.Name != "default" {
+		t.Fatalf("expected default theme, got %q", got.Theme.Name)
+	}
+	if len(got.Terraform.DefaultFlags) != 1 || got.Terraform.DefaultFlags[0] != "-compact-warnings" {
+		t.Fatalf("expected default terraform flags, got %#v", got.Terraform.DefaultFlags)
+	}
+	if got.Terraform.Timeout != 10*time.Minute {
+		t.Fatalf("expected default timeout %v, got %v", 10*time.Minute, got.Terraform.Timeout)
+	}
+	if got.Terraform.Parallelism != 10 {
+		t.Fatalf("expected default parallelism 10, got %d", got.Terraform.Parallelism)
+	}
+	if got.History.Level != "standard" {
+		t.Fatalf("expected default history level standard, got %q", got.History.Level)
+	}
+	if got.History.CompressionThreshold != 64*1024 {
+		t.Fatalf("expected default compression threshold 65536, got %d", got.History.CompressionThreshold)
+	}
+}
+
+func TestExpandConfigPathsContinuesAfterEmptyPreset(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := &Config{
+		Presets: []EnvironmentPreset{
+			{Name: "empty", WorkDir: ""},
+			{Name: "target", WorkDir: "~/projects/dev"},
+		},
+	}
+
+	if err := expandConfigPaths(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := filepath.Join(home, "projects", "dev")
+	if cfg.Presets[1].WorkDir != expected {
+		t.Fatalf("expected expanded second preset workdir %q, got %q", expected, cfg.Presets[1].WorkDir)
+	}
+}
+
+func TestExpandPathWithTildeBackslashExpands(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	input := `~\projects\dev`
+	output, err := expandPath(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if output == input {
+		t.Fatalf("expected backslash tilde path to expand, got %q", output)
+	}
+	if !strings.HasPrefix(output, home) {
+		t.Fatalf("expected expanded path to start with home %q, got %q", home, output)
 	}
 }
