@@ -97,7 +97,6 @@ func (v *AboutView) updateContent() {
 		value string
 	}{
 		{"Keybindings", "Press ? for keybinds"},
-		{"Config Options", "Press , for settings"},
 		{"GitHub", "https://github.com/ushiradineth/lazytf"},
 		{"Raise an Issue", "https://github.com/ushiradineth/lazytf/issues"},
 		{"Release Notes", "https://github.com/ushiradineth/lazytf/releases"},
