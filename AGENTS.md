@@ -22,19 +22,22 @@ Preferred local commands (`Justfile`):
 - `just build` (build `bin/lazytf`)
 - `just fmt` (gofumpt + goimports-reviser + golangci-lint fmt)
 - `just vet`
-- `just lint` (golangci-lint, timeout 5m)
-- `just test` (verbose + race: `go test -v -race ./...`)
-- `just test-coverage` (writes `coverage.out` and `coverage.html`)
+- `just lint` (defaults to `mode=normal`; supports `mode=fix|all`)
+- `just test` (defaults to `mode=default`; supports `mode=coverage|summary`)
+- `just integration` (tagged integration tests)
+- `just e2e` (tagged end-to-end tests)
 - `just security` (`govulncheck ./...`)
-- `just dco` (checks `Signed-off-by` trailers on commits since `origin/main`)
-- `just check-all` (fmt + vet + lint + coverage + security)
-- `just ci` (tidy + dco + vet + lint + coverage + build + security)
+- `just generate` (run code generation)
+- `just generate-check` (verify generated artifacts are fresh)
+- `just verify` (CI-equivalent verify checks)
+- `just check` (single verification gate)
 
 ## Testing
 confidence: high
 
 - Fast default for broad validation: `go test ./...` (matches CI)
-- Local stricter run: `just test`
+- Local verification gate: `just check`
+- Fast local test run: `just test`
 - Integration (tagged): `go test -tags=integration ./test/integration`
 - E2E (tagged): `go test -tags=e2e ./test/e2e`
 - E2E with race detector: `go test -race -tags=e2e ./test/e2e`
@@ -85,8 +88,7 @@ confidence: medium
 - Before applying an approved plan, start from a feature branch or a separate git worktree/workspace.
 - If the user did not specify branch or workspace preference for planned implementation, ask once before making code changes.
 - Keep diffs scoped to the requested change.
-- Before every PR push, run `just ci` locally and fix failures before pushing.
-- Before PR, run `just check-all` (project contribution guidance).
+- Before every PR push, run `just check` locally and fix failures before pushing.
 - If touching CI-sensitive paths, also run CI-equivalent commands (`go mod verify`, `go vet ./...`, `go test ./...`, `golangci-lint run --timeout=5m`, `go build ./...`).
 
 ## Boundaries
@@ -113,7 +115,7 @@ Never
 ## Verification checklist
 
 - Confirm changed scope is limited to requested files/areas.
-- Run `just ci` before creating or updating a PR branch.
+- Run `just check` before creating or updating a PR branch.
 - Run relevant tests first, then broader checks as needed.
 - For core-path changes, run at least CI-equivalent validation.
 - Ensure formatting and lint pass (`just fmt`, `just lint`).
