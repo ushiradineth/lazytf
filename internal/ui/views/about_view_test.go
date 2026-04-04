@@ -120,6 +120,9 @@ func TestAboutViewUpdateContent(t *testing.T) {
 	if !strings.Contains(content, "Keybindings") {
 		t.Error("expected keybindings info in content")
 	}
+	if strings.Contains(content, "Press , for settings") {
+		t.Error("did not expect removed settings hint in content")
+	}
 }
 
 func TestAboutViewUpdateContentNilStyles(t *testing.T) {

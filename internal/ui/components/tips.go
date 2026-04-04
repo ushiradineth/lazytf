@@ -9,7 +9,7 @@ var tips = []string{
 	// Navigation & UI
 	"Press '?' to see all keybindings.",
 	"Press 'Tab' to cycle through panels, 'Shift+Tab' to go back.",
-	"Use number keys '1-4' to jump directly to panels.",
+	"Use number keys '0-4' to jump directly to panels.",
 	"Press 'L' to toggle the command log panel.",
 	"Press 'T' to change the theme.",
 	"Use 'j/k' or arrow keys to navigate lists.",
