@@ -492,58 +492,74 @@ func defaultValueByPath() map[string]string {
 }
 
 func collectDefaultValues(value reflect.Value, path string, out map[string]string) {
-	if !value.IsValid() {
+	v, t, ok := dereferenceValue(value)
+	if !ok {
 		return
-	}
-
-	t := value.Type()
-	for t.Kind() == reflect.Ptr {
-		if value.IsNil() {
-			return
-		}
-		value = value.Elem()
-		t = value.Type()
 	}
 
 	if t == reflect.TypeOf(time.Duration(0)) {
 		if path != "" {
-			out[path] = value.Interface().(time.Duration).String()
+			out[path] = time.Duration(v.Int()).String()
 		}
 		return
 	}
 
-	switch t.Kind() {
-	case reflect.Struct:
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
-			name, include := schemaFieldName(field)
-			if !include {
-				continue
-			}
-			childPath := name
-			if path != "" {
-				childPath = path + "." + name
-			}
-			collectDefaultValues(value.Field(i), childPath, out)
+	if t.Kind() == reflect.Struct {
+		collectStructDefaultValues(v, t, path, out)
+		return
+	}
+
+	collectLeafDefaultValue(v, t, path, out)
+}
+
+func dereferenceValue(value reflect.Value) (reflect.Value, reflect.Type, bool) {
+	if !value.IsValid() {
+		return reflect.Value{}, nil, false
+	}
+	t := value.Type()
+	for t.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return reflect.Value{}, nil, false
 		}
-	case reflect.Bool:
+		value = value.Elem()
+		t = value.Type()
+	}
+	return value, t, true
+}
+
+func collectStructDefaultValues(value reflect.Value, t reflect.Type, path string, out map[string]string) {
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		name, include := schemaFieldName(field)
+		if !include {
+			continue
+		}
+		childPath := name
 		if path != "" {
-			out[path] = strconv.FormatBool(value.Bool())
+			childPath = path + "." + name
 		}
+		collectDefaultValues(value.Field(i), childPath, out)
+	}
+}
+
+func collectLeafDefaultValue(value reflect.Value, t reflect.Type, path string, out map[string]string) {
+	if path == "" {
+		return
+	}
+
+	switch t.Kind() {
+	case reflect.Bool:
+		out[path] = strconv.FormatBool(value.Bool())
 	case reflect.String:
-		if path != "" && value.String() != "" {
+		if value.String() != "" {
 			out[path] = value.String()
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if path != "" {
-			out[path] = strconv.FormatInt(value.Int(), 10)
-		}
+		out[path] = strconv.FormatInt(value.Int(), 10)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if path != "" {
-			out[path] = strconv.FormatUint(value.Uint(), 10)
-		}
+		out[path] = strconv.FormatUint(value.Uint(), 10)
 	case reflect.Slice, reflect.Array:
-		if path == "" || value.Len() == 0 {
+		if value.Len() == 0 {
 			return
 		}
 		encoded, err := json.Marshal(value.Interface())
@@ -552,7 +568,7 @@ func collectDefaultValues(value reflect.Value, path string, out map[string]strin
 		}
 		out[path] = string(encoded)
 	case reflect.Map:
-		if path == "" || value.Len() == 0 {
+		if value.Len() == 0 {
 			return
 		}
 		encoded, err := json.Marshal(value.Interface())
@@ -560,6 +576,8 @@ func collectDefaultValues(value reflect.Value, path string, out map[string]strin
 			return
 		}
 		out[path] = string(encoded)
+	default:
+		return
 	}
 }
 
