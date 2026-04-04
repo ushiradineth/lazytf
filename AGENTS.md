@@ -91,6 +91,17 @@ confidence: medium
 - Before every PR push, run `just check` locally and fix failures before pushing.
 - If touching CI-sensitive paths, also run CI-equivalent commands (`go mod verify`, `go vet ./...`, `go test ./...`, `golangci-lint run --timeout=5m`, `go build ./...`).
 
+## Releases
+confidence: high
+
+- Releases are automated via `.github/workflows/release.yml`.
+- Start a release by running the `Release` workflow manually on `main` with `version_bump` set to `patch`, `minor`, or `major`.
+- The workflow opens a release PR that bumps `VERSION` on branch `release/vX.Y.Z` with commit title `chore(release): bump version to X.Y.Z`.
+- After the release PR merges to `main`, the same workflow detects the `VERSION` change, creates tag `vX.Y.Z`, validates GoReleaser config, and publishes artifacts.
+- Verify published release URL using `gh release view vX.Y.Z --json url --jq .url`.
+- Prefer `just release-check` for local release config validation before touching release-related files.
+- Do not manually create release tags or run ad hoc `goreleaser release` for official releases unless explicitly requested.
+
 ## Boundaries
 confidence: high
 
