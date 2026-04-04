@@ -7,23 +7,32 @@
 // temp-file-and-rename pattern to prevent corruption on crash or power loss.
 //
 //go:generate go run ../../scripts/gen-config-schema.go
-//go:generate go run ../../scripts/gen-nix-config-options/main.go
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"gopkg.in/yaml.v3"
 )
 
 const currentVersion = 1
 
-const defaultSchemaComment = "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json\n"
+const (
+	mainSchemaURL           = "https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json"
+	releaseSchemaURLPattern = "https://raw.githubusercontent.com/ushiradineth/lazytf/v%s/internal/config/config.schema.json"
+	schemaHintPrefix        = "# yaml-language-server: $schema="
+	defaultMouseHintComment = "# mouse: true # optional override. By default lazytf enables mouse outside tmux and disables it inside tmux."
+)
+
+var semverPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // Config defines the user configuration file schema.
 type Config struct {
@@ -31,11 +40,18 @@ type Config struct {
 	DefaultEnvironment string                    `yaml:"default_environment,omitempty" description:"Default workspace or folder environment to select when lazytf starts."`
 	Mouse              *bool                     `yaml:"mouse,omitempty" description:"Enable mouse navigation in the UI. By default lazytf enables mouse outside tmux and disables it inside tmux to respect tmux mouse settings. Set this explicitly to override that behavior."`
 	Notification       *bool                     `yaml:"notification,omitempty" description:"Enable user notifications for important UI events. Set this explicitly to override the default behavior."`
+	Warnings           WarningConfig             `yaml:"warnings,omitempty" description:"Controls warning visibility in the UI and runtime diagnostics."`
 	Theme              ThemeConfig               `yaml:"theme,omitempty" description:"Theme settings for the lazytf UI."`
 	Terraform          TerraformConfig           `yaml:"terraform,omitempty" description:"Terraform execution settings used by lazytf."`
 	History            HistoryConfig             `yaml:"history,omitempty" description:"History storage and retention settings."`
 	Presets            []EnvironmentPreset       `yaml:"presets,omitempty" description:"Named presets that bundle environment selection, workdir, theme, and default Terraform flags."`
 	ProjectOverrides   map[string]*ProjectConfig `yaml:"project_overrides,omitempty" description:"Per-project overrides keyed by project path."`
+}
+
+// WarningConfig controls non-blocking warning output.
+type WarningConfig struct {
+	SuppressAll                bool `yaml:"suppress_all,omitempty" description:"Suppress all non-blocking warnings shown by lazytf."`
+	SuppressSchemaHintMismatch bool `yaml:"suppress_schema_hint_mismatch,omitempty" description:"Suppress warnings when the config file schema hint does not match the running lazytf version."`
 }
 
 // ThemeConfig holds theme selection settings.
@@ -63,6 +79,14 @@ type HistoryConfig struct {
 // Manager loads and saves configuration files with locking.
 type Manager struct {
 	path string
+}
+
+// SchemaHintStatus reports schema hint comment state for a config file.
+type SchemaHintStatus struct {
+	ExpectedURL string
+	ActualURL   string
+	HasHint     bool
+	Mismatch    bool
 }
 
 // DefaultPath returns the default config path.
@@ -163,7 +187,7 @@ func (m *Manager) Load() (Config, error) {
 		return Config{}, fmt.Errorf("decode config from %s: %w", m.path, err)
 	}
 
-	cfg, migrated, err := migrateConfig(cfg)
+	cfg, _, err = migrateConfig(cfg)
 	if err != nil {
 		return Config{}, err
 	}
@@ -173,15 +197,6 @@ func (m *Manager) Load() (Config, error) {
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("validate config from %s: %w", m.path, err)
-	}
-
-	if migrated {
-		if err := m.backupLocked(); err != nil {
-			return Config{}, fmt.Errorf("backup config %s before migration: %w", m.path, err)
-		}
-		if err := m.saveLocked(cfg); err != nil {
-			return Config{}, fmt.Errorf("save migrated config to %s: %w", m.path, err)
-		}
 	}
 
 	return cfg, nil
@@ -221,12 +236,13 @@ func (m *Manager) saveLocked(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(m.path), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-	return writeFileAtomic(m.path, data)
+	return writeFileAtomic(m.path, withSchemaHintComment(data))
 }
 
 func (m *Manager) writeDefaultLocked(cfg Config) error {
 	cfg = cfg.WithDefaults()
 	cfg.Version = currentVersion
+	cfg = withBootstrapDefaults(cfg)
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
@@ -240,8 +256,29 @@ func (m *Manager) writeDefaultLocked(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(m.path), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-	payload := append([]byte(defaultSchemaComment), data...)
-	return writeFileAtomic(m.path, payload)
+	return writeFileAtomic(m.path, withSchemaHintComment(withDefaultMouseHint(data)))
+}
+
+// SchemaHintStatus inspects the config file schema hint without mutating the file.
+func (m *Manager) SchemaHintStatus() (SchemaHintStatus, error) {
+	if m == nil {
+		return SchemaHintStatus{}, errors.New("config manager is nil")
+	}
+	data, err := os.ReadFile(m.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return SchemaHintStatus{}, nil
+		}
+		return SchemaHintStatus{}, fmt.Errorf("read config from %s: %w", m.path, err)
+	}
+	actual, hasHint := parseSchemaHintURL(data)
+	expected := schemaURLForVersion(consts.Version)
+	return SchemaHintStatus{
+		ExpectedURL: expected,
+		ActualURL:   actual,
+		HasHint:     hasHint,
+		Mismatch:    hasHint && actual != expected,
+	}, nil
 }
 
 func (m *Manager) lockPath() string {
@@ -268,6 +305,19 @@ func DefaultConfig() Config {
 	cfg := Config{Version: currentVersion}
 	cfg.History.Enabled = true
 	return cfg.WithDefaults()
+}
+
+// DefaultBootstrapConfig returns defaults used when creating a new config file.
+func DefaultBootstrapConfig() Config {
+	return withBootstrapDefaults(DefaultConfig())
+}
+
+func withBootstrapDefaults(cfg Config) Config {
+	if cfg.Notification == nil {
+		notificationDisabled := false
+		cfg.Notification = &notificationDisabled
+	}
+	return cfg
 }
 
 // WithDefaults ensures default values are set.
@@ -440,4 +490,70 @@ func writeFileAtomic(path string, data []byte) error {
 		return fmt.Errorf("rename temp config: %w", err)
 	}
 	return nil
+}
+
+func schemaURLForVersion(version string) string {
+	trimmed := strings.TrimSpace(version)
+	if semverPattern.MatchString(trimmed) {
+		return fmt.Sprintf(releaseSchemaURLPattern, trimmed)
+	}
+	return mainSchemaURL
+}
+
+func schemaHintComment() string {
+	return schemaHintPrefix + schemaURLForVersion(consts.Version) + "\n"
+}
+
+func withSchemaHintComment(data []byte) []byte {
+	trimmed := bytes.TrimLeft(data, "\n")
+	lines := strings.Split(string(trimmed), "\n")
+	if len(lines) > 0 {
+		firstLine := strings.TrimSpace(lines[0])
+		if strings.HasPrefix(firstLine, schemaHintPrefix) {
+			trimmed = []byte(strings.Join(lines[1:], "\n"))
+		}
+	}
+	return append([]byte(schemaHintComment()), trimmed...)
+}
+
+func withDefaultMouseHint(data []byte) []byte {
+	content := strings.TrimRight(string(data), "\n")
+	if strings.Contains(content, defaultMouseHintComment) {
+		return []byte(content + "\n")
+	}
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines)+1)
+	inserted := false
+	for _, line := range lines {
+		out = append(out, line)
+		if strings.HasPrefix(strings.TrimSpace(line), "notification:") {
+			out = append(out, defaultMouseHintComment)
+			inserted = true
+		}
+	}
+	if !inserted {
+		out = append(out, defaultMouseHintComment)
+	}
+	return []byte(strings.Join(out, "\n") + "\n")
+}
+
+func parseSchemaHintURL(data []byte) (string, bool) {
+	content := strings.TrimPrefix(string(data), "\uFEFF")
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, schemaHintPrefix) {
+			url := strings.TrimSpace(strings.TrimPrefix(trimmed, schemaHintPrefix))
+			if url == "" {
+				return "", false
+			}
+			return url, true
+		}
+		if !strings.HasPrefix(trimmed, "#") {
+			break
+		}
+	}
+	return "", false
 }

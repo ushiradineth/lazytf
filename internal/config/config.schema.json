@@ -1,4 +1,5 @@
 {
+  "$id": "https://raw.githubusercontent.com/ushiradineth/lazytf/v0.5.0/internal/config/config.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "default_environment": {
@@ -150,6 +151,20 @@
             "github-dark"
           ],
           "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "warnings": {
+      "description": "Controls warning visibility in the UI and runtime diagnostics.",
+      "properties": {
+        "suppress_all": {
+          "description": "Suppress all non-blocking warnings shown by lazytf.",
+          "type": "boolean"
+        },
+        "suppress_schema_hint_mismatch": {
+          "description": "Suppress warnings when the config file schema hint does not match the running lazytf version.",
+          "type": "boolean"
         }
       },
       "type": "object"

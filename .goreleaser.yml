@@ -1,81 +1,61 @@
+---
 version: 2
 
 project_name: lazytf
 
 before:
-  hooks:
-    - go mod verify
+  hooks: [go mod verify]
 
 builds:
   - id: linux-amd64
     main: ./cmd/lazytf
     binary: lazytf
-    env:
-      - CGO_ENABLED=1
-      - CC=x86_64-linux-gnu-gcc
-    goos:
-      - linux
-    goarch:
-      - amd64
+    env: [CGO_ENABLED=1, CC=x86_64-linux-gnu-gcc]
+    goos: [linux]
+    goarch: [amd64]
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
   - id: linux-arm64
     main: ./cmd/lazytf
     binary: lazytf
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
-    goos:
-      - linux
-    goarch:
-      - arm64
+    env: [CGO_ENABLED=1, CC=aarch64-linux-gnu-gcc]
+    goos: [linux]
+    goarch: [arm64]
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
   - id: linux-arm
     main: ./cmd/lazytf
     binary: lazytf
-    env:
-      - CGO_ENABLED=1
-      - CC=arm-linux-gnueabihf-gcc
-    goos:
-      - linux
-    goarch:
-      - arm
-    goarm:
-      - "6"
+    env: [CGO_ENABLED=1, CC=arm-linux-gnueabihf-gcc]
+    goos: [linux]
+    goarch: [arm]
+    goarm: ['6']
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
   - id: darwin-amd64
     main: ./cmd/lazytf
     binary: lazytf
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-    goarch:
-      - amd64
+    env: [CGO_ENABLED=0]
+    goos: [darwin]
+    goarch: [amd64]
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
   - id: darwin-arm64
     main: ./cmd/lazytf
     binary: lazytf
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-    goarch:
-      - arm64
+    env: [CGO_ENABLED=0]
+    goos: [darwin]
+    goarch: [arm64]
     ldflags:
       - -s -w -X github.com/ushiradineth/lazytf/internal/consts.Version={{.Version}}
 
 archives:
   - id: linux-amd64
-    ids:
-      - linux-amd64
+    ids: [linux-amd64]
     name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
@@ -84,12 +64,10 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
-    files:
-      - README.md
+    files: [README.md]
 
   - id: linux-arm64
-    ids:
-      - linux-arm64
+    ids: [linux-arm64]
     name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
@@ -98,12 +76,10 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
-    files:
-      - README.md
+    files: [README.md]
 
   - id: linux-arm
-    ids:
-      - linux-arm
+    ids: [linux-arm]
     name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
@@ -112,12 +88,10 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
-    files:
-      - README.md
+    files: [README.md]
 
   - id: darwin-amd64
-    ids:
-      - darwin-amd64
+    ids: [darwin-amd64]
     name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
@@ -126,12 +100,10 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
-    files:
-      - README.md
+    files: [README.md]
 
   - id: darwin-arm64
-    ids:
-      - darwin-arm64
+    ids: [darwin-arm64]
     name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
@@ -140,8 +112,7 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
-    files:
-      - README.md
+    files: [README.md]
 
 checksum:
   name_template: checksums.txt
@@ -149,10 +120,7 @@ checksum:
 changelog:
   sort: asc
   filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore\(deps\):'
+    exclude: ['^docs:', '^test:', '^chore\(deps\):']
   groups:
     - title: Features
       regexp: '^feat(\(.+\))?:'
@@ -163,19 +131,25 @@ changelog:
     - title: Maintenance
       regexp: '^chore(\(.+\))?:'
     - title: Other Changes
-      regexp: '.*'
+      regexp: .*
 
 release:
   draft: false
-  name_template: "{{ .Tag }}"
+  name_template: '{{ .Tag }}'
   footer: |
     ## Installation
 
+    - Docs: `https://github.com/ushiradineth/lazytf/blob/main/README.md#installation`
     - Homebrew: `brew tap ushiradineth/homebrew https://github.com/ushiradineth/homebrew && brew install --cask lazytf`
     - Nix: `nix run github:ushiradineth/lazytf`
 
+    ## Configuration references
+
+    - Schema: `https://raw.githubusercontent.com/ushiradineth/lazytf/{{ .Tag }}/internal/config/config.schema.json`
+    - Docs: `https://github.com/ushiradineth/lazytf/blob/{{ .Tag }}/CONFIGURATION.md`
+
 snapshot:
-  version_template: "{{ .Version }}-next"
+  version_template: '{{ .Version }}-next'
 
 homebrew_casks:
   - name: lazytf
@@ -186,17 +160,16 @@ homebrew_casks:
       - linux-arm
       - darwin-amd64
       - darwin-arm64
-    binaries:
-      - lazytf
+    binaries: [lazytf]
     homepage: https://github.com/ushiradineth/lazytf
     description: Terminal UI for reviewing Terraform plans
     repository:
       owner: ushiradineth
       name: homebrew
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
     commit_author:
       name: lazytf-bot
       email: 41898282+github-actions[bot]@users.noreply.github.com
-    caveats: |
+    caveats: |-
       If macOS blocks execution, run:
       xattr -dr com.apple.quarantine $(which lazytf)

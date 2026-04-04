@@ -145,4 +145,22 @@
     default = null;
     description = "Theme settings for the lazytf UI.";
   };
+  "warnings" = lib.mkOption {
+    type = lib.types.nullOr (lib.types.submodule {
+      options = {
+        "suppress_all" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.bool);
+          default = null;
+          description = "Suppress all non-blocking warnings shown by lazytf.";
+        };
+        "suppress_schema_hint_mismatch" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.bool);
+          default = null;
+          description = "Suppress warnings when the config file schema hint does not match the running lazytf version.";
+        };
+      };
+    });
+    default = null;
+    description = "Controls warning visibility in the UI and runtime diagnostics.";
+  };
 }
