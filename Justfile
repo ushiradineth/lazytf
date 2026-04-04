@@ -54,6 +54,12 @@ coverage:
     go test -v -race -coverprofile={{coverage_file}} -covermode=atomic ./...
     go tool cover -func={{coverage_file}}
 
+# Run mutation testing for a target package
+mutest package="./internal/diff":
+    @echo "Running go-mutesting for {{package}}..."
+    @command -v go-mutesting >/dev/null 2>&1 || { echo "Installing go-mutesting..."; go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest; }
+    go-mutesting {{package}}
+
 # ===== Formatting =====
 
 # Format code with gofumpt and organize imports
@@ -335,6 +341,8 @@ deps-tooling:
     go install github.com/mitranim/gow@latest
     @echo "→ Installing deadcode..."
     go install golang.org/x/tools/cmd/deadcode@latest
+    @echo "→ Installing go-mutesting..."
+    go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
     @echo "✓ All tools installed to $(go env GOPATH)/bin"
     @echo ""
     @echo "Make sure $(go env GOPATH)/bin is in your PATH"

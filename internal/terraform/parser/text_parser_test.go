@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -764,4 +766,44 @@ Plan: 0 to add, 0 to change, 0 to destroy.
 	plan, _ := parser.Parse(strings.NewReader(input))
 	// Read actions may or may not be parsed depending on implementation
 	_ = plan
+}
+
+func TestTextParserParseFile(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # aws_instance.web will be created
+  + resource "aws_instance" "web" {
+      + ami = "ami-123"
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+`
+
+	path := filepath.Join(t.TempDir(), "plan.txt")
+	if err := os.WriteFile(path, []byte(input), 0o600); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+
+	parser := NewTextParser()
+	plan, err := parser.ParseFile(path)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(plan.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(plan.Resources))
+	}
+	if plan.Resources[0].Action != terraform.ActionCreate {
+		t.Fatalf("expected create action, got %s", plan.Resources[0].Action)
+	}
+}
+
+func TestTextParserParseFileMissing(t *testing.T) {
+	parser := NewTextParser()
+	_, err := parser.ParseFile(filepath.Join(t.TempDir(), "missing-plan.txt"))
+	if err == nil {
+		t.Fatal("expected error for missing plan file")
+	}
+	if !strings.Contains(err.Error(), "failed to open file") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
