@@ -94,6 +94,15 @@ jobs:
           echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
           echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Regenerate generated assets
+        run: go generate ./...
+
       - name: Create release PR
         id: cpr
         uses: peter-evans/create-pull-request@v7
@@ -107,6 +116,7 @@ jobs:
             ## Release prep
 
             - bumps `VERSION` from `${{ steps.bump.outputs.current_version }}` to `${{ steps.bump.outputs.next_version }}`
+            - regenerates versioned config artifacts via `go generate ./...` so generated files match the bumped `VERSION`
             - after this PR merges to `main`, CI will create tag `v${{ steps.bump.outputs.next_version }}` and publish the release
           labels: release
           base: main
