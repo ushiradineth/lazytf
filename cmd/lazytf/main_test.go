@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1470,6 +1471,160 @@ func TestRun_UsesConfigMouseWhenFlagNotSet(t *testing.T) {
 	}
 }
 
+func TestRunWarnsOnSchemaHintMismatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldExecRunner := executionModeRunner
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		executionModeRunner = oldExecRunner
+		consts.Version = oldVersion
+	})
+	useTempConfig(t)
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	if err := os.WriteFile(tfPath, []byte("#!/bin/sh\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
+		t.Fatalf("chmod terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	original := "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 1\n"
+	if err := os.WriteFile(configPath, []byte(original), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	consts.Version = "1.2.3"
+	planFile = ""
+	workDir = "."
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	stderr := captureStderr(t, func() {
+		if err := run(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(stderr, "config schema hint mismatch") {
+		t.Fatalf("expected mismatch warning, got %q", stderr)
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(after) != original {
+		t.Fatalf("expected config file to remain unchanged on startup")
+	}
+}
+
+func TestRunSuppressesSchemaHintMismatchWarning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldExecRunner := executionModeRunner
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		executionModeRunner = oldExecRunner
+		consts.Version = oldVersion
+	})
+	useTempConfig(t)
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	if err := os.WriteFile(tfPath, []byte("#!/bin/sh\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
+		t.Fatalf("chmod terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	configContent := "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 1\nwarnings:\n  suppress_schema_hint_mismatch: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	consts.Version = "1.2.3"
+	planFile = ""
+	workDir = "."
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	stderr := captureStderr(t, func() {
+		if err := run(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if strings.Contains(stderr, "config schema hint mismatch") {
+		t.Fatalf("expected warning to be suppressed, got %q", stderr)
+	}
+}
+
+func TestRunSuppressesAllWarnings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldExecRunner := executionModeRunner
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		executionModeRunner = oldExecRunner
+		consts.Version = oldVersion
+	})
+	useTempConfig(t)
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	if err := os.WriteFile(tfPath, []byte("#!/bin/sh\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	if err := os.Chmod(tfPath, 0o700); err != nil {
+		t.Fatalf("chmod terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	configContent := "# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 1\nwarnings:\n  suppress_all: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	consts.Version = "1.2.3"
+	planFile = ""
+	workDir = "."
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	stderr := captureStderr(t, func() {
+		if err := run(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if strings.Contains(stderr, "config schema hint mismatch") {
+		t.Fatalf("expected warning to be suppressed by suppress_all, got %q", stderr)
+	}
+}
+
 func testConfig() config.Config {
 	return config.Config{
 		Theme: config.ThemeConfig{
@@ -1483,6 +1638,33 @@ func testConfig() config.Config {
 		},
 		Presets: []config.EnvironmentPreset{},
 	}
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe: %v", err)
+	}
+	os.Stderr = writePipe
+	defer func() {
+		os.Stderr = oldStderr
+	}()
+
+	fn()
+
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("close stderr writer: %v", err)
+	}
+	out, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	if err := readPipe.Close(); err != nil {
+		t.Fatalf("close stderr reader: %v", err)
+	}
+	return string(out)
 }
 
 func TestRunWithConfigWorkDir(t *testing.T) {

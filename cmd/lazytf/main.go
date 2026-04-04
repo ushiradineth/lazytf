@@ -141,6 +141,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	warnSchemaHintMismatch(&cfg, configManager)
 	if themeName != "" {
 		cfg.Theme.Name = themeName
 	}
@@ -173,6 +174,26 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return runExecutionMode(&cfg, overrideFlags, configManager, nil, "")
+}
+
+func warnSchemaHintMismatch(cfg *config.Config, configManager *config.Manager) {
+	if cfg == nil || configManager == nil {
+		return
+	}
+	if cfg.Warnings.SuppressAll || cfg.Warnings.SuppressSchemaHintMismatch {
+		return
+	}
+	status, err := configManager.SchemaHintStatus()
+	if err != nil || !status.Mismatch {
+		return
+	}
+	fmt.Fprintf(
+		os.Stderr,
+		"Warning: config schema hint mismatch (%s). Expected %s for lazytf %s. Update the first config line or set warnings.suppress_schema_hint_mismatch: true.\n",
+		status.ActualURL,
+		status.ExpectedURL,
+		consts.Version,
+	)
 }
 
 func runExecutionMode(

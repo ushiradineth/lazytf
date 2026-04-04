@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,6 +32,169 @@ func TestLoadMissingConfigReturnsDefaults(t *testing.T) {
 	}
 	if cfg.History.Level == "" {
 		t.Fatalf("expected default history level")
+	}
+}
+
+func TestSchemaURLForVersion(t *testing.T) {
+	if got, want := schemaURLForVersion("1.2.3"), "https://raw.githubusercontent.com/ushiradineth/lazytf/v1.2.3/internal/config/config.schema.json"; got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+	if got := schemaURLForVersion("dev"); got != mainSchemaURL {
+		t.Fatalf("expected main schema URL, got %q", got)
+	}
+	if got := schemaURLForVersion("1.2.3-rc1"); got != mainSchemaURL {
+		t.Fatalf("expected prerelease to fall back to main URL, got %q", got)
+	}
+}
+
+func TestLoadDoesNotRewriteExistingConfigForMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	original := schemaHintPrefix + "https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 0\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	cfg, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Version != currentVersion {
+		t.Fatalf("expected migrated in-memory version %d, got %d", currentVersion, cfg.Version)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config after load: %v", err)
+	}
+	if string(after) != original {
+		t.Fatalf("expected existing config to remain unchanged on load\nwant:\n%s\ngot:\n%s", original, string(after))
+	}
+}
+
+func TestSaveWritesSingleSchemaHintComment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	if err := manager.Save(DefaultConfig()); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	content := string(data)
+	if !strings.HasPrefix(content, schemaHintPrefix) {
+		t.Fatalf("expected config to start with schema hint comment, got %q", content)
+	}
+	if got := strings.Count(content, schemaHintPrefix); got != 1 {
+		t.Fatalf("expected single schema hint comment, got %d", got)
+	}
+}
+
+func TestWriteDefaultLockedAddsExplicitNotificationAndMouseHint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	if err := manager.writeDefaultLocked(DefaultConfig()); err != nil {
+		t.Fatalf("write default config: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	content := string(data)
+	if !strings.HasPrefix(content, schemaHintPrefix) {
+		t.Fatalf("expected schema hint prefix in bootstrap config")
+	}
+	if !strings.Contains(content, "notification: false") {
+		t.Fatalf("expected explicit notification: false in bootstrap config")
+	}
+	if !strings.Contains(content, defaultMouseHintComment) {
+		t.Fatalf("expected mouse guidance comment in bootstrap config")
+	}
+}
+
+func TestSchemaHintStatusDetectsMismatch(t *testing.T) {
+	oldVersion := consts.Version
+	consts.Version = "1.2.3"
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := schemaHintPrefix + "https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 1\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	status, err := manager.SchemaHintStatus()
+	if err != nil {
+		t.Fatalf("schema hint status: %v", err)
+	}
+	if !status.HasHint {
+		t.Fatalf("expected schema hint to be detected")
+	}
+	if !status.Mismatch {
+		t.Fatalf("expected mismatch status")
+	}
+	if status.ExpectedURL != schemaURLForVersion(consts.Version) {
+		t.Fatalf("unexpected expected URL %q", status.ExpectedURL)
+	}
+}
+
+func TestSchemaHintStatusWithoutHint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	status, err := manager.SchemaHintStatus()
+	if err != nil {
+		t.Fatalf("schema hint status: %v", err)
+	}
+	if status.HasHint {
+		t.Fatalf("expected no schema hint")
+	}
+	if status.Mismatch {
+		t.Fatalf("expected no mismatch without hint")
+	}
+}
+
+func TestSchemaHintStatusDetectsHintAfterLeadingComment(t *testing.T) {
+	oldVersion := consts.Version
+	consts.Version = "1.2.3"
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := "# managed manually\n# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/v1.1.1/internal/config/config.schema.json\nversion: 1\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	status, err := manager.SchemaHintStatus()
+	if err != nil {
+		t.Fatalf("schema hint status: %v", err)
+	}
+	if !status.HasHint || !status.Mismatch {
+		t.Fatalf("expected mismatch status for leading-comment schema hint")
 	}
 }
 
