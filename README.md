@@ -27,7 +27,8 @@ brew install --cask lazytf
 nix run github:ushiradineth/lazytf
 ```
 
-#### NixOS module usage
+<details>
+<summary><strong>NixOS module usage</strong></summary>
 
 ```nix
 {
@@ -54,7 +55,10 @@ nix run github:ushiradineth/lazytf
 }
 ```
 
-#### Home Manager module usage
+</details>
+
+<details>
+<summary><strong>Home Manager module usage</strong></summary>
 
 ```nix
 {
@@ -81,13 +85,43 @@ nix run github:ushiradineth/lazytf
 }
 ```
 
+</details>
+
+## Usage
+
+Start `lazytf` directly:
+
+```bash
+lazytf
+```
+
+Start with an existing Terraform plan file:
+
+```bash
+lazytf --plan plan.tfplan
+```
+
+If the plan is not in the current directory, pass `--workdir`:
+
+```bash
+lazytf --plan ../infrastructure/plan.tfplan --workdir ../infrastructure
+```
+
+One liner to start `lazytf` with a plan run:
+
+```bash
+terraform plan -no-color | lazytf --plan -
+```
+
+Read-only mode if you only want to visualise the diffs:
+
+```bash
+terraform plan -no-color | lazytf --plan - --readonly
+```
+
 ## Configuration
 
-### YAML config
-
-Config is stored in YAML and supports a yaml schema hint for editors.
-
-Add `# yaml-language-server: $schema=https://raw.githubusercontent.com/ushiradineth/lazytf/main/internal/config/config.schema.json` to the top of your config file.
+Full option reference lives in [`CONFIGURATION.md`](./CONFIGURATION.md).
 
 Path resolution order:
 
@@ -96,69 +130,22 @@ Path resolution order:
 3. `~/.config/lazytf/config.yaml`
 4. `/etc/lazytf/config.yaml`
 
-Example:
-
-```yaml
-version: 1
-theme:
-  name: default
-terraform:
-  default_flags:
-    - -compact-warnings
-  timeout: 10m
-history:
-  enabled: true
-  level: standard
-mouse: true
-notification: true
-```
-
-## Usage
-
-Execution mode with a binary plan file:
-
-```bash
-lazytf --plan plan.tfplan
-```
-
-When the plan was created in a different Terraform working directory, pass `--workdir`:
-
-```bash
-lazytf --plan ../tmpkube/plan.tfplan --workdir ../tmpkube
-```
-
-Execution mode from stdin plan text:
-
-```bash
-terraform plan -no-color | lazytf --plan -
-```
-
-Read-only mode is opt-in:
-
-```bash
-terraform plan -no-color | lazytf --plan - --readonly
-```
-
 ## Development Prerequisites
 
-- Go 1.25.8 or later
+- Go 1.25.8
 - [just](https://github.com/casey/just)
 
 ### With Nix
 
 - Install [direnv](https://direnv.net/)
-- `direnv allow` or `just shell`
+- Run `direnv allow` or `just shell`
 
 ### Without nix
 
 - `just deps-tooling`
 
-## Development
-
-### Quick Start
-
 ```bash
-# Install dependencies
+# Install Go dependencies
 just deps
 
 # Run the application
@@ -167,22 +154,19 @@ just run # or `just dev` for live reload
 
 ### Tooling
 
-Run `just` without arguments to see all available commands:
+Run `just` without arguments to see all available commands.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run `just check-all` to ensure quality
+4. Run `just check` to ensure quality
 5. Submit a pull request
 
 ### Before Raising a Pull Request
 
-Always run the quality checks:
-
-- `just check-all`
-- `just ci`
+Always run the quality check, `just check`.
 
 ## Credits
 
