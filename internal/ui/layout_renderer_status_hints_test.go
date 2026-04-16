@@ -115,3 +115,63 @@ func TestStatusHelpTextMainAndCommandLogPanels(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderStatusBarIncludesTargetModeIndicator(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.width = 120
+	m.panelManager.SetFocus(PanelResources)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+
+	if ok := m.resourceList.ToggleTargetSelectionAtSelected(); !ok {
+		t.Fatal("expected target selection to toggle")
+	}
+
+	got := m.renderStatusBar()
+	if !strings.Contains(got, "TARGET MODE (1 selected)") {
+		t.Fatalf("expected target mode indicator in status bar, got %q", got)
+	}
+}
+
+func TestRenderStatusBarHidesTargetModeIndicatorWhenDisabled(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.width = 120
+	m.panelManager.SetFocus(PanelResources)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = false
+	m.resourceList.SetTargetModeEnabled(false)
+
+	got := m.renderStatusBar()
+	if strings.Contains(got, "TARGET MODE") {
+		t.Fatalf("did not expect target mode indicator when disabled, got %q", got)
+	}
+}
+
+func TestRenderResourcesPanelWithTabsShowsTargetBadge(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.panelManager.SetFocus(PanelResources)
+	m.resourcesActiveTab = 0
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+
+	got := m.renderResourcesPanelWithTabs(80, 10)
+	if !strings.Contains(got, "[TARGET]") {
+		t.Fatalf("expected target badge in resources panel title, got %q", got)
+	}
+}
+
+func TestRenderResourcesPanelWithTabsHidesTargetBadgeOnStateTab(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.panelManager.SetFocus(PanelResources)
+	m.resourcesActiveTab = 1
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+
+	got := m.renderResourcesPanelWithTabs(80, 10)
+	if strings.Contains(got, "[TARGET]") {
+		t.Fatalf("did not expect target badge on state tab, got %q", got)
+	}
+}
