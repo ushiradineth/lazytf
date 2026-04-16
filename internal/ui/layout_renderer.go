@@ -30,6 +30,10 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, m.styles.Highlight.Render(m.envDisplayName()))
 	}
 
+	if targetStatus := m.targetModeStatusText(); targetStatus != "" {
+		parts = append(parts, targetStatus)
+	}
+
 	// Add resource summary
 	if m.plan != nil && len(m.plan.Resources) > 0 {
 		parts = append(parts, m.resourceSummaryText())
@@ -104,6 +108,15 @@ func (m *Model) statusHelpText() string {
 		return footerHelpHint
 	}
 	return strings.Join(hints, " | ")
+}
+
+func (m *Model) targetModeStatusText() string {
+	if !m.executionMode || !m.targetModeEnabled {
+		return ""
+	}
+	targetCount := len(m.currentTargetSelection())
+	label := fmt.Sprintf("TARGET MODE (%d selected)", targetCount)
+	return m.styles.Highlight.Bold(true).Render(label)
 }
 
 // countResourcesByAction counts resources of a specific action type.
@@ -345,7 +358,11 @@ func (m *Model) addTabsToPanel(panel string, width int, tabs []string, activeTab
 			tabParts = append(tabParts, tab)
 		}
 	}
-	titleRendered := titleStyle.Render("[2]") + " " + strings.Join(tabParts, " - ")
+	targetBadge := ""
+	if m.executionMode && m.targetModeEnabled && activeTab == 0 {
+		targetBadge = m.styles.Highlight.Bold(true).Render("[TARGET]") + " "
+	}
+	titleRendered := titleStyle.Render("[2]") + " " + targetBadge + strings.Join(tabParts, " - ")
 
 	// Try to replace the title in the first line
 	firstLine := lines[0]
