@@ -148,6 +148,21 @@ func TestRenderStatusBarHidesTargetModeIndicatorWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRenderStatusBarHidesTargetModeIndicatorOutsideExecutionMode(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.width = 120
+	m.executionMode = false
+	m.panelManager.SetFocus(PanelResources)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+
+	got := m.renderStatusBar()
+	if strings.Contains(got, "TARGET MODE") {
+		t.Fatalf("did not expect target mode indicator outside execution mode, got %q", got)
+	}
+}
+
 func TestRenderResourcesPanelWithTabsShowsTargetBadge(t *testing.T) {
 	m := newStatusHintsModel(t)
 	m.panelManager.SetFocus(PanelResources)
@@ -173,5 +188,19 @@ func TestRenderResourcesPanelWithTabsHidesTargetBadgeOnStateTab(t *testing.T) {
 	got := m.renderResourcesPanelWithTabs(80, 10)
 	if strings.Contains(got, "[TARGET]") {
 		t.Fatalf("did not expect target badge on state tab, got %q", got)
+	}
+}
+
+func TestRenderResourcesPanelWithTabsHidesTargetBadgeWhenTargetModeDisabled(t *testing.T) {
+	m := newStatusHintsModel(t)
+	m.panelManager.SetFocus(PanelResources)
+	m.resourcesActiveTab = 0
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.targetModeEnabled = false
+	m.resourceList.SetTargetModeEnabled(false)
+
+	got := m.renderResourcesPanelWithTabs(80, 10)
+	if strings.Contains(got, "[TARGET]") {
+		t.Fatalf("did not expect target badge when target mode is disabled, got %q", got)
 	}
 }
