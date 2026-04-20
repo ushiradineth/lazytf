@@ -177,7 +177,7 @@ func defaultFetchLatestReleaseVersion(ctx context.Context) (string, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "lazytf-version-check")
 
-	resp, err := http.DefaultClient.Do(req) // #nosec G107 -- request URL is fixed latestReleaseAPIURL constant.
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- request URL is fixed latestReleaseAPIURL constant.
 	if err != nil {
 		return "", fmt.Errorf("fetch latest release: %w", err)
 	}
