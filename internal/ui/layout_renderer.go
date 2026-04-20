@@ -30,10 +30,6 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, m.styles.Highlight.Render(m.envDisplayName()))
 	}
 
-	if targetStatus := m.targetModeStatusText(); targetStatus != "" {
-		parts = append(parts, targetStatus)
-	}
-
 	// Add resource summary
 	if m.plan != nil && len(m.plan.Resources) > 0 {
 		parts = append(parts, m.resourceSummaryText())
@@ -44,18 +40,22 @@ func (m *Model) renderStatusBar() string {
 
 	statusText := strings.Join(parts, " │ ")
 
-	// Add progress indicator on the right side
-	progressView := ""
+	// Add progress + version tags on the right side
+	var rightParts []string
 	if m.progressIndicator != nil {
-		progressView = m.progressIndicator.View()
+		if progressView := m.progressIndicator.View(); progressView != "" {
+			rightParts = append(rightParts, progressView)
+		}
 	}
+	rightParts = append(rightParts, m.footerVersionTag())
+	rightView := strings.Join(rightParts, "  ")
 
-	if progressView != "" {
-		progressWidth := lipgloss.Width(progressView)
+	if rightView != "" {
+		rightWidth := lipgloss.Width(rightView)
 		statusWidth := lipgloss.Width(statusText)
-		gap := m.width - statusWidth - progressWidth
+		gap := m.width - statusWidth - rightWidth
 		if gap > 0 {
-			statusText = statusText + components.GetPadding(gap) + progressView
+			statusText = statusText + components.GetPadding(gap) + rightView
 		}
 	}
 
@@ -108,15 +108,6 @@ func (m *Model) statusHelpText() string {
 		return footerHelpHint
 	}
 	return strings.Join(hints, " | ")
-}
-
-func (m *Model) targetModeStatusText() string {
-	if !m.executionMode || !m.targetModeEnabled {
-		return ""
-	}
-	targetCount := len(m.currentTargetSelection())
-	label := fmt.Sprintf("TARGET MODE (%d selected)", targetCount)
-	return m.styles.Highlight.Bold(true).Render(label)
 }
 
 // countResourcesByAction counts resources of a specific action type.

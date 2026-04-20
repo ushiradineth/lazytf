@@ -34,6 +34,12 @@ type NotificationFailedMsg struct {
 	Error  error
 }
 
+// VersionCheckMsg delivers latest-release lookup results.
+type VersionCheckMsg struct {
+	Latest string
+	Error  error
+}
+
 // QuitMsg is sent to quit the application.
 type QuitMsg struct{}
 

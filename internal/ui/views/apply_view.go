@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -38,10 +37,7 @@ type ApplyView struct {
 // NewApplyView creates a new apply view.
 func NewApplyView(s *styles.Styles) *ApplyView {
 	sp := spinner.New()
-	sp.Spinner = spinner.Spinner{
-		Frames: []string{"-", "\\", "|", "/"},
-		FPS:    120000000,
-	}
+	sp.Spinner = spinner.Dot
 
 	vp := viewport.New(0, 0)
 	return &ApplyView{
@@ -73,7 +69,7 @@ func (v *ApplyView) SetSize(width, height int) {
 
 // SetTitle updates the header title.
 func (v *ApplyView) SetTitle(title string) {
-	v.title = title
+	v.title = strings.TrimSpace(title)
 }
 
 // SetStatus updates the apply status.
@@ -169,7 +165,7 @@ func (v *ApplyView) renderHeader() string {
 	label := title
 	switch v.status {
 	case ApplyRunning:
-		label = fmt.Sprintf("%s %s", v.spinner.View(), title)
+		label = title
 	case ApplySuccess:
 		label = "OK " + title
 	case ApplyFailed:

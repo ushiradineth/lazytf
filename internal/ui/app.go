@@ -390,6 +390,9 @@ func (m *Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
+	if cmd := m.checkLatestReleaseCmd(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -514,6 +517,9 @@ func (m *Model) handleTertiaryUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case NotificationFailedMsg:
 		model := m.handleNotificationFailed(msg)
 		return model, nil, true
+	case VersionCheckMsg:
+		model, cmd := m.handleVersionCheck(msg)
+		return model, cmd, true
 
 	// Action request messages from panels
 	case RequestPlanMsg:
