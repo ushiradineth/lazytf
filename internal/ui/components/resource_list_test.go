@@ -1648,3 +1648,66 @@ func TestUpdateWithViewportMessage(t *testing.T) {
 	_, _ = r.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 	// Should not panic
 }
+
+func TestTargetPlanPreviewRendersDuringTargetedPlan(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(60, 10)
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+
+	r.SetTargetPlanPreview([]string{"module.alpha.aws_instance.web", "module.alpha.aws_instance.db"}, true)
+	view := r.View()
+
+	if !strings.Contains(view, "Targeted plan running for:") {
+		t.Fatalf("expected targeted plan preview header, got %q", view)
+	}
+	if !strings.Contains(view, "module.alpha.aws_instance.web") {
+		t.Fatalf("expected first target in preview, got %q", view)
+	}
+	if !strings.Contains(view, "module.alpha.aws_instance.db") {
+		t.Fatalf("expected second target in preview, got %q", view)
+	}
+}
+
+func TestTargetPlanPreviewSuppressesNoResourcesText(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(80, 10)
+	r.SetResources(nil)
+
+	r.SetTargetPlanPreview([]string{"module.foundation.module.ingress.helm_release.release"}, true)
+
+	view := r.View()
+	if strings.Contains(view, "No resources to display") {
+		t.Fatalf("expected no empty-state line while target preview is active, got %q", view)
+	}
+}
+
+func TestWrapTargetPreviewLineWrapsLongTargets(t *testing.T) {
+	lines := wrapTargetPreviewLine("module.foundation.module.ingress.helm_release.release", 24)
+	if len(lines) < 2 {
+		t.Fatalf("expected wrapped lines, got %#v", lines)
+	}
+	if !strings.HasPrefix(lines[0], "• ") {
+		t.Fatalf("expected first wrapped line to have bullet prefix, got %#v", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "  ") {
+		t.Fatalf("expected continuation line to be indented, got %#v", lines[1])
+	}
+}
+
+func TestTargetPlanPreviewClearsWhenInactive(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetSize(100, 10)
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+
+	r.SetTargetPlanPreview([]string{"module.alpha.aws_instance.web"}, true)
+	withPreview := r.View()
+	if !strings.Contains(withPreview, "Targeted plan running for:") {
+		t.Fatalf("expected preview header before clearing, got %q", withPreview)
+	}
+
+	r.SetTargetPlanPreview(nil, false)
+	withoutPreview := r.View()
+	if strings.Contains(withoutPreview, "Targeted plan running for:") {
+		t.Fatalf("expected preview header to be cleared, got %q", withoutPreview)
+	}
+}

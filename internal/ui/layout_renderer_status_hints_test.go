@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
 
@@ -116,7 +117,7 @@ func TestStatusHelpTextMainAndCommandLogPanels(t *testing.T) {
 	}
 }
 
-func TestRenderStatusBarIncludesTargetModeIndicator(t *testing.T) {
+func TestRenderStatusBarDoesNotIncludeTargetModeIndicator(t *testing.T) {
 	m := newStatusHintsModel(t)
 	m.width = 120
 	m.panelManager.SetFocus(PanelResources)
@@ -129,37 +130,26 @@ func TestRenderStatusBarIncludesTargetModeIndicator(t *testing.T) {
 	}
 
 	got := m.renderStatusBar()
-	if !strings.Contains(got, "TARGET MODE (1 selected)") {
-		t.Fatalf("expected target mode indicator in status bar, got %q", got)
+	if strings.Contains(got, "TARGET MODE") {
+		t.Fatalf("did not expect target mode status text in footer, got %q", got)
 	}
 }
 
-func TestRenderStatusBarHidesTargetModeIndicatorWhenDisabled(t *testing.T) {
+func TestRenderStatusBarShowsVersionTagOnRightSide(t *testing.T) {
+	oldVersion := consts.Version
+	consts.Version = "0.6.1"
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+
 	m := newStatusHintsModel(t)
 	m.width = 120
 	m.panelManager.SetFocus(PanelResources)
 	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
-	m.targetModeEnabled = false
-	m.resourceList.SetTargetModeEnabled(false)
 
 	got := m.renderStatusBar()
-	if strings.Contains(got, "TARGET MODE") {
-		t.Fatalf("did not expect target mode indicator when disabled, got %q", got)
-	}
-}
-
-func TestRenderStatusBarHidesTargetModeIndicatorOutsideExecutionMode(t *testing.T) {
-	m := newStatusHintsModel(t)
-	m.width = 120
-	m.executionMode = false
-	m.panelManager.SetFocus(PanelResources)
-	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
-	m.targetModeEnabled = true
-	m.resourceList.SetTargetModeEnabled(true)
-
-	got := m.renderStatusBar()
-	if strings.Contains(got, "TARGET MODE") {
-		t.Fatalf("did not expect target mode indicator outside execution mode, got %q", got)
+	if !strings.Contains(got, "v0.6.1") {
+		t.Fatalf("expected version tag in footer, got %q", got)
 	}
 }
 

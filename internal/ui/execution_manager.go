@@ -37,16 +37,21 @@ func (m *Model) beginPlan() tea.Cmd {
 		return nil
 	}
 	m.err = nil
+	var targetPreview []string
 	if m.targetModeEnabled {
 		targets := m.currentTargetSelection()
 		if len(targets) == 0 {
 			return m.toastError("Target mode enabled but no resources selected")
 		}
+		targetPreview = targets
 	}
 	planEnv, err := m.prepareTerraformEnv()
 	if err != nil {
 		m.err = err
 		return nil
+	}
+	if m.resourceList != nil {
+		m.resourceList.SetTargetPlanPreview(targetPreview, len(targetPreview) > 0)
 	}
 	planFlags, planFilePath := m.planFlagsForRun()
 	m.planRunFlags = planFlags
@@ -70,7 +75,7 @@ func (m *Model) beginPlan() tea.Cmd {
 
 	if m.applyView != nil {
 		m.applyView.Reset()
-		m.applyView.SetTitle("Running terraform plan...")
+		m.applyView.SetTitle("Planning changes...")
 		m.applyView.SetStatus(views.ApplyRunning)
 	}
 	m.updateExecutionViewForStreaming()
@@ -1208,6 +1213,9 @@ func (m *Model) finishTrackedOperation() {
 func (m *Model) handlePlanStart(msg PlanStartMsg) (tea.Model, tea.Cmd) {
 	m.clearPlanResultState()
 	if msg.Error != nil {
+		if m.resourceList != nil {
+			m.resourceList.SetTargetPlanPreview(nil, false)
+		}
 		m.clearSavedPlanState()
 	}
 	return m.handleOperationStart(
@@ -1225,6 +1233,9 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 	m.planRunning = false
 	m.finishTrackedOperation()
 	m.outputChan = nil
+	if m.resourceList != nil {
+		m.resourceList.SetTargetPlanPreview(nil, false)
+	}
 
 	// Log to session history
 	if m.commandLogPanel != nil {
