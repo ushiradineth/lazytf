@@ -169,9 +169,9 @@ func (d *Detector) Detect(ctx context.Context) (DetectionResult, error) {
 }
 
 func terraformWorkspaceList(ctx context.Context, workDir string) ([]string, error) {
-	path, err := exec.LookPath("terraform")
+	path, err := resolveTerraformBinaryPath()
 	if err != nil {
-		return nil, errors.New("terraform binary not found in PATH")
+		return nil, err
 	}
 
 	cmd := exec.CommandContext(ctx, path, "workspace", "list", "-no-color")
@@ -180,9 +180,9 @@ func terraformWorkspaceList(ctx context.Context, workDir string) ([]string, erro
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
-			return nil, fmt.Errorf("terraform workspace list failed: %w", err)
+			return nil, fmt.Errorf("terraform/tofu workspace list failed: %w", err)
 		}
-		return nil, fmt.Errorf("terraform workspace list failed: %w: %s", err, trimmed)
+		return nil, fmt.Errorf("terraform/tofu workspace list failed: %w: %s", err, trimmed)
 	}
 
 	return parseWorkspaceList(string(output)), nil

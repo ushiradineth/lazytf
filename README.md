@@ -123,6 +123,8 @@ terraform plan -no-color | lazytf --plan - --readonly
 
 Full option reference lives in [`CONFIGURATION.md`](./CONFIGURATION.md).
 
+`lazytf` supports both Terraform and OpenTofu binaries. By default it looks for `terraform` first and then `tofu`. You can explicitly set either path via `terraform.binary` in config.
+
 Path resolution order:
 
 1. `LAZYTF_CONFIG`

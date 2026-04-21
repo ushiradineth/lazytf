@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ushiradineth/lazytf/internal/consts"
 	"gopkg.in/yaml.v3"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 func TestLoadMissingConfigReturnsDefaults(t *testing.T) {

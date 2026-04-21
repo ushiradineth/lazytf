@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/ushiradineth/lazytf/v0.5.0/internal/config/config.schema.json",
+  "$id": "https://raw.githubusercontent.com/ushiradineth/lazytf/v0.6.0/internal/config/config.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "default_environment": {
@@ -112,7 +112,7 @@
       "description": "Terraform execution settings used by lazytf.",
       "properties": {
         "binary": {
-          "description": "Path to the Terraform binary to run.",
+          "description": "Path to the Terraform or OpenTofu binary to run.",
           "type": "string"
         },
         "default_flags": {

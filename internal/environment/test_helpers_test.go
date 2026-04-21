@@ -33,6 +33,32 @@ func setupFakeTerraform(t *testing.T) {
 	t.Setenv("PATH", dir)
 }
 
+func setupFakeTofu(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tofu script not supported on windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tofu")
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"workspace\" ] && [ \"$2\" = \"list\" ]; then\n" +
+		"  echo \"  default\"\n" +
+		"  echo \"* dev\"\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"if [ \"$1\" = \"workspace\" ] && [ \"$2\" = \"select\" ]; then\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exit 1\n"
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write tofu script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write tofu script: %v", err)
+	}
+	t.Setenv("PATH", dir)
+}
+
 func setupFakeTerraformError(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

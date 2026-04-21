@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/ushiradineth/lazytf/internal/tfbinary"
 )
 
 // WorkspaceListOutputFunc returns the raw workspace list output for a directory.
@@ -175,9 +177,9 @@ func parseWorkspaceListOutput(output string) workspaceListResult {
 }
 
 func terraformWorkspaceListOutput(ctx context.Context, workDir string) (string, error) {
-	path, err := exec.LookPath("terraform")
+	path, err := resolveTerraformBinaryPath()
 	if err != nil {
-		return "", errors.New("terraform binary not found in PATH")
+		return "", err
 	}
 
 	cmd := exec.CommandContext(ctx, path, "workspace", "list", "-no-color")
@@ -186,18 +188,18 @@ func terraformWorkspaceListOutput(ctx context.Context, workDir string) (string, 
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
-			return "", fmt.Errorf("terraform workspace list failed: %w", err)
+			return "", fmt.Errorf("terraform/tofu workspace list failed: %w", err)
 		}
-		return "", fmt.Errorf("terraform workspace list failed: %w: %s", err, trimmed)
+		return "", fmt.Errorf("terraform/tofu workspace list failed: %w: %s", err, trimmed)
 	}
 
 	return string(output), nil
 }
 
 func terraformWorkspaceSelect(ctx context.Context, workDir, name string) error {
-	path, err := exec.LookPath("terraform")
+	path, err := resolveTerraformBinaryPath()
 	if err != nil {
-		return errors.New("terraform binary not found in PATH")
+		return err
 	}
 	cmd := exec.CommandContext(ctx, path, "workspace", "select", "-no-color", name)
 	cmd.Dir = workDir
@@ -205,9 +207,13 @@ func terraformWorkspaceSelect(ctx context.Context, workDir, name string) error {
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
-			return fmt.Errorf("terraform workspace select failed: %w", err)
+			return fmt.Errorf("terraform/tofu workspace select failed: %w", err)
 		}
-		return fmt.Errorf("terraform workspace select failed: %w: %s", err, trimmed)
+		return fmt.Errorf("terraform/tofu workspace select failed: %w: %s", err, trimmed)
 	}
 	return nil
+}
+
+func resolveTerraformBinaryPath() (string, error) {
+	return tfbinary.Resolve()
 }

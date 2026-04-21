@@ -3,7 +3,10 @@ package environment
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -150,6 +153,44 @@ func TestTerraformWorkspaceSelectSuccess(t *testing.T) {
 	}
 }
 
+func TestTerraformWorkspaceListOutputTofuFallback(t *testing.T) {
+	setupFakeTofu(t)
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, consts.DefaultName) || !strings.Contains(out, consts.EnvDev) {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestTerraformWorkspaceSelectTofuFallback(t *testing.T) {
+	setupFakeTofu(t)
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTerraformWorkspaceListOutputPrefersTerraformOverTofu(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	dir := t.TempDir()
+	writeWorkspaceBinaryScript(t, dir, "terraform", "dev")
+	writeWorkspaceBinaryScript(t, dir, "tofu", "tofu-dev")
+	t.Setenv("PATH", dir)
+
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	parsed := parseWorkspaceListOutput(out)
+	if parsed.Current != "dev" {
+		t.Fatalf("expected terraform to win, got current workspace %q", parsed.Current)
+	}
+}
+
 func TestTerraformWorkspaceSelectErrorOutput(t *testing.T) {
 	setupFakeTerraformError(t)
 	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err == nil {
@@ -170,5 +211,26 @@ func TestWorkspaceManagerNil(t *testing.T) {
 	}
 	if err := manager.Validate(context.Background(), consts.EnvDev); err == nil {
 		t.Fatalf("expected validate error for nil manager")
+	}
+}
+
+func writeWorkspaceBinaryScript(t *testing.T, dir, binaryName, currentWorkspace string) {
+	t.Helper()
+	path := filepath.Join(dir, binaryName)
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"workspace\" ] && [ \"$2\" = \"list\" ]; then\n" +
+		"  echo \"  default\"\n" +
+		"  echo \"* " + currentWorkspace + "\"\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"if [ \"$1\" = \"workspace\" ] && [ \"$2\" = \"select\" ]; then\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exit 1\n"
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write %s script: %v", binaryName, err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("chmod %s script: %v", binaryName, err)
 	}
 }

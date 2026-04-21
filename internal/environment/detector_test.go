@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 func TestDetectWorkspaceStrategy(t *testing.T) {
@@ -151,6 +154,36 @@ func TestTerraformWorkspaceListSuccess(t *testing.T) {
 	}
 	if len(workspaces) != 2 || workspaces[1] != "dev" {
 		t.Fatalf("unexpected workspaces: %#v", workspaces)
+	}
+}
+
+func TestTerraformWorkspaceListTofuFallback(t *testing.T) {
+	setupFakeTofu(t)
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(workspaces) != 2 || workspaces[1] != "dev" {
+		t.Fatalf("unexpected workspaces: %#v", workspaces)
+	}
+}
+
+func TestTerraformWorkspaceListPrefersTerraformOverTofu(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	dir := t.TempDir()
+	writeWorkspaceBinaryScript(t, dir, "terraform", "dev")
+	writeWorkspaceBinaryScript(t, dir, "tofu", "tofu-dev")
+	t.Setenv("PATH", dir)
+
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(workspaces) != 2 || workspaces[1] != "dev" {
+		t.Fatalf("expected terraform-preferred list, got %#v", workspaces)
 	}
 }
 

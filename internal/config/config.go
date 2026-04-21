@@ -19,8 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ushiradineth/lazytf/internal/consts"
 	"gopkg.in/yaml.v3"
+
+	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
 const currentVersion = 1
@@ -62,7 +63,7 @@ type ThemeConfig struct {
 // TerraformConfig holds terraform-specific settings.
 type TerraformConfig struct {
 	DefaultFlags []string      `yaml:"default_flags,omitempty" description:"Default flags appended to Terraform commands run by lazytf."`
-	Binary       string        `yaml:"binary,omitempty" description:"Path to the Terraform binary to run."`
+	Binary       string        `yaml:"binary,omitempty" description:"Path to the Terraform or OpenTofu binary to run."`
 	WorkingDir   string        `yaml:"working_dir,omitempty" description:"Default working directory used when no folder or preset overrides it."`
 	Timeout      time.Duration `yaml:"timeout,omitempty" description:"Maximum time allowed for Terraform commands before lazytf cancels them."`
 	Parallelism  int           `yaml:"parallelism,omitempty" description:"Default Terraform parallelism value used when no explicit -parallelism flag is provided."`

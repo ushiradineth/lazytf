@@ -198,7 +198,7 @@ func TestRun_ExecuteModeTerraformMissing(t *testing.T) {
 	t.Setenv("PATH", "")
 
 	err := run(&cobra.Command{}, nil)
-	if err == nil || !strings.Contains(err.Error(), "failed to initialize terraform") {
+	if err == nil || !strings.Contains(err.Error(), "failed to initialize terraform/tofu") {
 		t.Fatalf("expected executor init error, got %v", err)
 	}
 }

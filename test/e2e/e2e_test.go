@@ -115,11 +115,14 @@ func TestE2EPlanModuleFixture(t *testing.T) {
 
 func terraformPathOrSkip(t *testing.T) string {
 	t.Helper()
-	path, err := exec.LookPath("terraform")
-	if err != nil {
-		t.Skip("terraform binary not found in PATH")
+	for _, binary := range []string{"terraform", "tofu"} {
+		path, err := exec.LookPath(binary)
+		if err == nil {
+			return path
+		}
 	}
-	return path
+	t.Skip("terraform/tofu binary not found in PATH")
+	return ""
 }
 
 func shouldSkipProviderDownload(output string) bool {

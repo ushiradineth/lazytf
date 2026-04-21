@@ -343,7 +343,7 @@ func buildExecutor(cfg *config.Config, flags []string) (*terraform.Executor, err
 	}
 	exec, err := executorFactory(workDir, execOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize terraform: %w", err)
+		return nil, fmt.Errorf("failed to initialize terraform/tofu: %w", err)
 	}
 	return exec, nil
 }

@@ -105,7 +105,7 @@
         "binary" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
           default = null;
-          description = "Path to the Terraform binary to run.";
+          description = "Path to the Terraform or OpenTofu binary to run.";
         };
         "default_flags" = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf (lib.types.str));
