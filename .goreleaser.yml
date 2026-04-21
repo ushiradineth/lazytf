@@ -136,9 +136,6 @@ changelog:
 release:
   draft: false
   name_template: '{{ .Tag }}'
-  header: |
-    ![lazytf banner](https://raw.githubusercontent.com/ushiradineth/lazytf/{{ .Tag }}/.github/banner.png)
-
   footer: |
     ## Installation
 
