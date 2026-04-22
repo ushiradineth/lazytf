@@ -80,11 +80,8 @@ func resourcesFooterSpecs(ctx *Context) []footerHintSpec {
 	}
 	if ctx.TargetMode {
 		return []footerHintSpec{
-			{Action: ActionToggleTarget, PreferredKey: footerSpaceKey},
 			{Action: ActionApply},
-			{Action: ActionToggleAllTargets},
 			{Action: ActionCopyAddress},
-			{Action: ActionToggleTargetMode},
 		}
 	}
 	return []footerHintSpec{

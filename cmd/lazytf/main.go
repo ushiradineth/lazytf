@@ -448,7 +448,13 @@ func runPlanInputMode(cfg *config.Config, overrideFlags []string, configManager 
 		return err
 	}
 	appStyles := styles.NewStyles(appTheme)
-	model := ui.NewModelWithStyles(plan, appStyles)
+	model := ui.NewReadOnlyModelWithStyles(plan, ui.ExecutionConfig{
+		PreloadedPlanPath: strings.TrimSpace(planPath),
+		PreloadedPlanEnv:  strings.TrimSpace(planEnv),
+		PreloadedPlanDir:  strings.TrimSpace(planWorkDir),
+		Config:            cfg,
+		ConfigManager:     configManager,
+	}, appStyles)
 	return programRunner(model)
 }
 

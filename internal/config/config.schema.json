@@ -165,6 +165,10 @@
         "suppress_schema_hint_mismatch": {
           "description": "Suppress warnings when the config file schema hint does not match the running lazytf version.",
           "type": "boolean"
+        },
+        "suppress_update_available": {
+          "description": "Suppress update-available toast notifications when a newer lazytf release is detected.",
+          "type": "boolean"
         }
       },
       "type": "object"

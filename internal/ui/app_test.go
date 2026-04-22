@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
@@ -162,6 +163,42 @@ func TestExecutionModelWithPlanStartsInDiffMode(t *testing.T) {
 	}
 	if m.mainArea.GetMode() != ModeDiff {
 		t.Fatalf("expected main area mode %v, got %v", ModeDiff, m.mainArea.GetMode())
+	}
+}
+
+func TestNewReadOnlyModelWithStylesCopiesMetadata(t *testing.T) {
+	manager, err := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	cfg := config.DefaultConfig()
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "aws_instance.main", Action: terraform.ActionCreate}}}
+
+	m := NewReadOnlyModelWithStyles(plan, ExecutionConfig{
+		Config:            &cfg,
+		ConfigManager:     manager,
+		PreloadedPlanPath: "/tmp/plan.tfplan",
+		PreloadedPlanDir:  "/tmp",
+		PreloadedPlanEnv:  "dev",
+	}, styles.DefaultStyles())
+
+	if m.executionMode {
+		t.Fatal("expected read-only model to run outside execution mode")
+	}
+	if m.config != &cfg {
+		t.Fatal("expected config pointer to be preserved")
+	}
+	if m.configManager != manager {
+		t.Fatal("expected config manager to be preserved")
+	}
+	if m.planFilePath != "/tmp/plan.tfplan" {
+		t.Fatalf("expected plan path metadata, got %q", m.planFilePath)
+	}
+	if m.planWorkDir != "/tmp" {
+		t.Fatalf("expected plan workdir metadata, got %q", m.planWorkDir)
+	}
+	if m.planEnvironment != "dev" {
+		t.Fatalf("expected plan environment metadata, got %q", m.planEnvironment)
 	}
 }
 
