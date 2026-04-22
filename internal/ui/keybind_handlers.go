@@ -695,12 +695,6 @@ func (m *Model) handleActionSelectResourceTab() tea.Cmd {
 	if m.resourceList == nil {
 		return nil
 	}
-	if m.targetModeEnabled {
-		if m.resourceList.ToggleTargetSelectionAtSelected() {
-			m.invalidateTargetPlanPin()
-		}
-		return nil
-	}
 	if m.resourceList.GetSelectedResource() == nil {
 		m.resourceList.ToggleGroup()
 		return nil

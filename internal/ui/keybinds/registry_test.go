@@ -423,8 +423,8 @@ func TestRegistry_Resolve_TargetModeBindingsOnResourcesTab(t *testing.T) {
 	if binding := r.Resolve("a", ctx); binding == nil || binding.Action != ActionApply {
 		t.Fatalf("expected a -> ActionApply in target mode, got %#v", binding)
 	}
-	if binding := r.Resolve("enter", ctx); binding == nil || binding.Action != ActionToggleTarget {
-		t.Fatalf("expected enter -> ActionToggleTarget in target mode, got %#v", binding)
+	if binding := r.Resolve("enter", ctx); binding == nil || binding.Action != ActionSelect {
+		t.Fatalf("expected enter -> ActionSelect in target mode, got %#v", binding)
 	}
 	if binding := r.Resolve(" ", ctx); binding == nil || binding.Action != ActionToggleTarget {
 		t.Fatalf("expected space -> ActionToggleTarget in target mode, got %#v", binding)

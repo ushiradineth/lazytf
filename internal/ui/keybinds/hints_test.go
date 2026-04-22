@@ -288,7 +288,7 @@ func TestRegistry_ForStatusBar_IncludesTargetModeHints(t *testing.T) {
 	opts := HintOptions{MaxPrimary: 16, MaxSecondary: 16, Separator: " | "}
 
 	result := r.ForStatusBar(ctx, opts)
-	if !strings.Contains(result, "enter: target select") {
+	if !strings.Contains(result, "target select") {
 		t.Fatalf("expected target-selection hint in status bar output, got %q", result)
 	}
 	if !strings.Contains(result, "s: target all") {

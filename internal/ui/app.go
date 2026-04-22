@@ -297,6 +297,20 @@ func NewExecutionModel(plan *terraform.Plan, cfg ExecutionConfig) *Model {
 	return NewExecutionModelWithStyles(plan, cfg, styles.DefaultStyles())
 }
 
+// NewReadOnlyModelWithStyles creates a non-execution model with read-only metadata.
+func NewReadOnlyModelWithStyles(plan *terraform.Plan, cfg ExecutionConfig, appStyles *styles.Styles) *Model {
+	m := NewModelWithStyles(plan, appStyles)
+	m.config = cfg.Config
+	m.configManager = cfg.ConfigManager
+	m.planFilePath = strings.TrimSpace(cfg.PreloadedPlanPath)
+	m.planWorkDir = strings.TrimSpace(cfg.PreloadedPlanDir)
+	m.planEnvironment = strings.TrimSpace(cfg.PreloadedPlanEnv)
+	if m.resourceList != nil {
+		m.resourceList.SetPanelTitlePrefix(m.styles.Highlight.Bold(true).Render("[READONLY]"))
+	}
+	return m
+}
+
 // NewExecutionModelWithStyles creates a model configured for terraform execution with styles.
 //
 //nolint:funlen // Constructor wires execution dependencies and startup state in one place.

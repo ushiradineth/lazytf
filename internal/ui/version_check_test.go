@@ -2,9 +2,12 @@ package ui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 )
 
@@ -117,7 +120,11 @@ func TestCheckLatestReleaseCmdCallsFetcherForReleaseVersions(t *testing.T) {
 }
 
 func TestHandleVersionCheckShowsToastWhenUpdateAvailable(t *testing.T) {
-	m := NewExecutionModel(nil, ExecutionConfig{})
+	manager, err := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	m := NewExecutionModel(nil, ExecutionConfig{ConfigManager: manager})
 	m.ready = true
 	m.width = 100
 	m.height = 30
@@ -140,5 +147,151 @@ func TestHandleVersionCheckShowsToastWhenUpdateAvailable(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "Update available") {
 		t.Fatalf("expected update toast message in view, got %q", view)
+	}
+}
+
+func TestCheckLatestReleaseCmdSuppressedByConfig(t *testing.T) {
+	m := NewExecutionModel(nil, ExecutionConfig{Config: &config.Config{Warnings: config.WarningConfig{SuppressUpdateAvailable: true}}})
+
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+	consts.Version = "0.6.1"
+
+	if cmd := m.checkLatestReleaseCmd(); cmd != nil {
+		t.Fatal("expected nil command when update warnings are suppressed")
+	}
+}
+
+func TestHandleVersionCheckSkipsAlreadyNotifiedRelease(t *testing.T) {
+	manager, err := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	m := NewExecutionModel(nil, ExecutionConfig{ConfigManager: manager})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+	consts.Version = "0.6.1"
+
+	if err := m.markReleaseVersionNotified("v0.7.0"); err != nil {
+		t.Fatalf("mark notified release: %v", err)
+	}
+
+	_, cmd := m.handleVersionCheck(VersionCheckMsg{Latest: "0.7.0"})
+	if cmd != nil {
+		t.Fatal("expected nil command for already notified release")
+	}
+	if m.toast != nil && m.toast.IsVisible() {
+		t.Fatal("did not expect toast for already notified release")
+	}
+}
+
+func TestHandleVersionCheckPersistsNotifiedRelease(t *testing.T) {
+	manager, err := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	m := NewExecutionModel(nil, ExecutionConfig{ConfigManager: manager})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+	consts.Version = "0.6.1"
+
+	_, cmd := m.handleVersionCheck(VersionCheckMsg{Latest: "v0.7.0"})
+	if cmd == nil {
+		t.Fatal("expected toast command for newer release")
+	}
+
+	got, err := m.lastNotifiedReleaseVersion()
+	if err != nil {
+		t.Fatalf("read notified release: %v", err)
+	}
+	if !sameReleaseVersion(got, "0.7.0") {
+		t.Fatalf("expected 0.7.0 recorded, got %q", got)
+	}
+
+	_, cmd = m.handleVersionCheck(VersionCheckMsg{Latest: "v0.7.1"})
+	if cmd == nil {
+		t.Fatal("expected toast command for new release version")
+	}
+}
+
+func TestHandleVersionCheckWriteStateFailureIsNonFatal(t *testing.T) {
+	baseDir := t.TempDir()
+	blockingPath := filepath.Join(baseDir, "blocking-file")
+	if err := os.WriteFile(blockingPath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocking file: %v", err)
+	}
+
+	manager, err := config.NewManager(filepath.Join(blockingPath, "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	m := NewExecutionModel(nil, ExecutionConfig{ConfigManager: manager})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+	consts.Version = "0.6.1"
+
+	_, cmd := m.handleVersionCheck(VersionCheckMsg{Latest: "v0.7.0"})
+	if cmd == nil {
+		t.Fatal("expected toast command even when state write fails")
+	}
+	if m.toast == nil || !m.toast.IsVisible() {
+		t.Fatal("expected visible toast when state write fails")
+	}
+}
+
+func TestHandleVersionCheckReadStateFailureIsNonFatal(t *testing.T) {
+	manager, err := config.NewManager(filepath.Join(t.TempDir(), "config.yaml"))
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	m := NewExecutionModel(nil, ExecutionConfig{ConfigManager: manager})
+	m.ready = true
+	m.width = 100
+	m.height = 30
+	m.updateLayout()
+
+	statePath, err := m.versionCheckStatePath()
+	if err != nil {
+		t.Fatalf("resolve state path: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("{"), 0o600); err != nil {
+		t.Fatalf("write invalid state: %v", err)
+	}
+
+	oldVersion := consts.Version
+	t.Cleanup(func() {
+		consts.Version = oldVersion
+	})
+	consts.Version = "0.6.1"
+
+	_, cmd := m.handleVersionCheck(VersionCheckMsg{Latest: "v0.7.0"})
+	if cmd == nil {
+		t.Fatal("expected toast command even when state read fails")
+	}
+	if m.toast == nil || !m.toast.IsVisible() {
+		t.Fatal("expected visible toast when state read fails")
 	}
 }

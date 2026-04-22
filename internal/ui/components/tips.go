@@ -21,7 +21,7 @@ var tips = []string{
 	"Press 'u' to filter only update operations.",
 	"Press 'd' to filter only delete operations.",
 	"Press 'r' to filter only replace operations.",
-	"Press 't' to toggle target mode for scoped plans.",
+	"Press 't' to toggle target for scoped plans.",
 	"Press 'Space' in target mode to target selected path or module tree.",
 	"Press 's' in target mode to toggle all visible targets.",
 	"Press 'y' to yank the selected resource address.",

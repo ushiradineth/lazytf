@@ -35,6 +35,10 @@ type githubLatestReleaseResponse struct {
 }
 
 func (m *Model) checkLatestReleaseCmd() tea.Cmd {
+	if m.shouldSuppressUpdateAvailableWarning() {
+		return nil
+	}
+
 	local := strings.TrimSpace(consts.Version)
 	if !shouldCheckLatestRelease(local) {
 		return nil
@@ -50,6 +54,9 @@ func (m *Model) checkLatestReleaseCmd() tea.Cmd {
 }
 
 func (m *Model) handleVersionCheck(msg VersionCheckMsg) (tea.Model, tea.Cmd) {
+	if m.shouldSuppressUpdateAvailableWarning() {
+		return m, nil
+	}
 	if msg.Error != nil {
 		return m, nil
 	}
@@ -62,6 +69,13 @@ func (m *Model) handleVersionCheck(msg VersionCheckMsg) (tea.Model, tea.Cmd) {
 	if !isRemoteVersionNewer(local, latest) {
 		return m, nil
 	}
+	alreadyNotified, err := m.wasReleaseVersionNotified(latest)
+	if err != nil {
+		m.appendSessionLog("Version check state", "update-check-state", err.Error())
+	}
+	if alreadyNotified {
+		return m, nil
+	}
 	if m.toast == nil {
 		return m, nil
 	}
@@ -69,7 +83,17 @@ func (m *Model) handleVersionCheck(msg VersionCheckMsg) (tea.Model, tea.Cmd) {
 	currentLabel := footerVersionLabel(local)
 	latestLabel := footerVersionLabel(latest)
 	message := fmt.Sprintf("Update available: %s (current %s)", latestLabel, currentLabel)
+	if err := m.markReleaseVersionNotified(latest); err != nil {
+		m.appendSessionLog("Version check state", "update-check-state", err.Error())
+	}
 	return m, m.toast.ShowInfo(message)
+}
+
+func (m *Model) shouldSuppressUpdateAvailableWarning() bool {
+	if m == nil || m.config == nil {
+		return false
+	}
+	return m.config.Warnings.SuppressAll || m.config.Warnings.SuppressUpdateAvailable
 }
 
 func (m *Model) footerVersionTag() string {

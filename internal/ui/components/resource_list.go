@@ -45,6 +45,7 @@ type ResourceList struct {
 		active  bool
 		targets []string
 	}
+	panelTitlePrefix string
 
 	// Summary counts for plan
 	summaryCreate  int
@@ -156,6 +157,11 @@ func (r *ResourceList) HasResources() bool {
 func (r *ResourceList) SetTargetModeEnabled(enabled bool) {
 	r.targetMode = enabled
 	r.updateViewport()
+}
+
+// SetPanelTitlePrefix sets optional text before the "Resources" title.
+func (r *ResourceList) SetPanelTitlePrefix(prefix string) {
+	r.panelTitlePrefix = strings.TrimSpace(prefix)
 }
 
 // SetTargetPlanPreview sets the snapshot of targets being planned.
@@ -441,6 +447,9 @@ func (r *ResourceList) View() string {
 
 	// Build title with filter indicators
 	titleText := "Resources"
+	if r.panelTitlePrefix != "" {
+		titleText = r.panelTitlePrefix + " " + titleText
+	}
 	indicatorText := r.renderFilterIndicators()
 	if indicatorText != "" {
 		titleText = titleText + " " + indicatorText
@@ -543,6 +552,10 @@ func wrapToWidth(text string, width int) []string {
 
 // buildFooterText builds the footer text with item count.
 func (r *ResourceList) buildFooterText() string {
+	targetHints := " target select: space | target all: s | target: t "
+	if r.targetMode {
+		return targetHints
+	}
 	if len(r.visibleItems) == 0 {
 		return ""
 	}

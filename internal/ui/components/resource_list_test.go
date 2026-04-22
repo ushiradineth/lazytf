@@ -1640,6 +1640,81 @@ func TestToggleAllTargetSelectionVisibleResources(t *testing.T) {
 	}
 }
 
+func TestResourceListFooterShowsTargetHintsInTargetMode(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	view := r.View()
+	for _, hint := range []string{"target select: space", "target all: s", "target: t"} {
+		if !strings.Contains(view, hint) {
+			t.Fatalf("expected target hint %q in resources footer, got %q", hint, view)
+		}
+	}
+}
+
+func TestResourceListFooterTargetHintsHavePadding(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	view := r.View()
+	if !strings.Contains(view, " target select: space | target all: s | target: t ") {
+		t.Fatalf("expected padded target hints in footer, got %q", view)
+	}
+}
+
+func TestResourceListFooterTargetModePrioritizesHintsOverItemCount(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(true)
+
+	view := r.View()
+	if strings.Contains(view, "1/1") {
+		t.Fatalf("did not expect item count to crowd target hints in target mode footer, got %q", view)
+	}
+}
+
+func TestResourceListFooterHidesTargetHintsWhenTargetModeDisabled(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetTargetModeEnabled(false)
+
+	view := r.View()
+	if strings.Contains(view, "target select: space") || strings.Contains(view, "target all: s") || strings.Contains(view, "target: t") {
+		t.Fatalf("did not expect target hints in footer when target mode disabled, got %q", view)
+	}
+}
+
+func TestResourceListFooterShowsTargetHintsWithNoVisibleItems(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+	r.SetFilter(terraform.ActionCreate, false)
+	r.SetTargetModeEnabled(true)
+
+	view := r.View()
+	if !strings.Contains(view, "target select: space") || !strings.Contains(view, "target all: s") || !strings.Contains(view, "target: t") {
+		t.Fatalf("expected target hints in footer with no visible items, got %q", view)
+	}
+}
+
+func TestResourceListTitlePrefixAppearsInTitle(t *testing.T) {
+	r := NewResourceList(styles.DefaultStyles())
+	r.SetPanelTitlePrefix("[READONLY]")
+	r.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	r.SetSize(80, 10)
+
+	view := r.View()
+	if !strings.Contains(view, "[READONLY]") {
+		t.Fatalf("expected [READONLY] title prefix, got %q", view)
+	}
+}
+
 func TestUpdateWithViewportMessage(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetSize(80, 10)
