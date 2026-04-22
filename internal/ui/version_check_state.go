@@ -130,5 +130,6 @@ func writeVersionCheckStateAtomic(path string, data []byte) error {
 		return err
 	}
 
+	// #nosec G703 -- destination path is derived from a fixed filename in versionCheckStatePath
 	return os.Rename(tmpPath, path)
 }
