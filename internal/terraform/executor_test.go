@@ -495,6 +495,41 @@ func TestResolveTerraformPath(t *testing.T) {
 	}
 }
 
+func TestResolveTerraformPathFallsBackToTofu(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tofuPath := writeFakeTofuArgsOnly(t, dir)
+	t.Setenv("PATH", dir)
+
+	path, err := resolveTerraformPath()
+	if err != nil {
+		t.Fatalf("resolve terraform path: %v", err)
+	}
+	if path != tofuPath {
+		t.Fatalf("expected tofu path %q, got %q", tofuPath, path)
+	}
+}
+
+func TestResolveTerraformPathPrefersTerraformOverTofu(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+	dir := t.TempDir()
+	tfPath := writeFakeTerraformArgsOnly(t, dir)
+	_ = writeFakeTofuArgsOnly(t, dir)
+	t.Setenv("PATH", dir)
+
+	path, err := resolveTerraformPath()
+	if err != nil {
+		t.Fatalf("resolve terraform path: %v", err)
+	}
+	if path != tfPath {
+		t.Fatalf("expected terraform path %q, got %q", tfPath, path)
+	}
+}
+
 func TestResolveTerraformPathMissing(t *testing.T) {
 	t.Setenv("PATH", "")
 	if _, err := resolveTerraformPath(); err == nil {
@@ -563,6 +598,28 @@ cmd="$1"
 shift
 if [ "$cmd" = "version" ]; then
   echo "Terraform v1.0.0"
+  exit 0
+fi
+echo "ARGS:$cmd $*"
+exit 0
+`
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return path
+}
+
+func writeFakeTofuArgsOnly(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "tofu")
+	script := `#!/bin/sh
+cmd="$1"
+shift
+if [ "$cmd" = "version" ]; then
+  echo "OpenTofu v1.10.0"
   exit 0
 fi
 echo "ARGS:$cmd $*"

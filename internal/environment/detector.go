@@ -16,10 +16,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/ushiradineth/lazytf/internal/tfbinary"
 )
 
 // StrategyType represents the detected environment strategy.
@@ -52,6 +53,7 @@ type WorkspaceListFunc func(ctx context.Context, workDir string) ([]string, erro
 // Detector identifies environment strategies for a Terraform project.
 type Detector struct {
 	workDir        string
+	binaryPath     string
 	listWorkspaces WorkspaceListFunc
 	maxDepth       int
 }
@@ -81,6 +83,14 @@ func WithMaxDepth(depth int) DetectorOption {
 	}
 }
 
+// WithBinaryPath sets a preferred terraform/tofu binary path.
+func WithBinaryPath(path string) DetectorOption {
+	return func(d *Detector) error {
+		d.binaryPath = strings.TrimSpace(path)
+		return nil
+	}
+}
+
 // NewDetector creates a Detector for the provided working directory.
 func NewDetector(workDir string, opts ...DetectorOption) (*Detector, error) {
 	if strings.TrimSpace(workDir) == "" {
@@ -98,10 +108,9 @@ func NewDetector(workDir string, opts ...DetectorOption) (*Detector, error) {
 		return nil, fmt.Errorf("working directory is not a directory: %s", absDir)
 	}
 
-	detector := &Detector{
-		workDir:        absDir,
-		listWorkspaces: terraformWorkspaceList,
-		maxDepth:       defaultMaxDepth,
+	detector := &Detector{workDir: absDir, maxDepth: defaultMaxDepth}
+	detector.listWorkspaces = func(ctx context.Context, dir string) ([]string, error) {
+		return terraformWorkspaceList(ctx, dir, detector.binaryPath)
 	}
 	for _, opt := range opts {
 		if err := opt(detector); err != nil {
@@ -168,21 +177,19 @@ func (d *Detector) Detect(ctx context.Context) (DetectionResult, error) {
 	return result, nil
 }
 
-func terraformWorkspaceList(ctx context.Context, workDir string) ([]string, error) {
-	path, err := exec.LookPath("terraform")
+func terraformWorkspaceList(ctx context.Context, workDir, preferredBinary string) ([]string, error) {
+	runtime, err := tfbinary.NewRuntime(preferredBinary)
 	if err != nil {
-		return nil, errors.New("terraform binary not found in PATH")
+		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, path, "workspace", "list", "-no-color")
-	cmd.Dir = workDir
-	output, err := cmd.CombinedOutput()
+	output, err := runtime.CombinedOutput(ctx, workDir, "workspace", "list", "-no-color")
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
-			return nil, fmt.Errorf("terraform workspace list failed: %w", err)
+			return nil, fmt.Errorf("terraform/tofu workspace list failed: %w", err)
 		}
-		return nil, fmt.Errorf("terraform workspace list failed: %w: %s", err, trimmed)
+		return nil, fmt.Errorf("terraform/tofu workspace list failed: %w: %s", err, trimmed)
 	}
 
 	return parseWorkspaceList(string(output)), nil

@@ -176,12 +176,12 @@ type workspaceManager interface {
 	Switch(ctx context.Context, name string) error
 }
 
-var newEnvironmentDetector = func(workDir string) (environmentDetector, error) {
-	return environment.NewDetector(workDir)
+var newEnvironmentDetector = func(workDir, binaryPath string) (environmentDetector, error) {
+	return environment.NewDetector(workDir, environment.WithBinaryPath(binaryPath))
 }
 
-var newWorkspaceManager = func(workDir string) (workspaceManager, error) {
-	return environment.NewWorkspaceManager(workDir)
+var newWorkspaceManager = func(workDir, binaryPath string) (workspaceManager, error) {
+	return environment.NewWorkspaceManager(workDir, environment.WithWorkspaceBinaryPath(binaryPath))
 }
 
 // ExecutionConfig configures execution mode behavior.

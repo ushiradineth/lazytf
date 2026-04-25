@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ushiradineth/lazytf/internal/tfbinary"
 )
 
 const defaultTimeout = 10 * time.Minute
@@ -522,8 +524,8 @@ func (e *Executor) commandContext(ctx context.Context, opts execOptions) (contex
 }
 
 func (e *Executor) buildCommand(ctx context.Context, args []string, extraEnv []string) *exec.Cmd {
-	// #nosec G204 -- terraform execution is intentional and arguments come from configured inputs.
-	cmd := exec.CommandContext(ctx, e.terraformPath, args...)
+	runtime := tfbinary.NewRuntimeFromPath(e.terraformPath)
+	cmd := runtime.CommandContext(ctx, args...)
 	cmd.Dir = e.workDir
 	cmd.Env = mergeEnv(os.Environ(), e.env, extraEnv)
 	return cmd
@@ -684,31 +686,16 @@ func splitEnv(item string) (string, string) {
 }
 
 func resolveTerraformPath() (string, error) {
-	if path, err := exec.LookPath("terraform"); err == nil {
-		return path, nil
-	}
-
-	commonPaths := []string{
-		"/usr/local/bin/terraform",
-		"/opt/homebrew/bin/terraform",
-		"/usr/bin/terraform",
-	}
-	for _, path := range commonPaths {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-
-	return "", errors.New("terraform binary not found in PATH")
+	return tfbinary.Resolve()
 }
 
 func validateTerraformPath(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("terraform binary not found: %w", err)
+		return fmt.Errorf("terraform/tofu binary not found: %w", err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("terraform path is a directory: %s", path)
+		return fmt.Errorf("terraform/tofu path is a directory: %s", path)
 	}
 	return nil
 }

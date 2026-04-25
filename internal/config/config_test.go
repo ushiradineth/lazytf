@@ -783,7 +783,7 @@ func TestProjectOverrideFor(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := Config{
 			ProjectOverrides: map[string]*ProjectConfig{
-				tmpDir: {Theme: "nord", Flags: []string{"-no-color"}},
+				tmpDir: {Theme: "nord", Flags: []string{"-no-color"}, Binary: "/custom/tofu"},
 			},
 		}
 		override := cfg.ProjectOverrideFor(tmpDir)
@@ -792,6 +792,9 @@ func TestProjectOverrideFor(t *testing.T) {
 		}
 		if override.Theme != "nord" {
 			t.Errorf("expected theme 'nord', got %q", override.Theme)
+		}
+		if override.Binary != "/custom/tofu" {
+			t.Errorf("expected binary '/custom/tofu', got %q", override.Binary)
 		}
 	})
 

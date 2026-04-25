@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 )
@@ -30,6 +31,7 @@ func (m *Model) envStatusLabel() string {
 
 func (m *Model) detectEnvironmentsCmd() tea.Cmd {
 	workDir := defaultWorkDir(m.envWorkDir)
+	binaryPath := configuredBinaryPathFromConfig(m.config)
 	return func() tea.Msg {
 		absWorkDir, err := filepath.Abs(workDir)
 		if err != nil {
@@ -39,13 +41,20 @@ func (m *Model) detectEnvironmentsCmd() tea.Cmd {
 		if err != nil {
 			return EnvironmentDetectedMsg{Error: err}
 		}
-		result, err := detectEnvironments(workDir)
+		result, err := detectEnvironments(workDir, binaryPath)
 		if err != nil {
 			return EnvironmentDetectedMsg{Error: err}
 		}
-		current := resolveDetectedEnvironment(m, workDir, absWorkDir, result)
+		current := resolveDetectedEnvironment(m, workDir, absWorkDir, result, binaryPath)
 		return EnvironmentDetectedMsg{Result: result, Current: current, Preference: pref}
 	}
+}
+
+func configuredBinaryPathFromConfig(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Terraform.Binary)
 }
 
 func defaultWorkDir(workDir string) string {
@@ -63,8 +72,8 @@ func loadEnvironmentPreference(workDir string) (*environment.Preference, error) 
 	return pref, nil
 }
 
-func detectEnvironments(workDir string) (environment.DetectionResult, error) {
-	detector, err := newEnvironmentDetector(workDir)
+func detectEnvironments(workDir, binaryPath string) (environment.DetectionResult, error) {
+	detector, err := newEnvironmentDetector(workDir, binaryPath)
 	if err != nil {
 		return environment.DetectionResult{}, err
 	}
@@ -76,13 +85,14 @@ func resolveDetectedEnvironment(
 	workDir string,
 	absWorkDir string,
 	result environment.DetectionResult,
+	binaryPath string,
 ) string {
 	current := m.envCurrent
 	if current == "" {
 		current = matchCurrentFolder(result.FolderPaths, absWorkDir)
 	}
 	if current == "" && len(result.Workspaces) > 0 {
-		if name, err := currentWorkspaceName(workDir); err == nil {
+		if name, err := currentWorkspaceName(workDir, binaryPath); err == nil {
 			current = name
 		}
 	}
@@ -101,8 +111,8 @@ func matchCurrentFolder(folderPaths []string, absWorkDir string) string {
 	return ""
 }
 
-func currentWorkspaceName(workDir string) (string, error) {
-	manager, err := newWorkspaceManager(workDir)
+func currentWorkspaceName(workDir, binaryPath string) (string, error) {
+	manager, err := newWorkspaceManager(workDir, binaryPath)
 	if err != nil {
 		return "", err
 	}
@@ -260,7 +270,7 @@ func (m *Model) applyEnvironmentSelection(option environment.Environment) error 
 	}
 	switch option.Strategy {
 	case environment.StrategyWorkspace:
-		manager, err := newWorkspaceManager(m.envWorkDir)
+		manager, err := newWorkspaceManager(m.envWorkDir, configuredBinaryPathFromConfig(m.config))
 		if err != nil {
 			return err
 		}

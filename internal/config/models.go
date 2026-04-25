@@ -9,7 +9,8 @@ import (
 type ProjectConfig struct {
 	Theme      string   `yaml:"theme,omitempty" description:"Built-in UI theme override for this project."`
 	Flags      []string `yaml:"flags,omitempty" description:"Additional Terraform flags for this project."`
-	PresetName string   `yaml:"preset_name,omitempty" description:"Preset name to apply for this project before project-specific overrides."`
+	PresetName string   `yaml:"preset_name,omitempty" description:"Preset name to apply for this project."`
+	Binary     string   `yaml:"binary,omitempty" description:"Path to the Terraform or OpenTofu binary to run for this project."`
 }
 
 // ProjectOverrideFor returns the project override matching a path.

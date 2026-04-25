@@ -79,6 +79,11 @@
   "project_overrides" = lib.mkOption {
     type = lib.types.nullOr (lib.types.attrsOf (lib.types.submodule {
       options = {
+        "binary" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.str);
+          default = null;
+          description = "Path to the Terraform or OpenTofu binary to run for this project.";
+        };
         "flags" = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf (lib.types.str));
           default = null;
@@ -87,7 +92,7 @@
         "preset_name" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
           default = null;
-          description = "Preset name to apply for this project before project-specific overrides.";
+          description = "Preset name to apply for this project.";
         };
         "theme" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
@@ -105,7 +110,7 @@
         "binary" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
           default = null;
-          description = "Path to the Terraform binary to run.";
+          description = "Path to the Terraform or OpenTofu binary to run.";
         };
         "default_flags" = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf (lib.types.str));
