@@ -163,6 +163,11 @@
           default = null;
           description = "Suppress warnings when the config file schema hint does not match the running lazytf version.";
         };
+        "suppress_update_available" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.bool);
+          default = null;
+          description = "Suppress update-available toast notifications when a newer lazytf release is detected.";
+        };
       };
     });
     default = null;

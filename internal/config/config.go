@@ -53,6 +53,7 @@ type Config struct {
 type WarningConfig struct {
 	SuppressAll                bool `yaml:"suppress_all,omitempty" description:"Suppress all non-blocking warnings shown by lazytf."`
 	SuppressSchemaHintMismatch bool `yaml:"suppress_schema_hint_mismatch,omitempty" description:"Suppress warnings when the config file schema hint does not match the running lazytf version."`
+	SuppressUpdateAvailable    bool `yaml:"suppress_update_available,omitempty" description:"Suppress update-available toast notifications when a newer lazytf release is detected."`
 }
 
 // ThemeConfig holds theme selection settings.

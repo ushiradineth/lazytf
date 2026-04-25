@@ -5901,6 +5901,115 @@ func TestPlanFlagsForRunIncludesSelectedTargets(t *testing.T) {
 	}
 }
 
+func TestBeginPlanShowsTargetPreviewInResourcesPanel(t *testing.T) {
+	executor := setupMockExecutor(t)
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 30
+	m.updateLayout()
+	m.executor = executor
+	m.progressIndicator = nil
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate}})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	cmd := m.beginPlan()
+	if cmd == nil {
+		t.Fatal("expected beginPlan command")
+	}
+
+	view := m.resourceList.View()
+	if !strings.Contains(view, "Targeted plan running for:") {
+		t.Fatalf("expected targeted plan preview while running, got %q", view)
+	}
+}
+
+func TestBeginPlanPreflightErrorDoesNotShowTargetPreview(t *testing.T) {
+	executor := setupMockExecutor(t)
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 30
+	m.updateLayout()
+	m.executor = executor
+	m.progressIndicator = nil
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate}})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	badWorkDir := filepath.Join(t.TempDir(), "terraform-root")
+	if err := os.WriteFile(badWorkDir, []byte("not-a-directory"), 0o600); err != nil {
+		t.Fatalf("write bad workdir file: %v", err)
+	}
+	executor.MockWorkDir = badWorkDir
+
+	cmd := m.beginPlan()
+	if cmd != nil {
+		t.Fatal("expected nil command when plan preflight fails")
+	}
+
+	view := m.resourceList.View()
+	if strings.Contains(view, "Targeted plan running for:") {
+		t.Fatalf("did not expect targeted preview after preflight error, got %q", view)
+	}
+}
+
+func TestHandlePlanCompleteClearsTargetPreview(t *testing.T) {
+	executor := setupMockExecutor(t)
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 30
+	m.updateLayout()
+	m.executor = executor
+	m.progressIndicator = nil
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate}})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	_ = m.beginPlan()
+	if !strings.Contains(m.resourceList.View(), "Targeted plan running for:") {
+		t.Fatal("expected preview header before plan completion")
+	}
+
+	plan := &terraform.Plan{Resources: []terraform.ResourceChange{{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate}}}
+	_, _ = m.handlePlanComplete(PlanCompleteMsg{Plan: plan, Result: &terraform.ExecutionResult{}, Output: "planned"})
+
+	if strings.Contains(m.resourceList.View(), "Targeted plan running for:") {
+		t.Fatal("expected preview header cleared after plan completion")
+	}
+}
+
+func TestHandlePlanStartErrorClearsTargetPreview(t *testing.T) {
+	executor := setupMockExecutor(t)
+	m := NewExecutionModel(nil, ExecutionConfig{})
+	m.ready = true
+	m.width = 120
+	m.height = 30
+	m.updateLayout()
+	m.executor = executor
+	m.progressIndicator = nil
+	m.targetModeEnabled = true
+	m.resourceList.SetTargetModeEnabled(true)
+	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate}})
+	_ = m.resourceList.ToggleTargetSelectionAtSelected()
+
+	_ = m.beginPlan()
+	if !strings.Contains(m.resourceList.View(), "Targeted plan running for:") {
+		t.Fatal("expected preview header before plan start failure handling")
+	}
+
+	_, _ = m.handlePlanStart(PlanStartMsg{Error: errors.New("failed to start")})
+
+	if strings.Contains(m.resourceList.View(), "Targeted plan running for:") {
+		t.Fatal("expected preview header cleared after start failure")
+	}
+}
+
 func TestApplyFlagsForRunRejectsUnpinnedTargetSelection(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true

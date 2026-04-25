@@ -329,7 +329,7 @@ func registerResourcesPanelBindings(r *Registry) {
 		Keys:        []string{"t"},
 		Action:      ActionToggleTargetMode,
 		Scope:       ScopeGlobal,
-		Description: "target mode",
+		Description: "target",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
@@ -396,14 +396,14 @@ func registerResourcesPanelBindings(r *Registry) {
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,
 		Tab:         0,
-		Description: "target mode",
+		Description: "target",
 		Category:    "Resources Panel",
 		Condition: func(ctx *Context) bool {
 			return ConditionExecutionMode(ctx) && ConditionTargetAvailable(ctx)
 		},
 	})
 	r.Register(Binding{
-		Keys:        []string{"enter", " "},
+		Keys:        []string{" "},
 		Action:      ActionToggleTarget,
 		Scope:       ScopePanelTab,
 		Panel:       PanelResources,

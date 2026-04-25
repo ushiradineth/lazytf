@@ -230,7 +230,7 @@ func buildFallbackSection(styles *styles.Styles, logText, tip string, width int)
 }
 
 func buildEmptyStateTips(styles *styles.Styles, tip string, width int) []string {
-	hint := "You can hide/focus this panel by pressing 'L'"
+	hint := "Press 'L' to show or hide this panel"
 	tipLine := "Tip: " + tip
 
 	// Wrap text if width is specified

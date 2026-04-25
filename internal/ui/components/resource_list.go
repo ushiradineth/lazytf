@@ -20,27 +20,32 @@ import (
 
 // ResourceList displays a list of resources.
 type ResourceList struct {
-	viewport       viewport.Model
-	frame          *PanelFrame
-	resources      []terraform.ResourceChange
-	selectedIndex  int
-	diffEngine     *diff.Engine
-	styles         *styles.Styles
-	width          int
-	height         int
-	filterActions  map[terraform.ActionType]bool
-	searchQuery    string
-	groupExpanded  map[string]bool
-	visibleItems   []listItem
-	allExpanded    bool
-	searchActive   bool
-	matchScores    map[string]int
-	lastMove       int
-	operationState *terraform.OperationState
-	showStatus     bool
-	focused        bool
-	targetMode     bool
-	selectedTarget map[string]struct{}
+	viewport          viewport.Model
+	frame             *PanelFrame
+	resources         []terraform.ResourceChange
+	selectedIndex     int
+	diffEngine        *diff.Engine
+	styles            *styles.Styles
+	width             int
+	height            int
+	filterActions     map[terraform.ActionType]bool
+	searchQuery       string
+	groupExpanded     map[string]bool
+	visibleItems      []listItem
+	allExpanded       bool
+	searchActive      bool
+	matchScores       map[string]int
+	lastMove          int
+	operationState    *terraform.OperationState
+	showStatus        bool
+	focused           bool
+	targetMode        bool
+	selectedTarget    map[string]struct{}
+	targetPlanPreview struct {
+		active  bool
+		targets []string
+	}
+	panelTitlePrefix string
 
 	// Summary counts for plan
 	summaryCreate  int
@@ -152,6 +157,26 @@ func (r *ResourceList) HasResources() bool {
 func (r *ResourceList) SetTargetModeEnabled(enabled bool) {
 	r.targetMode = enabled
 	r.updateViewport()
+}
+
+// SetPanelTitlePrefix sets optional text before the "Resources" title.
+func (r *ResourceList) SetPanelTitlePrefix(prefix string) {
+	r.panelTitlePrefix = strings.TrimSpace(prefix)
+}
+
+// SetTargetPlanPreview sets the snapshot of targets being planned.
+func (r *ResourceList) SetTargetPlanPreview(targets []string, active bool) {
+	defer r.updateViewport()
+
+	if !active || len(targets) == 0 {
+		r.targetPlanPreview.active = false
+		r.targetPlanPreview.targets = nil
+		return
+	}
+	copyTargets := append([]string{}, targets...)
+	sort.Strings(copyTargets)
+	r.targetPlanPreview.active = true
+	r.targetPlanPreview.targets = copyTargets
 }
 
 // ClearTargetSelection clears all target selections.
@@ -396,6 +421,9 @@ func (r *ResourceList) Update(msg tea.Msg) (any, tea.Cmd) {
 func (r *ResourceList) View() string {
 	// Build content with summary header
 	var contentParts []string
+	if preview := r.renderTargetPlanPreview(); preview != "" {
+		contentParts = append(contentParts, preview)
+	}
 
 	// Add summary header if we have counts
 	if r.summaryCreate > 0 || r.summaryUpdate > 0 || r.summaryDelete > 0 || r.summaryReplace > 0 {
@@ -419,6 +447,9 @@ func (r *ResourceList) View() string {
 
 	// Build title with filter indicators
 	titleText := "Resources"
+	if r.panelTitlePrefix != "" {
+		titleText = r.panelTitlePrefix + " " + titleText
+	}
 	indicatorText := r.renderFilterIndicators()
 	if indicatorText != "" {
 		titleText = titleText + " " + indicatorText
@@ -455,8 +486,76 @@ func (r *ResourceList) View() string {
 	return r.frame.RenderWithContent(result)
 }
 
+func (r *ResourceList) renderTargetPlanPreview() string {
+	if !r.targetPlanPreview.active || len(r.targetPlanPreview.targets) == 0 {
+		return ""
+	}
+	contentWidth := r.contentWidth()
+	lines := make([]string, 0, len(r.targetPlanPreview.targets)+2)
+	lines = append(lines, r.styles.Highlight.Bold(true).Render("Targeted plan running for:"))
+	for _, target := range r.targetPlanPreview.targets {
+		for _, wrapped := range wrapTargetPreviewLine(target, contentWidth) {
+			lines = append(lines, r.styles.LineItemText.Render(wrapped))
+		}
+	}
+	lines = append(lines, "")
+	return strings.Join(lines, "\n")
+}
+
+func wrapTargetPreviewLine(target string, width int) []string {
+	if width <= 3 {
+		return []string{"• " + target}
+	}
+	wrapped := wrapToWidth(target, width-2)
+	lines := make([]string, 0, len(wrapped))
+	for i, line := range wrapped {
+		if i == 0 {
+			lines = append(lines, "• "+line)
+			continue
+		}
+		lines = append(lines, "  "+line)
+	}
+	return lines
+}
+
+func wrapToWidth(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+	runes := []rune(text)
+	if len(runes) == 0 {
+		return []string{""}
+	}
+	lines := make([]string, 0, 1)
+	for len(runes) > 0 {
+		currentWidth := 0
+		end := 0
+		for end < len(runes) {
+			runeWidth := runewidth.RuneWidth(runes[end])
+			if runeWidth <= 0 {
+				runeWidth = 1
+			}
+			if currentWidth+runeWidth > width {
+				break
+			}
+			currentWidth += runeWidth
+			end++
+		}
+		if end == 0 {
+			end = 1
+		}
+		lines = append(lines, string(runes[:end]))
+		runes = runes[end:]
+	}
+	return lines
+}
+
 // buildFooterText builds the footer text with item count.
 func (r *ResourceList) buildFooterText() string {
+	targetHints := " target select: space | target all: s | target: t "
+	if r.targetMode {
+		return targetHints
+	}
 	if len(r.visibleItems) == 0 {
 		return ""
 	}
@@ -545,7 +644,11 @@ func (r *ResourceList) updateViewport() {
 		r.selectedIndex = 0
 		r.visibleItems = nil
 		r.viewport.YOffset = 0
-		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
+		if r.targetPlanPreview.active {
+			r.viewport.SetContent("")
+		} else {
+			r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
+		}
 		return
 	}
 
@@ -554,7 +657,11 @@ func (r *ResourceList) updateViewport() {
 	if len(r.visibleItems) == 0 {
 		r.selectedIndex = 0
 		r.viewport.YOffset = 0
-		r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
+		if r.targetPlanPreview.active {
+			r.viewport.SetContent("")
+		} else {
+			r.viewport.SetContent(r.styles.Dimmed.Render("No resources to display"))
+		}
 		return
 	}
 

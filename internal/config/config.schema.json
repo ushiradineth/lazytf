@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/ushiradineth/lazytf/v0.6.0/internal/config/config.schema.json",
+  "$id": "https://raw.githubusercontent.com/ushiradineth/lazytf/v0.6.3/internal/config/config.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "default_environment": {
@@ -168,6 +168,10 @@
         },
         "suppress_schema_hint_mismatch": {
           "description": "Suppress warnings when the config file schema hint does not match the running lazytf version.",
+          "type": "boolean"
+        },
+        "suppress_update_available": {
+          "description": "Suppress update-available toast notifications when a newer lazytf release is detected.",
           "type": "boolean"
         }
       },

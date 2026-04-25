@@ -254,7 +254,7 @@ func TestHandleActionToggleAllTargetsOnlyInTargetMode(t *testing.T) {
 	}
 }
 
-func TestHandleActionSelectResourceTabInTargetModeTogglesSelection(t *testing.T) {
+func TestHandleActionSelectResourceTabInTargetModeDoesNotToggleTargets(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 	m.ready = true
 	m.width = 100
@@ -262,16 +262,18 @@ func TestHandleActionSelectResourceTabInTargetModeTogglesSelection(t *testing.T)
 	m.updateLayout()
 	m.targetModeEnabled = true
 	m.resourceList.SetTargetModeEnabled(true)
-	m.resourceList.SetResources([]terraform.ResourceChange{{Address: "aws_instance.web", Action: terraform.ActionCreate}})
+	m.resourceList.SetResources([]terraform.ResourceChange{
+		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
+		{Address: "module.alpha.aws_instance.db", Action: terraform.ActionCreate},
+	})
 
 	cmd := m.handleActionSelectResourceTab()
 	if cmd != nil {
-		t.Fatal("expected nil command when selecting target")
+		t.Fatal("expected enter on tree fold to fold/unfold without running a command")
 	}
 
-	targets := m.resourceList.SelectedTargets()
-	if len(targets) != 1 || targets[0] != "aws_instance.web" {
-		t.Fatalf("unexpected target selection: %#v", targets)
+	if targets := m.resourceList.SelectedTargets(); len(targets) != 0 {
+		t.Fatalf("did not expect enter to toggle targets in target mode, got %#v", targets)
 	}
 }
 

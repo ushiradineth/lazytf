@@ -36,6 +36,26 @@ func TestLoadMissingConfigReturnsDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadConfigParsesSuppressUpdateAvailableWarning(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := "version: 1\nwarnings:\n  suppress_update_available: true\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	cfg, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.Warnings.SuppressUpdateAvailable {
+		t.Fatal("expected warnings.suppress_update_available to be true")
+	}
+}
+
 func TestSchemaURLForVersion(t *testing.T) {
 	if got, want := schemaURLForVersion("1.2.3"), "https://raw.githubusercontent.com/ushiradineth/lazytf/v1.2.3/internal/config/config.schema.json"; got != want {
 		t.Fatalf("expected %q, got %q", want, got)

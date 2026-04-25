@@ -20,14 +20,14 @@ const footerHelpHint = "keybinds: ?"
 func (m *Model) renderStatusBar() string {
 	var parts []string
 
-	// Add read-only indicator for non-execution mode
-	if !m.executionMode {
-		parts = append(parts, m.styles.Dimmed.Render("read-only"))
-	}
-
 	// Add workspace/environment info if available
 	if m.executionMode && m.envCurrent != "" {
 		parts = append(parts, m.styles.Highlight.Render(m.envDisplayName()))
+	}
+	if !m.executionMode {
+		if path := strings.TrimSpace(m.planFilePath); path != "" {
+			parts = append(parts, m.styles.Highlight.Render(truncateFooterPath(path, max(16, m.width/2))))
+		}
 	}
 
 	// Add resource summary
@@ -40,19 +40,30 @@ func (m *Model) renderStatusBar() string {
 
 	statusText := strings.Join(parts, " │ ")
 
-	// Add progress indicator on the right side
-	progressView := ""
+	// Add progress + version tags on the right side
+	var rightParts []string
 	if m.progressIndicator != nil {
-		progressView = m.progressIndicator.View()
-	}
-
-	if progressView != "" {
-		progressWidth := lipgloss.Width(progressView)
-		statusWidth := lipgloss.Width(statusText)
-		gap := m.width - statusWidth - progressWidth
-		if gap > 0 {
-			statusText = statusText + components.GetPadding(gap) + progressView
+		if progressView := m.progressIndicator.View(); progressView != "" {
+			rightParts = append(rightParts, progressView)
 		}
+	}
+	rightParts = append(rightParts, m.footerVersionTag())
+	rightView := strings.Join(rightParts, "  ")
+
+	if rightView != "" {
+		rightWidth := lipgloss.Width(rightView)
+		maxStatusWidth := m.width - rightWidth
+		if maxStatusWidth < 0 {
+			maxStatusWidth = 0
+		}
+		if lipgloss.Width(statusText) > maxStatusWidth {
+			statusText = lipgloss.NewStyle().MaxWidth(maxStatusWidth).Render(statusText)
+		}
+		gap := m.width - lipgloss.Width(statusText) - rightWidth
+		if gap < 0 {
+			gap = 0
+		}
+		statusText = statusText + components.GetPadding(gap) + rightView
 	}
 
 	// Limit status bar to 1 line to prevent scrolling
@@ -60,6 +71,24 @@ func (m *Model) renderStatusBar() string {
 		Width(m.width).
 		MaxHeight(1).
 		Render(statusText)
+}
+
+func truncateFooterPath(path string, maxWidth int) string {
+	if maxWidth <= 0 || lipgloss.Width(path) <= maxWidth {
+		return path
+	}
+	runes := []rune(path)
+	if len(runes) <= maxWidth {
+		return path
+	}
+	if maxWidth == 1 {
+		return "…"
+	}
+	keep := maxWidth - 1
+	if keep > len(runes) {
+		keep = len(runes)
+	}
+	return "…" + string(runes[len(runes)-keep:])
 }
 
 // resourceSummaryText returns a summary of resource changes like "+5 ~3 -2 ±2".
@@ -345,7 +374,11 @@ func (m *Model) addTabsToPanel(panel string, width int, tabs []string, activeTab
 			tabParts = append(tabParts, tab)
 		}
 	}
-	titleRendered := titleStyle.Render("[2]") + " " + strings.Join(tabParts, " - ")
+	targetBadge := ""
+	if m.executionMode && m.targetModeEnabled && activeTab == 0 {
+		targetBadge = m.styles.Highlight.Bold(true).Render("[TARGET]") + " "
+	}
+	titleRendered := titleStyle.Render("[2]") + " " + targetBadge + strings.Join(tabParts, " - ")
 
 	// Try to replace the title in the first line
 	firstLine := lines[0]
