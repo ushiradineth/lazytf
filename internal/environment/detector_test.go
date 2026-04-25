@@ -140,7 +140,7 @@ func TestParseWorkspaceList(t *testing.T) {
 
 func TestTerraformWorkspaceListMissingBinary(t *testing.T) {
 	t.Setenv("PATH", "")
-	_, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	_, err := terraformWorkspaceList(context.Background(), t.TempDir(), "")
 	if err == nil {
 		t.Fatalf("expected error when terraform binary missing")
 	}
@@ -148,7 +148,7 @@ func TestTerraformWorkspaceListMissingBinary(t *testing.T) {
 
 func TestTerraformWorkspaceListSuccess(t *testing.T) {
 	setupFakeTerraform(t)
-	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestTerraformWorkspaceListSuccess(t *testing.T) {
 
 func TestTerraformWorkspaceListTofuFallback(t *testing.T) {
 	setupFakeTofu(t)
-	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,12 +178,31 @@ func TestTerraformWorkspaceListPrefersTerraformOverTofu(t *testing.T) {
 	writeWorkspaceBinaryScript(t, dir, "tofu", "tofu-dev")
 	t.Setenv("PATH", dir)
 
-	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(workspaces) != 2 || workspaces[1] != "dev" {
 		t.Fatalf("expected terraform-preferred list, got %#v", workspaces)
+	}
+}
+
+func TestTerraformWorkspaceListUsesPreferredBinary(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	dir := t.TempDir()
+	writeWorkspaceBinaryScript(t, dir, "custom-tofu", "dev")
+	preferredPath := filepath.Join(dir, "custom-tofu")
+	t.Setenv("PATH", "")
+
+	workspaces, err := terraformWorkspaceList(context.Background(), t.TempDir(), preferredPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(workspaces) != 2 || workspaces[1] != "dev" {
+		t.Fatalf("expected preferred binary workspace list, got %#v", workspaces)
 	}
 }
 
@@ -226,7 +245,7 @@ func TestWorkspaceConfidenceScores(t *testing.T) {
 
 func TestTerraformWorkspaceListErrorOutput(t *testing.T) {
 	setupFakeTerraformError(t)
-	_, err := terraformWorkspaceList(context.Background(), t.TempDir())
+	_, err := terraformWorkspaceList(context.Background(), t.TempDir(), "")
 	if err == nil {
 		t.Fatalf("expected error for terraform workspace list")
 	}

@@ -19,7 +19,7 @@ func TestResolveWithPrefersTerraformOverTofu(t *testing.T) {
 		}
 	}
 
-	path, err := resolveWith(lookPath, func(_ string) bool { return false })
+	path, err := resolveWith("", lookPath, func(_ string) bool { return false })
 	if err != nil {
 		t.Fatalf("resolve with terraform+tofu available: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestResolveWithFallsBackToTofu(t *testing.T) {
 		return "", errors.New("missing")
 	}
 
-	path, err := resolveWith(lookPath, func(_ string) bool { return false })
+	path, err := resolveWith("", lookPath, func(_ string) bool { return false })
 	if err != nil {
 		t.Fatalf("resolve with tofu fallback: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestResolveWithFallsBackToCommonAbsolutePath(t *testing.T) {
 	lookPath := func(string) (string, error) {
 		return "", errors.New("missing")
 	}
-	path, err := resolveWith(lookPath, func(path string) bool {
+	path, err := resolveWith("", lookPath, func(path string) bool {
 		return path == "/opt/homebrew/bin/tofu"
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestResolveWithCommonPathFallbackPrefersTerraform(t *testing.T) {
 		return "", errors.New("missing")
 	}
 
-	path, err := resolveWith(lookPath, func(path string) bool {
+	path, err := resolveWith("", lookPath, func(path string) bool {
 		return path == "/opt/homebrew/bin/terraform" || path == "/usr/local/bin/tofu"
 	})
 	if err != nil {
@@ -89,11 +89,22 @@ func TestResolveWithMissingBinary(t *testing.T) {
 		return "", errors.New("missing")
 	}
 
-	_, err := resolveWith(lookPath, func(_ string) bool { return false })
+	_, err := resolveWith("", lookPath, func(_ string) bool { return false })
 	if err == nil {
 		t.Fatal("expected missing binary error")
 	}
 	if !errors.Is(err, errBinaryNotFound) {
 		t.Fatalf("expected errBinaryNotFound, got %v", err)
+	}
+}
+
+func TestResolveWithPreferredBinaryMissing(t *testing.T) {
+	t.Parallel()
+
+	_, err := resolveWith("/tmp/missing", func(string) (string, error) {
+		return "", errors.New("not used")
+	}, func(_ string) bool { return false })
+	if err == nil {
+		t.Fatal("expected error when preferred binary is missing")
 	}
 }

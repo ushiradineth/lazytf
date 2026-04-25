@@ -26,7 +26,7 @@ func TestParseWorkspaceListOutput(t *testing.T) {
 }
 
 func TestWorkspaceManagerListAndCurrent(t *testing.T) {
-	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string, _ string) (string, error) {
 		return "  default\n* prod\n", nil
 	}))
 	if err != nil {
@@ -52,7 +52,7 @@ func TestWorkspaceManagerListAndCurrent(t *testing.T) {
 }
 
 func TestWorkspaceManagerCurrentMissing(t *testing.T) {
-	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string, _ string) (string, error) {
 		return "default\n", nil
 	}))
 	if err != nil {
@@ -68,10 +68,10 @@ func TestWorkspaceManagerCurrentMissing(t *testing.T) {
 func TestWorkspaceManagerSwitchValidates(t *testing.T) {
 	selected := ""
 	manager, err := NewWorkspaceManager(t.TempDir(),
-		WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+		WithWorkspaceListOutputFunc(func(_ context.Context, _ string, _ string) (string, error) {
 			return "* dev\n  prod\n", nil
 		}),
-		WithWorkspaceSelectFunc(func(_ context.Context, _ string, name string) error {
+		WithWorkspaceSelectFunc(func(_ context.Context, _ string, name string, _ string) error {
 			selected = name
 			return nil
 		}),
@@ -93,7 +93,7 @@ func TestWorkspaceManagerSwitchValidates(t *testing.T) {
 }
 
 func TestWorkspaceManagerListError(t *testing.T) {
-	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string) (string, error) {
+	manager, err := NewWorkspaceManager(t.TempDir(), WithWorkspaceListOutputFunc(func(_ context.Context, _ string, _ string) (string, error) {
 		return "", errors.New("boom")
 	}))
 	if err != nil {
@@ -122,7 +122,7 @@ func TestWithWorkspaceSelectFuncNil(t *testing.T) {
 
 func TestTerraformWorkspaceListOutputMissingBinary(t *testing.T) {
 	t.Setenv("PATH", "")
-	_, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	_, err := terraformWorkspaceListOutput(context.Background(), t.TempDir(), "")
 	if err == nil {
 		t.Fatalf("expected error when terraform binary missing")
 	}
@@ -130,14 +130,14 @@ func TestTerraformWorkspaceListOutputMissingBinary(t *testing.T) {
 
 func TestTerraformWorkspaceSelectMissingBinary(t *testing.T) {
 	t.Setenv("PATH", "")
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err == nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev, ""); err == nil {
 		t.Fatalf("expected error when terraform binary missing")
 	}
 }
 
 func TestTerraformWorkspaceListOutputSuccess(t *testing.T) {
 	setupFakeTerraform(t)
-	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -148,14 +148,14 @@ func TestTerraformWorkspaceListOutputSuccess(t *testing.T) {
 
 func TestTerraformWorkspaceSelectSuccess(t *testing.T) {
 	setupFakeTerraform(t)
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err != nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestTerraformWorkspaceListOutputTofuFallback(t *testing.T) {
 	setupFakeTofu(t)
-	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,8 +166,28 @@ func TestTerraformWorkspaceListOutputTofuFallback(t *testing.T) {
 
 func TestTerraformWorkspaceSelectTofuFallback(t *testing.T) {
 	setupFakeTofu(t)
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err != nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTerraformWorkspaceListOutputUsesPreferredBinary(t *testing.T) {
+	if runtime.GOOS == consts.OSWindows {
+		t.Skip("shell script test not supported on windows")
+	}
+
+	dir := t.TempDir()
+	writeWorkspaceBinaryScript(t, dir, "custom-tofu", "dev")
+	preferredPath := filepath.Join(dir, "custom-tofu")
+	t.Setenv("PATH", "")
+
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir(), preferredPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	parsed := parseWorkspaceListOutput(out)
+	if parsed.Current != "dev" {
+		t.Fatalf("expected preferred binary workspace, got %q", parsed.Current)
 	}
 }
 
@@ -181,7 +201,7 @@ func TestTerraformWorkspaceListOutputPrefersTerraformOverTofu(t *testing.T) {
 	writeWorkspaceBinaryScript(t, dir, "tofu", "tofu-dev")
 	t.Setenv("PATH", dir)
 
-	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir())
+	out, err := terraformWorkspaceListOutput(context.Background(), t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +213,7 @@ func TestTerraformWorkspaceListOutputPrefersTerraformOverTofu(t *testing.T) {
 
 func TestTerraformWorkspaceSelectErrorOutput(t *testing.T) {
 	setupFakeTerraformError(t)
-	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev); err == nil {
+	if err := terraformWorkspaceSelect(context.Background(), t.TempDir(), consts.EnvDev, ""); err == nil {
 		t.Fatalf("expected error when terraform workspace select fails")
 	}
 }

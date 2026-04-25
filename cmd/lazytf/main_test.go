@@ -341,10 +341,10 @@ func TestDetectCurrentWorkspaceForPlanInput(t *testing.T) {
 		newWorkspaceManager = oldManager
 	})
 
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return &fakeWorkspaceManager{current: "prod"}, nil
 	}
-	if got := detectCurrentWorkspaceForPlanInput(t.TempDir()); got != "prod" {
+	if got := detectCurrentWorkspaceForPlanInput(t.TempDir(), nil); got != "prod" {
 		t.Fatalf("expected workspace prod, got %q", got)
 	}
 }
@@ -355,11 +355,53 @@ func TestDetectCurrentWorkspaceForPlanInputError(t *testing.T) {
 		newWorkspaceManager = oldManager
 	})
 
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return &fakeWorkspaceManager{currentErr: errors.New("boom")}, nil
 	}
-	if got := detectCurrentWorkspaceForPlanInput(t.TempDir()); got != "" {
+	if got := detectCurrentWorkspaceForPlanInput(t.TempDir(), nil); got != "" {
 		t.Fatalf("expected empty workspace on error, got %q", got)
+	}
+}
+
+func TestLoadPlanFromStdinUsesConfiguredBinaryForWorkspaceDetection(t *testing.T) {
+	oldStdin := os.Stdin
+	oldWorkDir := workDir
+	oldManager := newWorkspaceManager
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		workDir = oldWorkDir
+		newWorkspaceManager = oldManager
+	})
+
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	if _, err := writePipe.WriteString("Terraform will perform the following actions:\n\n  # aws_instance.web will be created\n  + resource \"aws_instance\" \"web\" {\n      + id = (known after apply)\n    }\n\nPlan: 1 to add, 0 to change, 0 to destroy.\n"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	_ = writePipe.Close()
+	os.Stdin = readPipe
+
+	workDir = t.TempDir()
+	capturedBinary := ""
+	newWorkspaceManager = func(_ string, binaryPath string) (workspaceManager, error) {
+		capturedBinary = binaryPath
+		return &fakeWorkspaceManager{current: "dev"}, nil
+	}
+
+	cfg := testConfig()
+	cfg.Terraform.Binary = "/custom/tofu"
+
+	_, _, _, _, planEnv, err := loadPlanFromStdin(&cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedBinary != "/custom/tofu" {
+		t.Fatalf("expected configured binary to be forwarded, got %q", capturedBinary)
+	}
+	if planEnv != "dev" {
+		t.Fatalf("expected detected workspace dev, got %q", planEnv)
 	}
 }
 
@@ -475,7 +517,7 @@ func TestRun_WorkspaceSwitchError(t *testing.T) {
 		t.Fatalf("program runner should not be called on workspace error")
 		return nil
 	}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return &fakeWorkspaceManager{switchErr: errors.New("switch failed")}, nil
 	}
 
@@ -1250,11 +1292,11 @@ func TestConfigureWorkDirAndWorkspaceInitError(t *testing.T) {
 	workspaceName = "dev"
 	folderPath = ""
 	workDir = t.TempDir()
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return nil, errors.New("init failed")
 	}
 
-	err := configureWorkDirAndWorkspace()
+	err := configureWorkDirAndWorkspace(nil)
 	if err == nil {
 		t.Fatalf("expected error for workspace init failure")
 	}
@@ -1274,9 +1316,82 @@ func TestConfigureWorkDirAndWorkspaceNoWorkspace(t *testing.T) {
 	workspaceName = ""
 	folderPath = ""
 
-	err := configureWorkDirAndWorkspace()
+	err := configureWorkDirAndWorkspace(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigureWorkDirAndWorkspacePassesConfiguredBinary(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldWorkDir := workDir
+	oldNewWs := newWorkspaceManager
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		workDir = oldWorkDir
+		newWorkspaceManager = oldNewWs
+	})
+
+	workspaceName = "dev"
+	folderPath = ""
+	workDir = t.TempDir()
+
+	capturedBinary := ""
+	newWorkspaceManager = func(_ string, binaryPath string) (workspaceManager, error) {
+		capturedBinary = binaryPath
+		return &fakeWorkspaceManager{}, nil
+	}
+
+	cfg := testConfig()
+	cfg.Terraform.Binary = "/custom/tofu"
+
+	if err := configureWorkDirAndWorkspace(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedBinary != "/custom/tofu" {
+		t.Fatalf("expected configured binary to be forwarded, got %q", capturedBinary)
+	}
+}
+
+func TestConfigureWorkDirAndWorkspaceAppliesProjectBinaryAfterFolderResolution(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldWorkDir := workDir
+	oldNewFolder := newFolderManager
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		workDir = oldWorkDir
+		newFolderManager = oldNewFolder
+	})
+
+	baseDir := t.TempDir()
+	resolved := filepath.Join(baseDir, "envs", "dev")
+	if err := os.MkdirAll(resolved, 0o755); err != nil {
+		t.Fatalf("mkdir resolved folder: %v", err)
+	}
+
+	newFolderManager = func(_ string) (folderManager, error) {
+		return &fakeFolderManager{}, nil
+	}
+
+	workspaceName = ""
+	folderPath = "envs/dev"
+	workDir = baseDir
+
+	cfg := testConfig()
+	cfg.Terraform.Binary = "/global/terraform"
+	cfg.ProjectOverrides = map[string]*config.ProjectConfig{
+		resolved: {Binary: "/project/tofu"},
+	}
+
+	if err := configureWorkDirAndWorkspace(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Terraform.Binary != "/project/tofu" {
+		t.Fatalf("expected project override binary, got %q", cfg.Terraform.Binary)
 	}
 }
 
@@ -1392,6 +1507,116 @@ presets:
 
 	if err := run(&cobra.Command{}, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunProjectOverrideBinaryApplied(t *testing.T) {
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldExecRunner := executionModeRunner
+	oldNewWorkspaceManager := newWorkspaceManager
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		executionModeRunner = oldExecRunner
+		newWorkspaceManager = oldNewWorkspaceManager
+	})
+	useTempConfig(t)
+
+	targetDir := t.TempDir()
+	binaryDir := t.TempDir()
+	binaryPath := filepath.Join(binaryDir, "custom-tofu")
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write override binary: %v", err)
+	}
+
+	configContent := "project_overrides:\n  \"" + targetDir + "\":\n    binary: \"" + binaryPath + "\"\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	capturedBinary := ""
+	newWorkspaceManager = func(_ string, binary string) (workspaceManager, error) {
+		capturedBinary = binary
+		return &fakeWorkspaceManager{}, nil
+	}
+
+	workDir = targetDir
+	workspaceName = "dev"
+	folderPath = ""
+	planFile = ""
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedBinary != binaryPath {
+		t.Fatalf("expected override binary %q, got %q", binaryPath, capturedBinary)
+	}
+}
+
+func TestRunProjectOverrideBinaryNonMatchKeepsGlobal(t *testing.T) {
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldExecRunner := executionModeRunner
+	oldNewWorkspaceManager := newWorkspaceManager
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		executionModeRunner = oldExecRunner
+		newWorkspaceManager = oldNewWorkspaceManager
+	})
+	useTempConfig(t)
+
+	targetDir := t.TempDir()
+	otherDir := t.TempDir()
+	binaryDir := t.TempDir()
+	globalBinaryPath := filepath.Join(binaryDir, "global-terraform")
+	overrideBinaryPath := filepath.Join(binaryDir, "override-tofu")
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(globalBinaryPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write global binary: %v", err)
+	}
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(overrideBinaryPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write override binary: %v", err)
+	}
+
+	configContent := "terraform:\n  binary: \"" + globalBinaryPath + "\"\nproject_overrides:\n  \"" + otherDir + "\":\n    binary: \"" + overrideBinaryPath + "\"\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	capturedBinary := ""
+	newWorkspaceManager = func(_ string, binary string) (workspaceManager, error) {
+		capturedBinary = binary
+		return &fakeWorkspaceManager{}, nil
+	}
+
+	workDir = targetDir
+	workspaceName = "dev"
+	folderPath = ""
+	planFile = ""
+	executionModeRunner = func(_ tea.Model, _ *history.Store) error {
+		return nil
+	}
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedBinary != globalBinaryPath {
+		t.Fatalf("expected global binary %q, got %q", globalBinaryPath, capturedBinary)
 	}
 }
 

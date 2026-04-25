@@ -57,8 +57,8 @@ var (
 	programRunner       = runProgram
 	executionModeRunner = runProgramWithCleanup
 	executorFactory     = terraform.NewExecutor
-	newWorkspaceManager = func(workDir string) (workspaceManager, error) {
-		return environment.NewWorkspaceManager(workDir)
+	newWorkspaceManager = func(workDir, binaryPath string) (workspaceManager, error) {
+		return environment.NewWorkspaceManager(workDir, environment.WithWorkspaceBinaryPath(binaryPath))
 	}
 	newFolderManager = func(workDir string) (folderManager, error) {
 		return environment.NewFolderManager(workDir)
@@ -165,6 +165,9 @@ func run(cmd *cobra.Command, args []string) error {
 		if override.PresetName != "" && presetName == "" {
 			presetName = override.PresetName
 		}
+		if trimmed := strings.TrimSpace(override.Binary); trimmed != "" {
+			cfg.Terraform.Binary = trimmed
+		}
 		overrideFlags = append(overrideFlags, override.Flags...)
 	}
 
@@ -203,7 +206,7 @@ func runExecutionMode(
 	preloadedPlan *terraform.Plan,
 	preloadedPlanPath string,
 ) error {
-	if err := configureWorkDirAndWorkspace(); err != nil {
+	if err := configureWorkDirAndWorkspace(cfg); err != nil {
 		return err
 	}
 	return runExecutionModeConfigured(cfg, overrideFlags, configManager, preloadedPlan, preloadedPlanPath, "", "", false)
@@ -308,7 +311,14 @@ func resolveAppStyles(cfg *config.Config) (*styles.Styles, error) {
 	return styles.NewStyles(appTheme), nil
 }
 
-func configureWorkDirAndWorkspace() error {
+func configuredBinaryPath(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Terraform.Binary)
+}
+
+func configureWorkDirAndWorkspace(cfg *config.Config) error {
 	if workspaceName != "" && folderPath != "" {
 		return errors.New("cannot use --workspace and --folder together")
 	}
@@ -319,10 +329,11 @@ func configureWorkDirAndWorkspace() error {
 		}
 		workDir = resolved
 	}
+	applyProjectBinaryOverrideForWorkDir(cfg, workDir)
 	if workspaceName == "" {
 		return nil
 	}
-	manager, err := newWorkspaceManager(workDir)
+	manager, err := newWorkspaceManager(workDir, configuredBinaryPath(cfg))
 	if err != nil {
 		return fmt.Errorf("failed to initialize workspace manager: %w", err)
 	}
@@ -330,6 +341,19 @@ func configureWorkDirAndWorkspace() error {
 		return fmt.Errorf("failed to select workspace %s: %w", workspaceName, err)
 	}
 	return nil
+}
+
+func applyProjectBinaryOverrideForWorkDir(cfg *config.Config, dir string) {
+	if cfg == nil {
+		return
+	}
+	override := cfg.ProjectOverrideFor(dir)
+	if override == nil {
+		return
+	}
+	if trimmed := strings.TrimSpace(override.Binary); trimmed != "" {
+		cfg.Terraform.Binary = trimmed
+	}
 }
 
 func buildExecutor(cfg *config.Config, flags []string) (*terraform.Executor, error) {
@@ -428,7 +452,7 @@ func applyPreset(cfg *config.Config, flags []string) ([]string, error) {
 }
 
 func runPlanInputMode(cfg *config.Config, overrideFlags []string, configManager *config.Manager) error {
-	if err := configureWorkDirAndWorkspace(); err != nil {
+	if err := configureWorkDirAndWorkspace(cfg); err != nil {
 		return err
 	}
 	plan, planPath, fromStdin, planWorkDir, planEnv, err := loadPlanInput(cfg, strings.TrimSpace(planFile))
@@ -452,8 +476,8 @@ func runPlanInputMode(cfg *config.Config, overrideFlags []string, configManager 
 	return programRunner(model)
 }
 
-func detectCurrentWorkspaceForPlanInput(targetWorkDir string) string {
-	manager, err := newWorkspaceManager(targetWorkDir)
+func detectCurrentWorkspaceForPlanInput(targetWorkDir string, cfg *config.Config) string {
+	manager, err := newWorkspaceManager(targetWorkDir, configuredBinaryPath(cfg))
 	if err != nil {
 		return ""
 	}
@@ -466,12 +490,12 @@ func detectCurrentWorkspaceForPlanInput(targetWorkDir string) string {
 
 func loadPlanInput(cfg *config.Config, input string) (*terraform.Plan, string, bool, string, string, error) {
 	if input == "-" {
-		return loadPlanFromStdin()
+		return loadPlanFromStdin(cfg)
 	}
 	return loadPlanFromBinaryFile(cfg, input)
 }
 
-func loadPlanFromStdin() (*terraform.Plan, string, bool, string, string, error) {
+func loadPlanFromStdin(cfg *config.Config) (*terraform.Plan, string, bool, string, string, error) {
 	if stdinIsTerminal() {
 		return nil, "", false, "", "", errors.New("--plan - requires piped input, for example: terraform plan -no-color | lazytf --plan -")
 	}
@@ -491,7 +515,7 @@ func loadPlanFromStdin() (*terraform.Plan, string, bool, string, string, error) 
 	if absDir, absErr := filepath.Abs(workDir); absErr == nil {
 		effectiveWorkDir = absDir
 	}
-	return plan, "", true, effectiveWorkDir, detectCurrentWorkspaceForPlanInput(effectiveWorkDir), nil
+	return plan, "", true, effectiveWorkDir, detectCurrentWorkspaceForPlanInput(effectiveWorkDir, cfg), nil
 }
 
 func loadPlanFromBinaryFile(cfg *config.Config, planPath string) (*terraform.Plan, string, bool, string, string, error) {
@@ -530,7 +554,7 @@ func loadPlanFromBinaryFile(cfg *config.Config, planPath string) (*terraform.Pla
 	if err != nil {
 		return nil, "", false, "", "", fmt.Errorf("failed to parse terraform show output: %w", err)
 	}
-	planEnv := detectCurrentWorkspaceForPlanInput(effectiveWorkDir)
+	planEnv := detectCurrentWorkspaceForPlanInput(effectiveWorkDir, cfg)
 	return plan, resolvedPlanPath, false, effectiveWorkDir, planEnv, nil
 }
 

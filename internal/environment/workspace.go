@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -13,14 +12,15 @@ import (
 )
 
 // WorkspaceListOutputFunc returns the raw workspace list output for a directory.
-type WorkspaceListOutputFunc func(ctx context.Context, workDir string) (string, error)
+type WorkspaceListOutputFunc func(ctx context.Context, workDir, preferredBinary string) (string, error)
 
 // WorkspaceSelectFunc selects a workspace in the given directory.
-type WorkspaceSelectFunc func(ctx context.Context, workDir, name string) error
+type WorkspaceSelectFunc func(ctx context.Context, workDir, name, preferredBinary string) error
 
 // WorkspaceManager manages Terraform workspaces.
 type WorkspaceManager struct {
 	workDir         string
+	binaryPath      string
 	listOutput      WorkspaceListOutputFunc
 	selectWorkspace WorkspaceSelectFunc
 }
@@ -46,6 +46,14 @@ func WithWorkspaceSelectFunc(fn WorkspaceSelectFunc) WorkspaceManagerOption {
 			return errors.New("workspace select function cannot be nil")
 		}
 		m.selectWorkspace = fn
+		return nil
+	}
+}
+
+// WithWorkspaceBinaryPath configures a preferred terraform/tofu binary path.
+func WithWorkspaceBinaryPath(path string) WorkspaceManagerOption {
+	return func(m *WorkspaceManager) error {
+		m.binaryPath = strings.TrimSpace(path)
 		return nil
 	}
 }
@@ -90,7 +98,7 @@ func (m *WorkspaceManager) List(ctx context.Context) ([]string, error) {
 		ctx = context.Background()
 	}
 
-	output, err := m.listOutput(ctx, m.workDir)
+	output, err := m.listOutput(ctx, m.workDir, m.binaryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +115,7 @@ func (m *WorkspaceManager) Current(ctx context.Context) (string, error) {
 		ctx = context.Background()
 	}
 
-	output, err := m.listOutput(ctx, m.workDir)
+	output, err := m.listOutput(ctx, m.workDir, m.binaryPath)
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +154,7 @@ func (m *WorkspaceManager) Switch(ctx context.Context, name string) error {
 	if err := m.Validate(ctx, name); err != nil {
 		return err
 	}
-	return m.selectWorkspace(ctx, m.workDir, name)
+	return m.selectWorkspace(ctx, m.workDir, name, m.binaryPath)
 }
 
 type workspaceListResult struct {
@@ -176,15 +184,13 @@ func parseWorkspaceListOutput(output string) workspaceListResult {
 	return workspaceListResult{Workspaces: workspaces, Current: current}
 }
 
-func terraformWorkspaceListOutput(ctx context.Context, workDir string) (string, error) {
-	path, err := resolveTerraformBinaryPath()
+func terraformWorkspaceListOutput(ctx context.Context, workDir, preferredBinary string) (string, error) {
+	runtime, err := tfbinary.NewRuntime(preferredBinary)
 	if err != nil {
 		return "", err
 	}
 
-	cmd := exec.CommandContext(ctx, path, "workspace", "list", "-no-color")
-	cmd.Dir = workDir
-	output, err := cmd.CombinedOutput()
+	output, err := runtime.CombinedOutput(ctx, workDir, "workspace", "list", "-no-color")
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
@@ -196,14 +202,12 @@ func terraformWorkspaceListOutput(ctx context.Context, workDir string) (string, 
 	return string(output), nil
 }
 
-func terraformWorkspaceSelect(ctx context.Context, workDir, name string) error {
-	path, err := resolveTerraformBinaryPath()
+func terraformWorkspaceSelect(ctx context.Context, workDir, name, preferredBinary string) error {
+	runtime, err := tfbinary.NewRuntime(preferredBinary)
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, path, "workspace", "select", "-no-color", name)
-	cmd.Dir = workDir
-	output, err := cmd.CombinedOutput()
+	output, err := runtime.CombinedOutput(ctx, workDir, "workspace", "select", "-no-color", name)
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
@@ -212,8 +216,4 @@ func terraformWorkspaceSelect(ctx context.Context, workDir, name string) error {
 		return fmt.Errorf("terraform/tofu workspace select failed: %w: %s", err, trimmed)
 	}
 	return nil
-}
-
-func resolveTerraformBinaryPath() (string, error) {
-	return tfbinary.Resolve()
 }

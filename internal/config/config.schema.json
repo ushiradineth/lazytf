@@ -79,6 +79,10 @@
     "project_overrides": {
       "additionalProperties": {
         "properties": {
+          "binary": {
+            "description": "Path to the Terraform or OpenTofu binary to run for this project.",
+            "type": "string"
+          },
           "flags": {
             "description": "Additional Terraform flags for this project.",
             "items": {
@@ -87,7 +91,7 @@
             "type": "array"
           },
           "preset_name": {
-            "description": "Preset name to apply for this project before project-specific overrides.",
+            "description": "Preset name to apply for this project.",
             "type": "string"
           },
           "theme": {

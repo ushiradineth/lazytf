@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ushiradineth/lazytf/internal/config"
 	"github.com/ushiradineth/lazytf/internal/consts"
 	"github.com/ushiradineth/lazytf/internal/environment"
 	"github.com/ushiradineth/lazytf/internal/history"
@@ -1195,7 +1196,7 @@ func TestApplyEnvironmentSelectionWorkspace(t *testing.T) {
 	}()
 
 	manager := &fakeWorkspaceManager{}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return manager, nil
 	}
 
@@ -1224,7 +1225,7 @@ func TestApplyEnvironmentSelectionSavesPreference(t *testing.T) {
 	}()
 
 	manager := &fakeWorkspaceManager{}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return manager, nil
 	}
 
@@ -1333,16 +1334,21 @@ func TestDetectEnvironmentsCmdUsesWorkspaceManager(t *testing.T) {
 			Workspaces: []string{consts.EnvDev},
 		},
 	}
-	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+	capturedDetectorBinary := ""
+	newEnvironmentDetector = func(_ string, binary string) (environmentDetector, error) {
+		capturedDetectorBinary = binary
 		return detector, nil
 	}
 	manager := &fakeWorkspaceManager{current: consts.EnvDev}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	capturedWorkspaceBinary := ""
+	newWorkspaceManager = func(_ string, binary string) (workspaceManager, error) {
+		capturedWorkspaceBinary = binary
 		return manager, nil
 	}
 
 	m := NewModel(&terraform.Plan{})
 	m.envWorkDir = t.TempDir()
+	m.config = &config.Config{Terraform: config.TerraformConfig{Binary: "/custom/tofu"}}
 
 	msg := m.detectEnvironmentsCmd()()
 	typed, ok := msg.(EnvironmentDetectedMsg)
@@ -1351,6 +1357,12 @@ func TestDetectEnvironmentsCmdUsesWorkspaceManager(t *testing.T) {
 	}
 	if typed.Current != consts.EnvDev {
 		t.Fatalf("expected current workspace, got %q", typed.Current)
+	}
+	if capturedDetectorBinary != "/custom/tofu" {
+		t.Fatalf("expected detector binary path, got %q", capturedDetectorBinary)
+	}
+	if capturedWorkspaceBinary != "/custom/tofu" {
+		t.Fatalf("expected workspace binary path, got %q", capturedWorkspaceBinary)
 	}
 }
 
@@ -1371,7 +1383,7 @@ func TestDetectEnvironmentsCmdUsesFolderMatch(t *testing.T) {
 			FolderPaths: []string{absWorkDir},
 		},
 	}
-	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+	newEnvironmentDetector = func(_ string, _ string) (environmentDetector, error) {
 		return detector, nil
 	}
 
@@ -6394,11 +6406,11 @@ func TestCurrentWorkspaceNameError(t *testing.T) {
 		newWorkspaceManager = origNewWorkspaceManager
 	}()
 
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return nil, errors.New("no workspace manager")
 	}
 
-	_, err := currentWorkspaceName("/tmp")
+	_, err := currentWorkspaceName("/tmp", "")
 	if err == nil {
 		t.Error("expected error from currentWorkspaceName")
 	}
@@ -6411,11 +6423,11 @@ func TestCurrentWorkspaceNameSuccess(t *testing.T) {
 	}()
 
 	manager := &fakeWorkspaceManager{current: "development"}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return manager, nil
 	}
 
-	name, err := currentWorkspaceName("/tmp")
+	name, err := currentWorkspaceName("/tmp", "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -6464,11 +6476,11 @@ func TestDetectEnvironmentsError(t *testing.T) {
 		newEnvironmentDetector = origNewEnvironmentDetector
 	}()
 
-	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+	newEnvironmentDetector = func(_ string, _ string) (environmentDetector, error) {
 		return nil, errors.New("detector error")
 	}
 
-	_, err := detectEnvironments("/tmp")
+	_, err := detectEnvironments("/tmp", "")
 	if err == nil {
 		t.Error("expected error from detectEnvironments")
 	}
@@ -6484,11 +6496,11 @@ func TestDetectEnvironmentsSuccess(t *testing.T) {
 		Strategy:   environment.StrategyWorkspace,
 		Workspaces: []string{"dev", "prod"},
 	}
-	newEnvironmentDetector = func(_ string) (environmentDetector, error) {
+	newEnvironmentDetector = func(_ string, _ string) (environmentDetector, error) {
 		return &fakeDetector{result: expected}, nil
 	}
 
-	result, err := detectEnvironments("/tmp")
+	result, err := detectEnvironments("/tmp", "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -6602,7 +6614,7 @@ func TestResolveDetectedEnvironmentWithWorkspaces(t *testing.T) {
 	}()
 
 	manager := &fakeWorkspaceManager{current: "staging"}
-	newWorkspaceManager = func(_ string) (workspaceManager, error) {
+	newWorkspaceManager = func(_ string, _ string) (workspaceManager, error) {
 		return manager, nil
 	}
 
@@ -6612,7 +6624,7 @@ func TestResolveDetectedEnvironmentWithWorkspaces(t *testing.T) {
 		Workspaces: []string{"dev", "staging", "prod"},
 	}
 
-	current := resolveDetectedEnvironment(m, "/tmp", "/tmp", result)
+	current := resolveDetectedEnvironment(m, "/tmp", "/tmp", result, "")
 	if current != "staging" {
 		t.Errorf("expected 'staging', got %q", current)
 	}
@@ -6625,7 +6637,7 @@ func TestResolveDetectedEnvironmentFallbackToAbsWorkDir(t *testing.T) {
 		FolderPaths: []string{"/other/path"},
 	}
 
-	current := resolveDetectedEnvironment(m, "/projects", "/projects/abs", result)
+	current := resolveDetectedEnvironment(m, "/projects", "/projects/abs", result, "")
 	if current != "/projects/abs" {
 		t.Errorf("expected '/projects/abs', got %q", current)
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/ushiradineth/lazytf/internal/history"
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/tfbinary"
 )
 
 func TestE2EPlanApplyHistory(t *testing.T) {
@@ -115,11 +115,9 @@ func TestE2EPlanModuleFixture(t *testing.T) {
 
 func terraformPathOrSkip(t *testing.T) string {
 	t.Helper()
-	for _, binary := range []string{"terraform", "tofu"} {
-		path, err := exec.LookPath(binary)
-		if err == nil {
-			return path
-		}
+	path, err := tfbinary.Resolve()
+	if err == nil {
+		return path
 	}
 	t.Skip("terraform/tofu binary not found in PATH")
 	return ""

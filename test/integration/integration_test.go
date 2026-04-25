@@ -6,13 +6,13 @@ import (
 	"context"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ushiradineth/lazytf/internal/terraform"
 	tfparser "github.com/ushiradineth/lazytf/internal/terraform/parser"
+	"github.com/ushiradineth/lazytf/internal/tfbinary"
 )
 
 func TestIntegrationPlanApplyWorkflow(t *testing.T) {
@@ -102,11 +102,9 @@ func TestIntegrationPlanParsingModuleFixture(t *testing.T) {
 
 func terraformPathOrSkip(t *testing.T) string {
 	t.Helper()
-	for _, binary := range []string{"terraform", "tofu"} {
-		path, err := exec.LookPath(binary)
-		if err == nil {
-			return path
-		}
+	path, err := tfbinary.Resolve()
+	if err == nil {
+		return path
 	}
 	t.Skip("terraform/tofu binary not found in PATH")
 	return ""

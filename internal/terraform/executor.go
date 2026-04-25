@@ -524,8 +524,8 @@ func (e *Executor) commandContext(ctx context.Context, opts execOptions) (contex
 }
 
 func (e *Executor) buildCommand(ctx context.Context, args []string, extraEnv []string) *exec.Cmd {
-	// #nosec G204 -- terraform execution is intentional and arguments come from configured inputs.
-	cmd := exec.CommandContext(ctx, e.terraformPath, args...)
+	runtime := tfbinary.NewRuntimeFromPath(e.terraformPath)
+	cmd := runtime.CommandContext(ctx, args...)
 	cmd.Dir = e.workDir
 	cmd.Env = mergeEnv(os.Environ(), e.env, extraEnv)
 	return cmd

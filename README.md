@@ -123,7 +123,27 @@ terraform plan -no-color | lazytf --plan - --readonly
 
 Full option reference lives in [`CONFIGURATION.md`](./CONFIGURATION.md).
 
-`lazytf` supports both Terraform and OpenTofu binaries. By default it looks for `terraform` first and then `tofu`. You can explicitly set either path via `terraform.binary` in config.
+`lazytf` supports both Terraform and OpenTofu. By default it looks for `terraform` first and then `tofu`. If `terraform.binary` is set in config, that configured path is used consistently across the TUI.
+
+Choose a global binary explicitly:
+
+```yaml
+terraform:
+  binary: /opt/homebrew/bin/tofu   # or /opt/homebrew/bin/terraform
+```
+
+You can also add project overrides keyed by path. These apply project-scoped binary, theme, and flags:
+
+```yaml
+project_overrides:
+  /Users/you/work/prod-infra:
+    binary: /opt/homebrew/bin/terraform
+    theme: nord
+    flags:
+      - -lock-timeout=60s
+```
+
+Precedence: matching `project_overrides.<path>.binary` overrides global `terraform.binary` for that project.
 
 Path resolution order:
 
