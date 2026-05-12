@@ -47,9 +47,13 @@
         packages.default = lazytf;
         packages.lazytf = lazytf;
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = lazytf;
-        };
+        apps.default =
+          flake-utils.lib.mkApp {
+            drv = lazytf;
+          }
+          // {
+            meta = lazytf.meta;
+          };
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
