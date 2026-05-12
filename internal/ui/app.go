@@ -632,13 +632,37 @@ func applyEnvironmentPreference(
 	if pref == nil {
 		return strategy, current
 	}
-	if pref.Strategy != "" && strategyAvailable(result, pref.Strategy) {
+	if pref.Strategy != "" {
+		if !strategyAvailable(result, pref.Strategy) {
+			return strategy, current
+		}
 		strategy = pref.Strategy
 	}
-	if pref.Environment != "" {
+	if pref.Environment != "" && preferenceEnvironmentAvailable(result, strategy, pref.Environment) {
 		current = pref.Environment
 	}
 	return strategy, current
+}
+
+func preferenceEnvironmentAvailable(result environment.DetectionResult, strategy environment.StrategyType, value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	if strategyMatches(strategy, environment.StrategyWorkspace) {
+		for _, workspace := range result.Workspaces {
+			if workspace == value {
+				return true
+			}
+		}
+	}
+	if strategyMatches(strategy, environment.StrategyFolder) {
+		for _, folder := range result.FolderPaths {
+			if folder == value || filepath.Base(folder) == value {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Model) updateEnvironmentPanel(_ []string) {

@@ -244,6 +244,9 @@ func scanTerraformFolders(ctx context.Context, root string, maxDepth int) ([]str
 		}
 
 		dir := filepath.Dir(path)
+		if filepath.Clean(dir) == filepath.Clean(root) {
+			return nil
+		}
 		if containsIgnoredSegment(dir) {
 			return nil
 		}
