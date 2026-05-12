@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -334,6 +335,36 @@ func TestDefaultPathAndOpenDefault(t *testing.T) {
 			t.Errorf("close history store: %v", closeErr)
 		}
 	})
+}
+
+func TestLocalPath(t *testing.T) {
+	workDir := t.TempDir()
+	path, err := LocalPath(workDir)
+	if err != nil {
+		t.Fatalf("local path: %v", err)
+	}
+	want := filepath.Join(workDir, ".lazytf", "history.db")
+	if path != want {
+		t.Fatalf("expected local path %q, got %q", want, path)
+	}
+}
+
+func TestOpenLocal(t *testing.T) {
+	workDir := t.TempDir()
+	store, err := OpenLocal(workDir)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := store.Close(); closeErr != nil {
+			t.Errorf("close history store: %v", closeErr)
+		}
+	})
+
+	path := filepath.Join(workDir, ".lazytf", "history.db")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected local history db at %s: %v", path, err)
+	}
 }
 
 func TestWithCompressionThreshold(t *testing.T) {

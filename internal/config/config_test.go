@@ -902,6 +902,77 @@ func TestProjectOverrideFor(t *testing.T) {
 	})
 }
 
+func TestProjectOverrideHistoryConfig(t *testing.T) {
+	projectDir := t.TempDir()
+	historyPath := filepath.Join(t.TempDir(), "history.db")
+	data := []byte("project_overrides:\n  \"" + projectDir + "\":\n    history:\n      enabled: false\n      level: full\n      path: \"" + historyPath + "\"\n      compression_threshold: 2048\n")
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if err := expandConfigPaths(&cfg); err != nil {
+		t.Fatalf("expand config paths: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate config: %v", err)
+	}
+
+	override := cfg.ProjectOverrideFor(projectDir)
+	if override == nil {
+		t.Fatal("expected project override")
+	}
+	if override.History.Enabled == nil {
+		t.Fatal("expected explicit history enabled override")
+	}
+	if *override.History.Enabled {
+		t.Fatal("expected explicit history enabled false")
+	}
+	if override.History.Level != "full" {
+		t.Fatalf("expected project history level full, got %q", override.History.Level)
+	}
+	if override.History.Path != historyPath {
+		t.Fatalf("expected project history path %q, got %q", historyPath, override.History.Path)
+	}
+	if override.History.CompressionThreshold != 2048 {
+		t.Fatalf("expected project compression threshold 2048, got %d", override.History.CompressionThreshold)
+	}
+}
+
+func TestProjectOverrideHistoryEnabledOmittedInherits(t *testing.T) {
+	projectDir := t.TempDir()
+	data := []byte("project_overrides:\n  \"" + projectDir + "\":\n    history:\n      level: standard\n")
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	override := cfg.ProjectOverrideFor(projectDir)
+	if override == nil {
+		t.Fatal("expected project override")
+	}
+	if override.History.Enabled != nil {
+		t.Fatal("expected omitted history enabled to remain nil")
+	}
+}
+
+func TestProjectOverrideHistoryEnabledTrue(t *testing.T) {
+	projectDir := t.TempDir()
+	data := []byte("project_overrides:\n  \"" + projectDir + "\":\n    history:\n      enabled: true\n")
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	override := cfg.ProjectOverrideFor(projectDir)
+	if override == nil {
+		t.Fatal("expected project override")
+	}
+	if override.History.Enabled == nil || !*override.History.Enabled {
+		t.Fatal("expected explicit history enabled true")
+	}
+}
+
 func TestPresetByName(t *testing.T) {
 	t.Run("empty name", func(t *testing.T) {
 		cfg := Config{
@@ -1354,6 +1425,7 @@ func TestValidateHistoryLevelVariants(t *testing.T) {
 		{"", false},
 		{"minimal", false},
 		{"standard", false},
+		{"full", false},
 		{"verbose", false},
 		{"invalid", true},
 		{"MINIMAL", true}, // case sensitive
@@ -1366,6 +1438,44 @@ func TestValidateHistoryLevelVariants(t *testing.T) {
 				t.Errorf("validateHistoryLevel(%q) error = %v, wantErr %v", tt.level, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoadConfigDefaultsHistoryEnabledWhenOmitted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("theme:\n  name: default\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	cfg, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.History.Enabled {
+		t.Fatal("expected omitted history.enabled to use default true")
+	}
+}
+
+func TestLoadConfigPreservesExplicitHistoryDisabled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("history:\n  enabled: false\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	manager, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	cfg, err := manager.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.History.Enabled {
+		t.Fatal("expected explicit history.enabled false to be preserved")
 	}
 }
 

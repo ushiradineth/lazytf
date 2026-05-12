@@ -142,6 +142,13 @@ func TestPrepareOutputLevels(t *testing.T) {
 		t.Error("verbose output should be truncated")
 	}
 
+	// Test with full level
+	fullLogger := &Logger{level: LevelFull}
+	result = fullLogger.prepareOutput(output)
+	if len(result) > maxOutputVerbose {
+		t.Error("full output should be truncated like verbose")
+	}
+
 	// Test with standard level
 	standardLogger := &Logger{level: LevelStandard}
 	result = standardLogger.prepareOutput(output)

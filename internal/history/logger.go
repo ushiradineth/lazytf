@@ -11,6 +11,7 @@ type Level string
 const (
 	LevelMinimal  Level = "minimal"
 	LevelStandard Level = "standard"
+	LevelFull     Level = "full"
 	LevelVerbose  Level = "verbose"
 )
 
@@ -57,7 +58,7 @@ func (l *Logger) prepareOutput(output string) string {
 	switch l.level {
 	case LevelMinimal:
 		return ""
-	case LevelVerbose:
+	case LevelFull, LevelVerbose:
 		return truncateOutput(output, maxOutputVerbose)
 	default:
 		return truncateOutput(output, maxOutputStandard)

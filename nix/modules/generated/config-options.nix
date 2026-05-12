@@ -21,7 +21,7 @@
         "level" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
           default = null;
-          description = "History detail level. Supported values are minimal, standard, and full.";
+          description = "History detail level. Supported values are minimal, standard, and full. verbose is accepted as a legacy alias for full.";
         };
         "path" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
@@ -88,6 +88,34 @@
           type = lib.types.nullOr (lib.types.listOf (lib.types.str));
           default = null;
           description = "Additional Terraform flags for this project.";
+        };
+        "history" = lib.mkOption {
+          type = lib.types.nullOr (lib.types.submodule {
+            options = {
+              "compression_threshold" = lib.mkOption {
+                type = lib.types.nullOr (lib.types.int);
+                default = null;
+                description = "Compress stored output larger than this many bytes for this project.";
+              };
+              "enabled" = lib.mkOption {
+                type = lib.types.nullOr (lib.types.bool);
+                default = null;
+                description = "Enable persistent operation history for this project. Omit to inherit the global history setting.";
+              };
+              "level" = lib.mkOption {
+                type = lib.types.nullOr (lib.types.str);
+                default = null;
+                description = "History detail level for this project. Supported values are minimal, standard, and full. verbose is accepted as a legacy alias for full.";
+              };
+              "path" = lib.mkOption {
+                type = lib.types.nullOr (lib.types.str);
+                default = null;
+                description = "Path to the history database file for this project.";
+              };
+            };
+          });
+          default = null;
+          description = "History settings override for this project.";
         };
         "preset_name" = lib.mkOption {
           type = lib.types.nullOr (lib.types.str);
