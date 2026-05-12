@@ -145,9 +145,6 @@ func run(cmd *cobra.Command, args []string) error {
 	if themeName != "" {
 		cfg.Theme.Name = themeName
 	}
-	if noHistory {
-		cfg.History.Enabled = false
-	}
 	if cmd != nil && !cmd.Flags().Changed("mouse") && cfg.Mouse != nil {
 		mouseEnabled = *cfg.Mouse
 	}
@@ -229,6 +226,8 @@ func runExecutionModeConfigured(
 	if err != nil {
 		return err
 	}
+	applyProjectBinaryOverrideForWorkDir(cfg, workDir)
+	applyEffectiveHistoryConfigForWorkDir(cfg, workDir)
 	appStyles, err := resolveAppStyles(cfg)
 	if err != nil {
 		return err
@@ -250,7 +249,7 @@ func runExecutionModeConfigured(
 	if absDir, absErr := filepath.Abs(resolvedPreloadedPlanDir); absErr == nil {
 		resolvedPreloadedPlanDir = absDir
 	}
-	historyStore, historyLogger, err := openHistory(cfg)
+	historyStore, historyLogger, err := openHistory(cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -356,6 +355,37 @@ func applyProjectBinaryOverrideForWorkDir(cfg *config.Config, dir string) {
 	}
 }
 
+func applyProjectHistoryOverrideForWorkDir(cfg *config.Config, dir string) {
+	if cfg == nil {
+		return
+	}
+	override := cfg.ProjectOverrideFor(dir)
+	if override == nil {
+		return
+	}
+	if override.History.Enabled != nil {
+		cfg.History.Enabled = *override.History.Enabled
+	}
+	if trimmed := strings.TrimSpace(override.History.Level); trimmed != "" {
+		cfg.History.Level = trimmed
+	}
+	if trimmed := strings.TrimSpace(override.History.Path); trimmed != "" {
+		cfg.History.Path = trimmed
+	}
+	if override.History.CompressionThreshold > 0 {
+		cfg.History.CompressionThreshold = override.History.CompressionThreshold
+	}
+}
+
+func applyEffectiveHistoryConfigForWorkDir(cfg *config.Config, dir string) {
+	// Precedence: CLI flag, project override, global config, built-in defaults.
+	// Global/default values are already loaded into cfg before this merge.
+	applyProjectHistoryOverrideForWorkDir(cfg, dir)
+	if cfg != nil && noHistory {
+		cfg.History.Enabled = false
+	}
+}
+
 func buildExecutor(cfg *config.Config, flags []string) (*terraform.Executor, error) {
 	var execOpts []terraform.ExecutorOption
 	execOpts = append(execOpts, terraform.WithDefaultFlags(flags))
@@ -382,7 +412,7 @@ func resolveSelectedEnv() string {
 	return envName
 }
 
-func openHistory(cfg *config.Config) (*history.Store, *history.Logger, error) {
+func openHistory(cfg *config.Config, historyWorkDir string) (*history.Store, *history.Logger, error) {
 	if !cfg.History.Enabled {
 		return nil, nil, nil
 	}
@@ -397,7 +427,7 @@ func openHistory(cfg *config.Config) (*history.Store, *history.Logger, error) {
 	if strings.TrimSpace(cfg.History.Path) != "" {
 		historyStore, err = history.Open(cfg.History.Path, opts...)
 	} else {
-		historyStore, err = history.OpenDefault(opts...)
+		historyStore, err = history.OpenLocal(historyWorkDir, opts...)
 	}
 	if err != nil {
 		if shouldDisableHistoryForError(err) {

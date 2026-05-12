@@ -104,6 +104,28 @@ func OpenDefault(opts ...StoreOption) (*Store, error) {
 	return Open(path, opts...)
 }
 
+// LocalPath returns the project-local history DB path for a workdir.
+func LocalPath(workDir string) (string, error) {
+	trimmed := strings.TrimSpace(workDir)
+	if trimmed == "" {
+		trimmed = "."
+	}
+	abs, err := filepath.Abs(trimmed)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(abs, ".lazytf", "history.db"), nil
+}
+
+// OpenLocal opens the project-local history store for a workdir.
+func OpenLocal(workDir string, opts ...StoreOption) (*Store, error) {
+	path, err := LocalPath(workDir)
+	if err != nil {
+		return nil, err
+	}
+	return Open(path, opts...)
+}
+
 // Open opens or creates the history store.
 func Open(path string, opts ...StoreOption) (*Store, error) {
 	if strings.HasPrefix(path, "~") {

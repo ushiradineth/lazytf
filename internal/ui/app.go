@@ -1366,10 +1366,22 @@ func (m *Model) initHistory(cfg ExecutionConfig) {
 
 	store := cfg.HistoryStore
 	if store == nil {
+		if strings.TrimSpace(cfg.WorkDir) == "" {
+			return
+		}
 		var err error
-		store, err = history.OpenDefault()
+		var opts []history.StoreOption
+		level := history.LevelStandard
+		if cfg.Config != nil {
+			opts = append(opts, history.WithCompressionThreshold(cfg.Config.History.CompressionThreshold))
+			level = history.Level(cfg.Config.History.Level)
+		}
+		store, err = history.OpenLocal(cfg.WorkDir, opts...)
 		if err != nil {
 			m.err = err
+		}
+		if cfg.HistoryLogger == nil && store != nil {
+			cfg.HistoryLogger = history.NewLogger(store, level)
 		}
 	}
 	m.historyStore = store

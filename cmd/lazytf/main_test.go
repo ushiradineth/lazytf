@@ -870,7 +870,7 @@ func TestOpenHistoryDisabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.History.Enabled = false
 
-	store, logger, err := openHistory(&cfg)
+	store, logger, err := openHistory(&cfg, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -888,7 +888,7 @@ func TestOpenHistoryWithCustomPath(t *testing.T) {
 	cfg.History.Path = filepath.Join(t.TempDir(), "history.db")
 	cfg.History.CompressionThreshold = 1024
 
-	store, logger, err := openHistory(&cfg)
+	store, logger, err := openHistory(&cfg, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -907,11 +907,9 @@ func TestOpenHistoryWithDefaultPath(t *testing.T) {
 	cfg := testConfig()
 	cfg.History.Enabled = true
 	cfg.History.Path = ""
+	workDir := t.TempDir()
 
-	// Set a temp XDG data home to avoid polluting the user's actual data directory
-	t.Setenv("XDG_DATA_HOME", t.TempDir())
-
-	store, logger, err := openHistory(&cfg)
+	store, logger, err := openHistory(&cfg, workDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -924,6 +922,10 @@ func TestOpenHistoryWithDefaultPath(t *testing.T) {
 	t.Cleanup(func() {
 		_ = store.Close()
 	})
+	localPath := filepath.Join(workDir, ".lazytf", "history.db")
+	if _, err := os.Stat(localPath); err != nil {
+		t.Fatalf("expected local history db at %s: %v", localPath, err)
+	}
 }
 
 func TestOpenHistoryInvalidPath(t *testing.T) {
@@ -931,12 +933,156 @@ func TestOpenHistoryInvalidPath(t *testing.T) {
 	cfg.History.Enabled = true
 	cfg.History.Path = "/nonexistent/path/that/cannot/be/created/history.db"
 
-	_, _, err := openHistory(&cfg)
+	_, _, err := openHistory(&cfg, t.TempDir())
 	if err == nil {
 		t.Fatalf("expected error for invalid path")
 	}
 	if !strings.Contains(err.Error(), "history store") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyProjectHistoryOverrideForWorkDir(t *testing.T) {
+	projectDir := t.TempDir()
+	projectHistoryPath := filepath.Join(t.TempDir(), "project-history.db")
+	enabled := true
+	cfg := testConfig()
+	cfg.History.Enabled = false
+	cfg.History.Level = "minimal"
+	cfg.History.Path = ""
+	cfg.History.CompressionThreshold = 1024
+	cfg.ProjectOverrides = map[string]*config.ProjectConfig{
+		projectDir: {
+			History: config.ProjectHistoryConfig{
+				Enabled:              &enabled,
+				Level:                "full",
+				Path:                 projectHistoryPath,
+				CompressionThreshold: 2048,
+			},
+		},
+	}
+
+	applyProjectHistoryOverrideForWorkDir(&cfg, projectDir)
+
+	if !cfg.History.Enabled {
+		t.Fatalf("expected project override to enable history")
+	}
+	if cfg.History.Level != "full" {
+		t.Fatalf("expected project history level full, got %q", cfg.History.Level)
+	}
+	if cfg.History.Path != projectHistoryPath {
+		t.Fatalf("expected project history path %q, got %q", projectHistoryPath, cfg.History.Path)
+	}
+	if cfg.History.CompressionThreshold != 2048 {
+		t.Fatalf("expected project compression threshold 2048, got %d", cfg.History.CompressionThreshold)
+	}
+}
+
+func TestApplyProjectHistoryOverrideOmittedFieldsInherit(t *testing.T) {
+	projectDir := t.TempDir()
+	cfg := testConfig()
+	cfg.History.Enabled = true
+	cfg.History.Level = "standard"
+	cfg.History.Path = "/global/history.db"
+	cfg.History.CompressionThreshold = 4096
+	cfg.ProjectOverrides = map[string]*config.ProjectConfig{
+		projectDir: {History: config.ProjectHistoryConfig{Level: "full"}},
+	}
+
+	applyProjectHistoryOverrideForWorkDir(&cfg, projectDir)
+
+	if !cfg.History.Enabled {
+		t.Fatalf("expected omitted enabled to inherit global true")
+	}
+	if cfg.History.Level != "full" {
+		t.Fatalf("expected level override full, got %q", cfg.History.Level)
+	}
+	if cfg.History.Path != "/global/history.db" {
+		t.Fatalf("expected global path to remain, got %q", cfg.History.Path)
+	}
+	if cfg.History.CompressionThreshold != 4096 {
+		t.Fatalf("expected global compression threshold to remain, got %d", cfg.History.CompressionThreshold)
+	}
+}
+
+func TestApplyEffectiveHistoryConfigProjectDisableAndNoHistoryPrecedence(t *testing.T) {
+	oldNoHistory := noHistory
+	t.Cleanup(func() {
+		noHistory = oldNoHistory
+	})
+
+	projectDir := t.TempDir()
+	enabled := true
+	cfg := testConfig()
+	cfg.History.Enabled = false
+	cfg.ProjectOverrides = map[string]*config.ProjectConfig{
+		projectDir: {History: config.ProjectHistoryConfig{Enabled: &enabled}},
+	}
+
+	noHistory = false
+	applyEffectiveHistoryConfigForWorkDir(&cfg, projectDir)
+	if !cfg.History.Enabled {
+		t.Fatalf("expected project override to enable history over global disabled")
+	}
+
+	enabled = false
+	cfg.History.Enabled = true
+	applyEffectiveHistoryConfigForWorkDir(&cfg, projectDir)
+	if cfg.History.Enabled {
+		t.Fatalf("expected project override to disable history over global enabled")
+	}
+
+	enabled = true
+	cfg.History.Enabled = true
+	noHistory = true
+	applyEffectiveHistoryConfigForWorkDir(&cfg, projectDir)
+	if cfg.History.Enabled {
+		t.Fatalf("expected --no-history to remain a hard disable")
+	}
+}
+
+func TestEffectiveHistoryConfigAppliesAfterFolderResolution(t *testing.T) {
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldWorkDir := workDir
+	oldNoHistory := noHistory
+	oldNewFolder := newFolderManager
+	t.Cleanup(func() {
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		workDir = oldWorkDir
+		noHistory = oldNoHistory
+		newFolderManager = oldNewFolder
+	})
+
+	baseDir := t.TempDir()
+	resolved := filepath.Join(baseDir, "envs", "dev")
+	if err := os.MkdirAll(resolved, 0o755); err != nil {
+		t.Fatalf("mkdir resolved folder: %v", err)
+	}
+
+	newFolderManager = func(_ string) (folderManager, error) {
+		return &fakeFolderManager{}, nil
+	}
+
+	projectHistoryPath := filepath.Join(t.TempDir(), "history.db")
+	cfg := testConfig()
+	cfg.History.Enabled = true
+	cfg.ProjectOverrides = map[string]*config.ProjectConfig{
+		resolved: {History: config.ProjectHistoryConfig{Path: projectHistoryPath}},
+	}
+
+	workspaceName = ""
+	folderPath = "envs/dev"
+	workDir = baseDir
+	noHistory = false
+
+	if err := configureWorkDirAndWorkspace(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	applyEffectiveHistoryConfigForWorkDir(&cfg, workDir)
+	if cfg.History.Path != projectHistoryPath {
+		t.Fatalf("expected project history path after folder resolution, got %q", cfg.History.Path)
 	}
 }
 
@@ -1617,6 +1763,112 @@ func TestRunProjectOverrideBinaryNonMatchKeepsGlobal(t *testing.T) {
 	}
 	if capturedBinary != globalBinaryPath {
 		t.Fatalf("expected global binary %q, got %q", globalBinaryPath, capturedBinary)
+	}
+}
+
+func TestRunProjectHistoryOverrideEnablesOverGlobalDisabled(t *testing.T) {
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldExecRunner := executionModeRunner
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		executionModeRunner = oldExecRunner
+	})
+	useTempConfig(t)
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	targetDir := t.TempDir()
+	configContent := "history:\n  enabled: false\nterraform:\n  binary: \"" + tfPath + "\"\nproject_overrides:\n  \"" + targetDir + "\":\n    history:\n      enabled: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	var capturedStore *history.Store
+	executionModeRunner = func(model tea.Model, store *history.Store) error {
+		_ = model
+		capturedStore = store
+		if store != nil {
+			return store.Close()
+		}
+		return nil
+	}
+
+	workDir = targetDir
+	workspaceName = ""
+	folderPath = ""
+	planFile = ""
+	noHistory = false
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedStore == nil {
+		t.Fatal("expected project override to enable history over global disabled")
+	}
+	localPath := filepath.Join(targetDir, ".lazytf", "history.db")
+	if _, err := os.Stat(localPath); err != nil {
+		t.Fatalf("expected local history db at %s: %v", localPath, err)
+	}
+}
+
+func TestRunNoHistoryDisablesProjectHistoryOverride(t *testing.T) {
+	oldPlanFile := planFile
+	oldWorkDir := workDir
+	oldWorkspace := workspaceName
+	oldFolder := folderPath
+	oldExecRunner := executionModeRunner
+	t.Cleanup(func() {
+		planFile = oldPlanFile
+		workDir = oldWorkDir
+		workspaceName = oldWorkspace
+		folderPath = oldFolder
+		executionModeRunner = oldExecRunner
+	})
+	useTempConfig(t)
+
+	tfDir := t.TempDir()
+	tfPath := filepath.Join(tfDir, "terraform")
+	//nolint:gosec // test executable needs execute permission
+	if err := os.WriteFile(tfPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write terraform script: %v", err)
+	}
+	t.Setenv("PATH", tfDir)
+
+	targetDir := t.TempDir()
+	configContent := "history:\n  enabled: false\nterraform:\n  binary: \"" + tfPath + "\"\nproject_overrides:\n  \"" + targetDir + "\":\n    history:\n      enabled: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	var capturedStore *history.Store
+	executionModeRunner = func(_ tea.Model, store *history.Store) error {
+		capturedStore = store
+		return nil
+	}
+
+	workDir = targetDir
+	workspaceName = ""
+	folderPath = ""
+	planFile = ""
+	noHistory = true
+
+	if err := run(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedStore != nil {
+		t.Fatal("expected --no-history to disable project history override")
 	}
 }
 

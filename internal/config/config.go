@@ -73,9 +73,22 @@ type TerraformConfig struct {
 // HistoryConfig configures history logging.
 type HistoryConfig struct {
 	Enabled              bool   `yaml:"enabled,omitempty" description:"Enable persistent operation history."`
-	Level                string `yaml:"level,omitempty" description:"History detail level. Supported values are minimal, standard, and full."`
+	EnabledSet           bool   `yaml:"-" schema:"-"`
+	Level                string `yaml:"level,omitempty" description:"History detail level. Supported values are minimal, standard, and full. verbose is accepted as a legacy alias for full."`
 	Path                 string `yaml:"path,omitempty" description:"Path to the history database file."`
 	CompressionThreshold int    `yaml:"compression_threshold,omitempty" description:"Compress stored output larger than this many bytes."`
+}
+
+// UnmarshalYAML tracks whether history.enabled was explicitly configured.
+func (h *HistoryConfig) UnmarshalYAML(value *yaml.Node) error {
+	type rawHistoryConfig HistoryConfig
+	var raw rawHistoryConfig
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*h = HistoryConfig(raw)
+	h.EnabledSet = yamlMappingHasKey(value, "enabled")
+	return nil
 }
 
 // Manager loads and saves configuration files with locking.
@@ -339,6 +352,9 @@ func (c Config) WithDefaults() Config {
 	if c.Terraform.Parallelism == 0 {
 		c.Terraform.Parallelism = 10
 	}
+	if !c.History.EnabledSet {
+		c.History.Enabled = true
+	}
 	if c.History.Level == "" {
 		c.History.Level = "standard"
 	}
@@ -346,6 +362,18 @@ func (c Config) WithDefaults() Config {
 		c.History.CompressionThreshold = 64 * 1024 // 64KB default
 	}
 	return c
+}
+
+func yamlMappingHasKey(node *yaml.Node, key string) bool {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate ensures the config is usable.
@@ -362,7 +390,18 @@ func (c Config) Validate() error {
 	if c.Terraform.Parallelism < 0 {
 		return errors.New("terraform parallelism cannot be negative")
 	}
-	return validateHistoryLevel(c.History.Level)
+	if err := validateHistoryLevel(c.History.Level); err != nil {
+		return err
+	}
+	for key, project := range c.ProjectOverrides {
+		if project == nil {
+			continue
+		}
+		if err := validateHistoryLevel(project.History.Level); err != nil {
+			return fmt.Errorf("project override %s history level: %w", key, err)
+		}
+	}
+	return nil
 }
 
 func validateHistoryLevel(level string) error {
@@ -370,7 +409,7 @@ func validateHistoryLevel(level string) error {
 		return nil
 	}
 	switch level {
-	case "minimal", "standard", "verbose":
+	case "minimal", "standard", "full", "verbose":
 		return nil
 	default:
 		return fmt.Errorf("invalid history level: %s", level)
@@ -424,6 +463,13 @@ func expandConfigPaths(cfg *Config) error {
 	for key, project := range cfg.ProjectOverrides {
 		if project == nil {
 			continue
+		}
+		if project.History.Path != "" {
+			path, err := expandPath(project.History.Path)
+			if err != nil {
+				return err
+			}
+			project.History.Path = path
 		}
 		cfg.ProjectOverrides[key] = project
 	}

@@ -4525,11 +4525,20 @@ func TestInitHistoryWithNilStore(t *testing.T) {
 
 	cfg := ExecutionConfig{
 		HistoryEnabled: true,
-		HistoryStore:   nil, // Will try to open default, which may fail
+		HistoryStore:   nil,
+		WorkDir:        t.TempDir(),
 	}
 
-	// Should not panic even if store cannot be opened
+	// Should not panic and should open project-local history when possible.
 	m.initHistory(cfg)
+	if m.historyStore == nil {
+		t.Fatal("expected project-local history store")
+	}
+	t.Cleanup(func() {
+		if err := m.historyStore.Close(); err != nil {
+			t.Errorf("close history store: %v", err)
+		}
+	})
 }
 
 func TestInitHistoryWithHistoryPanel(t *testing.T) {

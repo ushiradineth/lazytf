@@ -18,7 +18,7 @@
           "type": "boolean"
         },
         "level": {
-          "description": "History detail level. Supported values are minimal, standard, and full.",
+          "description": "History detail level. Supported values are minimal, standard, and full. verbose is accepted as a legacy alias for full.",
           "type": "string"
         },
         "path": {
@@ -89,6 +89,28 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "history": {
+            "description": "History settings override for this project.",
+            "properties": {
+              "compression_threshold": {
+                "description": "Compress stored output larger than this many bytes for this project.",
+                "type": "integer"
+              },
+              "enabled": {
+                "description": "Enable persistent operation history for this project. Omit to inherit the global history setting.",
+                "type": "boolean"
+              },
+              "level": {
+                "description": "History detail level for this project. Supported values are minimal, standard, and full. verbose is accepted as a legacy alias for full.",
+                "type": "string"
+              },
+              "path": {
+                "description": "Path to the history database file for this project.",
+                "type": "string"
+              }
+            },
+            "type": "object"
           },
           "preset_name": {
             "description": "Preset name to apply for this project.",
