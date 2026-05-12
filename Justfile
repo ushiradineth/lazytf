@@ -221,7 +221,7 @@ quality-quick:
 security:
 	@echo "Running security checks..."
 	@command -v govulncheck >/dev/null 2>&1 || { echo "❌ govulncheck not installed. Refer flake.nix for installation"; exit 1; }
-	GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.8}" govulncheck ./...
+	GOTOOLCHAIN="${GOTOOLCHAIN:-go1.25.10}" govulncheck ./...
 
 # Find TODO/FIXME/BUG comments
 [group('diagnostics')]
