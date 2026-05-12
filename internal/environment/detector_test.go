@@ -33,6 +33,32 @@ func TestDetectWorkspaceStrategy(t *testing.T) {
 	}
 }
 
+func TestDetectWorkspaceStrategyIgnoresRootTerraformFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.tf"), []byte(""), 0o600); err != nil {
+		t.Fatalf("write tf: %v", err)
+	}
+
+	detector, err := NewDetector(root, WithWorkspaceListFunc(func(_ context.Context, _ string) ([]string, error) {
+		return []string{"default", "dev", "prod"}, nil
+	}))
+	if err != nil {
+		t.Fatalf("new detector: %v", err)
+	}
+
+	result, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+
+	if result.Strategy != StrategyWorkspace {
+		t.Fatalf("expected workspace strategy, got %q", result.Strategy)
+	}
+	if len(result.FolderPaths) != 0 {
+		t.Fatalf("expected no folder environments for root tf files, got %v", result.FolderPaths)
+	}
+}
+
 func TestDetectFolderStrategyNested(t *testing.T) {
 	root := t.TempDir()
 	dirs := []string{

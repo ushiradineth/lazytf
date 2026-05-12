@@ -3769,6 +3769,25 @@ func TestApplyEnvironmentPreference(t *testing.T) {
 	}
 }
 
+func TestApplyEnvironmentPreferenceIgnoresUnavailableStaleFolderPreference(t *testing.T) {
+	result := environment.DetectionResult{
+		Strategy:   environment.StrategyWorkspace,
+		Workspaces: []string{"default", "dev", "prod"},
+	}
+	pref := &environment.Preference{
+		Strategy:    environment.StrategyFolder,
+		Environment: "/Users/shu/Code/tmpkube",
+	}
+
+	strategy, current := applyEnvironmentPreference(result, "prod", pref)
+	if strategy != environment.StrategyWorkspace {
+		t.Fatalf("expected StrategyWorkspace, got %v", strategy)
+	}
+	if current != "prod" {
+		t.Fatalf("expected current workspace to stay prod, got %q", current)
+	}
+}
+
 func TestEnvDisplayName(t *testing.T) {
 	m := NewExecutionModel(nil, ExecutionConfig{})
 
