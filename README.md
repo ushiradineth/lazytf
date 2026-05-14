@@ -1,5 +1,18 @@
 ![banner](./.github/banner.png)
 
+## Demo
+
+<https://github.com/user-attachments/assets/f62e3b70-8848-41be-8211-6a26ff434533>
+
+## Features
+
+- Run Terraform plan and apply flows inside a terminal UI.
+- Review targeted workflows by planning a selected resource, replanning, and applying from the same interface.
+- Pipe Terraform CLI output directly into lazytf for cleaner plan review.
+- Open existing Terraform plan files when you already have a saved plan artifact.
+- Use read-only mode when you only want to inspect diffs without running mutations through lazytf.
+- Keep apply history so previous operations are easier to inspect after the terminal output is gone.
+
 ## Installation
 
 ### Binary releases
