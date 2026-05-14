@@ -1,17 +1,24 @@
 ![banner](./.github/banner.png)
 
 ## Demo
-
-<https://github.com/user-attachments/assets/f62e3b70-8848-41be-8211-6a26ff434533>
+https://github.com/user-attachments/assets/f62e3b70-8848-41be-8211-6a26ff434533
 
 ## Features
 
-- Run Terraform plan and apply flows inside a terminal UI.
-- Review targeted workflows by planning a selected resource, replanning, and applying from the same interface.
+- Run plan, apply, init, init-upgrade, validate, format, and state refresh flows inside a terminal UI.
+- Review Terraform plans as navigable resource diffs with create, update, delete, and replace filters.
+- Use target mode to select resources, run targeted plans, replan, and apply from the same interface.
 - Pipe Terraform CLI output directly into lazytf for cleaner plan review.
 - Open existing Terraform plan files when you already have a saved plan artifact.
 - Use read-only mode when you only want to inspect diffs without running mutations through lazytf.
+- Browse Terraform state resources and run state operations from the resource view.
 - Keep apply history so previous operations are easier to inspect after the terminal output is gone.
+- Capture command logs, diagnostics, progress, and optional desktop notifications for Terraform operations.
+- Switch between Terraform workspaces and folder-based environments, with automatic environment detection.
+- Configure behavior through YAML, NixOS modules, or Home Manager modules.
+- Use presets and project overrides for workdir, environment, theme, binary, flags, and history settings.
+- Select Terraform or OpenTofu binaries globally or per project.
+- Choose built-in themes and lazygit-style keybindings, with tmux-aware mouse support.
 
 ## Installation
 
