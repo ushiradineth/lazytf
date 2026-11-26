@@ -777,17 +777,15 @@ func TestCollapseSelectedGroupClearsDiffSelection(t *testing.T) {
 	}
 }
 
-func TestSingleResourceLeafNoGroupHeader(t *testing.T) {
+func TestSingleResourceLeafShowsGroupHeader(t *testing.T) {
 	r := NewResourceList(styles.DefaultStyles())
 	r.SetResources([]terraform.ResourceChange{
 		{Address: "module.alpha.aws_instance.web", Action: terraform.ActionCreate},
 	})
 	r.SetSize(80, 10)
 
-	for _, item := range r.visibleItems {
-		if item.kind == itemGroup {
-			t.Fatalf("expected no group header for single resource, got %#v", r.visibleItems)
-		}
+	if groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha); groupIdx < 0 {
+		t.Fatalf("expected module header for single resource, got %#v", r.visibleItems)
 	}
 }
 
@@ -915,8 +913,9 @@ func TestFilterWithGroupingCountsAndVisibility(t *testing.T) {
 	r.SetFilter(terraform.ActionDelete, false)
 	r.SetSize(80, 10)
 
-	if indexOfGroup(r.visibleItems, consts.ModuleAlpha) >= 0 {
-		t.Fatalf("expected single resource without group header, got %#v", r.visibleItems)
+	groupIdx := indexOfGroup(r.visibleItems, consts.ModuleAlpha)
+	if groupIdx < 0 || r.visibleItems[groupIdx].count != 1 {
+		t.Fatalf("expected module header with filtered count of one, got %#v", r.visibleItems)
 	}
 	if got := selectFirstResource(r); got == nil || got.Address != "module.alpha.aws_instance.web" {
 		t.Fatalf("expected remaining resource, got %#v", got)

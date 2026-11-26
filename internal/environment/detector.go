@@ -218,11 +218,8 @@ func scanTerraformFolders(ctx context.Context, root string, maxDepth int) ([]str
 	baseDepth := pathDepth(root)
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 
 		if err != nil {
@@ -230,10 +227,7 @@ func scanTerraformFolders(ctx context.Context, root string, maxDepth int) ([]str
 		}
 
 		if d.IsDir() {
-			if shouldSkipDir(d.Name()) {
-				return fs.SkipDir
-			}
-			if maxDepth > 0 && pathDepth(path)-baseDepth > maxDepth {
+			if shouldSkipDir(d.Name()) || (maxDepth > 0 && pathDepth(path)-baseDepth > maxDepth) {
 				return fs.SkipDir
 			}
 			return nil
