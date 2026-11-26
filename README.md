@@ -154,7 +154,7 @@ Path resolution order:
 
 ## Development Prerequisites
 
-- Go 1.25.10
+- Go 1.26.11
 - [just](https://github.com/casey/just)
 
 ### With Nix

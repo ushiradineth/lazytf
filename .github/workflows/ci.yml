@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25.10"
+  GO_VERSION: "1.26.11"
   GOLANGCI_LINT_VERSION: "v2.10.1"
   GOVULNCHECK_VERSION: "v1.1.4"
 
@@ -262,6 +262,7 @@ jobs:
       - name: Snapshot build (no publish)
         run: |
           docker run --rm \
+            -e GOTOOLCHAIN=go1.26.11 \
             -v "$PWD:/work" \
             -w /work \
             ghcr.io/goreleaser/goreleaser-cross@sha256:376c5aee1ead08141b106268f1c136e17920cc0c58a0bf009e6eb37e5fae50c5 \

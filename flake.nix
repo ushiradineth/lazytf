@@ -22,7 +22,7 @@
           src = ./.;
           vendorHash = "sha256-df/siwSWcTKWbpdTCDdZy+vr0IKmWeD/DkrEbvNwsBQ=";
           proxyVendor = true;
-          go = pkgs.go_1_25;
+          go = pkgs.go_1_26;
           doCheck = false;
 
           env = {
@@ -57,7 +57,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.go_1_25
+            pkgs.go_1_26
 
             pkgs.gopls
             pkgs.gofumpt

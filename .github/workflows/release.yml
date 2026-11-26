@@ -197,6 +197,7 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           docker run --rm \
+            -e GOTOOLCHAIN=go1.26.11 \
             -e GITHUB_TOKEN \
             -e HOMEBREW_TAP_GITHUB_TOKEN \
             -e GORELEASER_CURRENT_TAG \

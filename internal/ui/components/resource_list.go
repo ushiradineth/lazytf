@@ -1225,17 +1225,6 @@ func (r *ResourceList) buildVisibleItems(resources []terraform.ResourceChange) [
 func (r *ResourceList) appendNodeItems(node *moduleNode, depth int) []listItem {
 	items := []listItem{}
 	total := node.countTotal()
-	// Skip group header for single resources, but not during search to preserve context
-	if !r.searchActive && total == 1 && len(node.children) == 0 {
-		res := node.resources[0]
-		items = append(items, listItem{
-			kind:     itemResource,
-			resource: &res,
-			indent:   (depth + 1) * 2,
-		})
-		return items
-	}
-
 	if _, ok := r.groupExpanded[node.path]; !ok {
 		r.groupExpanded[node.path] = r.allExpanded
 	}

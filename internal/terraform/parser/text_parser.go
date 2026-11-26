@@ -84,6 +84,7 @@ type planBuilder struct {
 	after         map[string]any
 	afterUnknown  map[string]any
 	pathStack     []string
+	collections   []*collectionFrame
 	sawNoChanges  bool
 	heredocActive bool
 	heredocEnd    string
@@ -140,7 +141,7 @@ func (b *planBuilder) handleHeredocLine(trimmed, rawLine string) bool {
 	if !b.heredocActive {
 		return false
 	}
-	if trimmed == b.heredocEnd {
+	if trimmed == b.heredocEnd || (len(b.collections) > 0 && trimmed == b.heredocEnd+",") {
 		value := strings.Join(b.heredocBuffer, "\n")
 		b.applyHeredocValue(b.heredocKey, b.heredocPrefix, value)
 		b.heredocActive = false
@@ -164,6 +165,10 @@ func (b *planBuilder) handleHeaderLine(trimmed string) bool {
 }
 
 func (b *planBuilder) handleActionLine(trimmed string) {
+	if len(b.collections) > 0 {
+		b.consumeCollectionLine(trimmed)
+		return
+	}
 	prefix, rest := parseActionPrefix(trimmed)
 	if prefix == "" {
 		if isBlockClose(trimmed) {
@@ -183,11 +188,12 @@ func (b *planBuilder) handleActionLine(trimmed string) {
 	}
 
 	if delimiter, ok := parseHeredocDelimiter(valuePart); ok {
-		b.heredocActive = true
-		b.heredocEnd = delimiter
-		b.heredocKey = key
-		b.heredocPrefix = prefix
-		b.heredocBuffer = nil
+		b.startHeredoc(key, prefix, delimiter)
+		return
+	}
+
+	if stripCollectionComment(valuePart) == "[" {
+		b.collections = append(b.collections, newCollectionFrame(key, prefix, "["))
 		return
 	}
 
@@ -250,6 +256,7 @@ func (b *planBuilder) startResource(address string, action terraform.ActionType)
 	b.after = make(map[string]any)
 	b.afterUnknown = make(map[string]any)
 	b.pathStack = nil
+	b.collections = nil
 }
 
 func (b *planBuilder) flushCurrent() {
@@ -311,7 +318,25 @@ func (b *planBuilder) setAfterUnknown(path []string) {
 	setPathValue(b.afterUnknown, path, true)
 }
 
+func (b *planBuilder) startHeredoc(key, prefix, delimiter string) {
+	b.heredocActive = true
+	b.heredocEnd = delimiter
+	b.heredocKey = key
+	b.heredocPrefix = prefix
+	b.heredocBuffer = nil
+}
+
 func (b *planBuilder) applyHeredocValue(key, prefix, value string) {
+	if len(b.collections) > 0 {
+		before, after := value, value
+		if prefix == "~" {
+			if oldValue, newValue, ok := splitHeredocDiff(value); ok {
+				before, after = oldValue, newValue
+			}
+		}
+		b.collections[len(b.collections)-1].add(key, prefix, before, after, false)
+		return
+	}
 	path := append([]string{}, b.pathStack...)
 	path = append(path, key)
 	switch prefix {

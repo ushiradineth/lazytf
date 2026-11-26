@@ -1272,9 +1272,6 @@ func (m *Model) handlePlanComplete(msg PlanCompleteMsg) (tea.Model, tea.Cmd) {
 
 	if msg.Plan != nil {
 		m.setPlan(msg.Plan)
-		if m.operationState != nil {
-			m.operationState.InitializeFromPlan(msg.Plan)
-		}
 		if m.planView != nil {
 			m.planView.SetSummary(m.planSummary())
 		}
@@ -1803,16 +1800,13 @@ func (m *Model) planFlagsForRun() ([]string, string) {
 			planFlags = append(planFlags, "-target="+target)
 		}
 	}
+	workDir := m.currentWorkDir()
 	planFilePath := planOutputPath(planFlags)
 	if planFilePath != "" {
+		if !filepath.IsAbs(planFilePath) {
+			planFilePath = filepath.Join(workDir, planFilePath)
+		}
 		return planFlags, planFilePath
-	}
-	workDir := m.envWorkDir
-	if m.executor != nil {
-		workDir = m.executor.WorkDir()
-	}
-	if strings.TrimSpace(workDir) == "" {
-		workDir = "."
 	}
 	planFilePath = filepath.Join(workDir, ".lazytf", "tmp", "plan.tfplan")
 	planFlags = append(planFlags, "-out="+planFilePath)
@@ -1888,21 +1882,35 @@ func (m *Model) applyFlagsForRun() ([]string, error) {
 		}
 		return nil, fmt.Errorf("check saved plan file %q: %w", m.planFilePath, err)
 	}
-	flags = removePlanFileArgs(flags)
+	flags = savedPlanApplyFlags(flags)
 	flags = append(flags, m.planFilePath)
 	return flags, nil
 }
 
-func removePlanFileArgs(flags []string) []string {
-	if len(flags) == 0 {
-		return nil
-	}
+func savedPlanApplyFlags(flags []string) []string {
 	filtered := make([]string, 0, len(flags))
-	for _, flag := range flags {
-		if isPlanFileArg(flag) {
+	for i := 0; i < len(flags); i++ {
+		flag := flags[i]
+		name, _, hasValue := strings.Cut(flag, "=")
+		switch name {
+		case "-out", "-target", "-replace", "-generate-config-out":
+			if !hasValue {
+				i++
+			}
+			continue
+		case "-detailed-exitcode", "-destroy", "-refresh", "-refresh-only":
+			continue
+		case "-var", "-var-file":
+			filtered = append(filtered, flag)
+			if !hasValue && i+1 < len(flags) {
+				i++
+				filtered = append(filtered, flags[i])
+			}
 			continue
 		}
-		filtered = append(filtered, flag)
+		if !isPlanFileArg(flag) {
+			filtered = append(filtered, flag)
+		}
 	}
 	return filtered
 }
